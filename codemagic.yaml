@@ -8,6 +8,9 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mgmacri.speedyboy
     scripts:
       - name: Set up code signing
         script: |
@@ -17,6 +20,9 @@ workflows:
           keychain initialize
           keychain add-certificates
           xcode-project use-profiles
+      - name: Set up CocoaPods
+        script: |
+          cd ios && pod install
       - name: Get Flutter packages
         script: flutter pub get
       - name: Run tests
@@ -32,6 +38,7 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        submit_to_app_store: false
     triggering:
       events:
         - push
