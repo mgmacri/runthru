@@ -1,0 +1,123 @@
+# Speedy Boy v2.0
+
+Cross-platform speed reading app with a 3D neumorphic cube viewport and optional stereoscopic head-tracking.
+
+## Prerequisites
+
+- **Flutter SDK** ≥ 3.5.3 ([install](https://docs.flutter.dev/get-started/install))
+- **Dart SDK** ≥ 3.5.3 (bundled with Flutter)
+- Platform toolchains for your target (see below)
+
+## Setup
+
+```bash
+flutter pub get
+```
+
+## Running in Debug / Dev Mode
+
+### Windows Desktop
+
+Requires Visual Studio 2022 with the "Desktop development with C++" workload.
+
+```bash
+flutter config --enable-windows-desktop
+flutter run -d windows
+```
+
+### macOS Desktop
+
+Requires Xcode 15+.
+
+```bash
+flutter config --enable-macos-desktop
+flutter run -d macos
+```
+
+### Linux Desktop
+
+Requires `clang`, `cmake`, `ninja-build`, `pkg-config`, `libgtk-3-dev`.
+
+```bash
+flutter config --enable-linux-desktop
+flutter run -d linux
+```
+
+### Android
+
+Requires Android Studio with an emulator or a connected device with USB debugging enabled.
+
+```bash
+flutter run -d <device-id>
+```
+
+To list available devices:
+
+```bash
+flutter devices
+```
+
+### iOS
+
+Requires Xcode 15+ and a valid signing identity. Simulator works for debug.
+
+```bash
+open ios/Runner.xcworkspace   # set signing team in Xcode first
+flutter run -d <device-id>
+```
+
+### Chrome (Web) — experimental
+
+```bash
+flutter run -d chrome
+```
+
+## Useful Commands
+
+| Command | Description |
+|---|---|
+| `dart analyze lib/` | Static analysis (strict mode) |
+| `flutter test` | Run unit tests |
+| `flutter test integration_test/` | Run integration tests |
+| `flutter run -d windows --release` | Release build (Windows) |
+| `flutter build apk` | Release APK (Android) |
+| `flutter build ios` | Release build (iOS) |
+
+## Hot Reload / Hot Restart
+
+While the app is running in debug mode, press:
+
+- **r** — Hot reload (preserves state)
+- **R** — Hot restart (resets state)
+- **q** — Quit
+
+## Full Screen Mode
+
+On **Windows**, **macOS**, and **Linux**: click the full-screen icon (top-right) in the reading view, or press **F11** (OS-level) to toggle full-screen. This hides the title bar and system chrome for a distraction-free, immersive reading experience with the magic window parallax effect.
+
+## Project Structure
+
+```
+lib/
+  core/         # ORP algorithm, word timer, dynamic font sizing
+  design/       # Design tokens, typography, decorations, materials, animations
+  hooks/        # Bookmark auto-save notifier
+  navigation/   # go_router config + cube transition
+  screens/      # Library, Reading, Settings screens
+  services/     # PDF extraction, folder scanning, preprocessing queue
+  stereo/        # Optional magic window parallax (pointer/IMU-driven)
+  store/        # Riverpod state (config, models)
+  three_d/      # Cube viewport painter, word painter, glyph measurer
+  widgets/      # Reusable 3D neumorphic widgets
+  debug/        # Latency & FPS probes (debug builds only)
+test/           # Unit tests
+integration_test/ # Integration tests
+```
+
+## Architecture
+
+- **State**: Riverpod (`flutter_riverpod`)
+- **Navigation**: go_router with 3D cube rotation transitions
+- **Rendering**: CustomPainter + Canvas + Matrix4 for the 3D cube viewport
+- **PDF**: Syncfusion PDF extraction in Dart Isolates
+- **Head Tracking**: Optional — pointer-driven magic window parallax (desktop mouse hover), IMU/gyro (mobile). Creates an AR-like illusion of looking into the device. Graceful no-op when disabled.

@@ -1,0 +1,48 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter Run (debug)",
+      "type": "shell",
+      "command": "flutter run",
+      "group": "build"
+    },
+    {
+      "label": "Flutter Build Android",
+      "type": "shell",
+      "command": "flutter build apk --release",
+      "group": "build"
+    },
+    {
+      "label": "Dart Analyze",
+      "type": "shell",
+      "command": "dart analyze --fatal-infos",
+      "group": "test",
+      "problemMatcher": "$dart-analyze"
+    },
+    {
+      "label": "Run Unit Tests",
+      "type": "shell",
+      "command": "flutter test",
+      "group": "test"
+    },
+    {
+      "label": "Run Integration Tests",
+      "type": "shell",
+      "command": "flutter test integration_test/",
+      "group": "test"
+    },
+    {
+      "label": "Contrast Audit",
+      "type": "shell",
+      "command": "flutter test test/design/contrast_audit_test.dart",
+      "group": "test"
+    },
+    {
+      "label": "Build Runner (Riverpod codegen)",
+      "type": "shell",
+      "command": "dart run build_runner build --delete-conflicting-outputs",
+      "group": "build"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "github.copilot.chat.codeGeneration.instructions": [
+    { "file": ".github/copilot-instructions.md" }
+  ],
+  "github.copilot.chat.testGeneration.instructions": [
+    {
+      "text": "Use flutter_test for unit tests and integration_test for E2E. Test pure functions (orp, sentenceResolver, parallaxOffset) directly. For widget tests, use WidgetTester.pumpWidget with ProviderScope. Always test reduced-motion code paths. Use 'group' for organization. Name test files *_test.dart."
+    }
+  ],
+  "github.copilot.chat.reviewSelection.instructions": [
+    {
+      "text": "Check for: (1) raw Color() with hex outside tokens.dart, (2) hardcoded TextStyle in widgets, (3) missing isReducedMotion check before animations, (4) camera code without graceful fallback, (5) mixing stage* and shell* tokens on wrong surface, (6) TextPainter allocation inside paint(), (7) heavy computation on main isolate, (8) Navigator.push instead of go_router, (9) setState for shared state instead of Riverpod, (10) missing shouldRepaint guards on CustomPainter."
+    }
+  ],
+  "dart.lineLength": 80,
+  "editor.defaultFormatter": "Dart-Code.dart-code",
+  "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll": "explicit"
+    }
+  }
+}
