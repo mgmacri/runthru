@@ -24,11 +24,11 @@ workflows:
           keychain initialize
           keychain add-certificates
           xcode-project use-profiles
-      - name: Set up CocoaPods
-        script: |
-          cd ios && pod install
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Set up CocoaPods
+        script: |
+          cd ios && pod install --repo-update
       - name: Run tests
         script: flutter test
       - name: Build iOS
