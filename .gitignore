@@ -49,3 +49,6 @@ app.*.map.json
 agent-bootstrap-dart.md
 speedy-boy-srs-v2-dart.md
 tasks-v2-dart.json
+
+# Apple API keys — NEVER commit
+*.p8
