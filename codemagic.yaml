@@ -9,26 +9,23 @@ workflows:
       flutter: stable
       xcode: latest
     scripts:
-      - name: Set up code signing
-        script: |
-          # Create distribution certificate if none exists
-          app-store-connect certificates create \
-            --type IOS_DISTRIBUTION \
-            --save || echo "Certificate already exists or was created"
-          # Fetch or create App Store provisioning profile
-          app-store-connect fetch-signing-files "com.mgmacri.speedyboy" \
-            --type IOS_APP_STORE \
-            --platform IOS \
-            --create
-          # Initialize keychain and install certs + profiles
-          keychain initialize
-          keychain add-certificates
-          xcode-project use-profiles
       - name: Get Flutter packages
         script: flutter pub get
       - name: Set up CocoaPods
         script: |
           cd ios && pod install --repo-update
+      - name: Set up code signing
+        script: |
+          app-store-connect certificates create \
+            --type IOS_DISTRIBUTION \
+            --save || true
+          app-store-connect fetch-signing-files "com.mgmacri.speedyboy" \
+            --type IOS_APP_STORE \
+            --platform IOS \
+            --create
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
       - name: Run tests
         script: flutter test
       - name: Build iOS
