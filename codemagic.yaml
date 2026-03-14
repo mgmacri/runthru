@@ -14,29 +14,25 @@ workflows:
       - name: Set up CocoaPods
         script: |
           cd ios && pod install --repo-update
-      - name: Set up code signing
+      - name: Fetch signing files
         script: |
-          app-store-connect certificates create \
-            --type IOS_DISTRIBUTION \
-            --save || true
           app-store-connect fetch-signing-files "com.mgmacri.speedyboy" \
             --type IOS_APP_STORE \
             --platform IOS \
             --create
           keychain initialize
           keychain add-certificates
-          xcode-project use-profiles
       - name: Run tests
         script: flutter test
-      - name: Flutter build (no codesign)
+      - name: Build iOS (no codesign — let Flutter migrate)
         script: |
           flutter build ios \
             --release \
             --no-codesign
-      - name: Re-apply signing after Flutter migration
+      - name: Apply signing profiles (after Flutter migration)
         script: |
           xcode-project use-profiles
-      - name: Build IPA
+      - name: Archive and sign IPA
         script: |
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
