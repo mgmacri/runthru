@@ -8,21 +8,19 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.mgmacri.speedyboy
     scripts:
       - name: Set up code signing
         script: |
+          # Create distribution certificate if none exists
+          app-store-connect certificates create \
+            --type IOS_DISTRIBUTION \
+            --save || echo "Certificate already exists or was created"
+          # Fetch or create App Store provisioning profile
           app-store-connect fetch-signing-files "com.mgmacri.speedyboy" \
             --type IOS_APP_STORE \
+            --platform IOS \
             --create
-          app-store-connect fetch-signing-files "com.mgmacri.speedyboy" \
-            --type IOS_APP_DEVELOPMENT \
-            --create
-          app-store-connect certificates list \
-            --type IOS_DISTRIBUTION \
-            --create
+          # Initialize keychain and install certs + profiles
           keychain initialize
           keychain add-certificates
           xcode-project use-profiles
