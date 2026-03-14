@@ -28,11 +28,19 @@ workflows:
           xcode-project use-profiles
       - name: Run tests
         script: flutter test
-      - name: Build iOS
+      - name: Flutter build (no codesign)
         script: |
-          flutter build ipa \
+          flutter build ios \
             --release \
-            --export-options-plist=/Users/builder/export_options.plist
+            --no-codesign
+      - name: Re-apply signing after Flutter migration
+        script: |
+          xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
