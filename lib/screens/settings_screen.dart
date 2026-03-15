@@ -1,4 +1,4 @@
-import 'dart:io' show Directory, File, Platform;
+import 'dart:io' show Directory, File, FileSystemEntity, FileSystemException, Platform;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -68,44 +68,74 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  /// iOS: pick PDF files directly (bypasses broken directory
-  /// security-scoped access), copy to app-local directory.
+  /// iOS: pick a folder, immediately scan with async list() while the
+  /// security scope is active, copy found PDFs to app-local storage.
   Future<void> _pickPdfsIos(
     BuildContext context,
     ConfigNotifier notifier,
   ) async {
-    appLog('settings', 'iOS: calling pickFiles(pdf, multi)…');
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-      allowMultiple: true,
-    );
+    appLog('settings', 'iOS: calling getDirectoryPath()…');
+    final selectedPath = await FilePicker.platform.getDirectoryPath();
+    appLog('settings', 'iOS: getDirectoryPath result=$selectedPath');
 
-    if (result == null || result.files.isEmpty) {
-      appLog('settings', 'iOS: user cancelled or no files selected');
+    if (selectedPath == null) {
+      appLog('settings', 'iOS: user cancelled');
       return;
     }
 
-    appLog('settings', 'iOS: ${result.files.length} files picked');
+    // Scan immediately while the security scope is still active.
+    // MUST use async dir.list(), not listSync().
+    final directory = Directory(selectedPath);
+    appLog('settings', 'iOS: listing directory (async)…');
+    final List<FileSystemEntity> entities;
+    try {
+      entities = await directory.list(recursive: false).toList();
+    } on FileSystemException catch (e) {
+      appLog('settings', 'iOS: dir.list() failed: ${e.message}');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cannot read folder: ${e.message}'),
+            backgroundColor: SpeedyBoyTokens.shellError,
+          ),
+        );
+      }
+      return;
+    }
 
+    appLog('settings', 'iOS: found ${entities.length} entities');
+    final pdfFiles = entities
+        .whereType<File>()
+        .where((f) => f.path.toLowerCase().endsWith('.pdf'))
+        .toList();
+    appLog('settings', 'iOS: ${pdfFiles.length} PDFs in folder');
+
+    if (pdfFiles.isEmpty) {
+      appLog('settings', 'iOS: no PDFs found in picked folder');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No PDF files found in that folder')),
+        );
+      }
+      return;
+    }
+
+    // Copy to app-local storage for persistence across app restarts.
     final docsDir = await getApplicationDocumentsDirectory();
     final pdfDir = Directory('${docsDir.path}/pdfs');
     if (!pdfDir.existsSync()) pdfDir.createSync(recursive: true);
     appLog('settings', 'iOS: local PDF dir = ${pdfDir.path}');
 
     var copied = 0;
-    for (final pf in result.files) {
-      if (pf.path == null) {
-        appLog('settings', 'iOS: file "${pf.name}" has null path, skipping');
-        continue;
-      }
-      final dest = '${pdfDir.path}/${pf.name}';
+    for (final file in pdfFiles) {
+      final name = file.path.split('/').last;
+      final dest = '${pdfDir.path}/$name';
       try {
-        await File(pf.path!).copy(dest);
+        await file.copy(dest);
         copied++;
-        appLog('settings', 'iOS: copied "${pf.name}" → $dest');
+        appLog('settings', 'iOS: copied "$name" → $dest');
       } on Object catch (e) {
-        appLog('settings', 'iOS: failed to copy "${pf.name}": $e');
+        appLog('settings', 'iOS: failed to copy "$name": $e');
       }
     }
 
@@ -298,7 +328,7 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       onPressed: () => _pickFolder(context, notifier),
                       child: Text(
-                        _isIos ? 'Add PDFs' : 'Browse',
+                        _isIos ? 'Import Folder' : 'Browse',
                         style: SpeedyBoyTypography.body.copyWith(
                           color: SpeedyBoyTokens.stageText,
                         ),

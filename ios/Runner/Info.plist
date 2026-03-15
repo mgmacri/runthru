@@ -53,6 +53,8 @@
 	<string>Speedy Boy needs access to your documents to scan PDF files for speed reading.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>UISupportsDocumentBrowser</key>
+	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 </dict>
