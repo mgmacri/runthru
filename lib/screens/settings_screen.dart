@@ -1,6 +1,8 @@
 import 'dart:developer' as dev;
+import 'dart:io' show Platform;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -14,20 +16,28 @@ import 'package:speedy_boy/widgets/wpm_slider.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  static bool get _isIos {
+    if (kIsWeb) return false;
+    return Platform.isIOS;
+  }
+
   Future<void> _pickFolder(
     BuildContext context,
     ConfigNotifier notifier,
   ) async {
     try {
-      // Check storage permission on Android / iOS
-      final status = await Permission.storage.status;
-      if (status.isDenied) {
-        final result = await Permission.storage.request();
-        if (result.isPermanentlyDenied && context.mounted) {
-          _showPermissionDeniedDialog(context);
-          return;
+      // Storage permission is Android-only; on iOS the document picker
+      // handles its own sandbox access.
+      if (!_isIos) {
+        final status = await Permission.storage.status;
+        if (status.isDenied) {
+          final result = await Permission.storage.request();
+          if (result.isPermanentlyDenied && context.mounted) {
+            _showPermissionDeniedDialog(context);
+            return;
+          }
+          if (!result.isGranted) return;
         }
-        if (!result.isGranted) return;
       }
 
       final result = await FilePicker.platform.getDirectoryPath();

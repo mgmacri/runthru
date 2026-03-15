@@ -2,6 +2,7 @@ import 'dart:developer' as dev;
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/store/config.dart';
@@ -10,10 +11,20 @@ import 'package:speedy_boy/store/config.dart';
 class FolderScannerService {
   FolderScannerService._();
 
-  /// Scan in a background isolate so the UI never blocks.
+  static bool get _isIos => !kIsWeb && Platform.isIOS;
+
+  /// Scan for PDFs.
+  ///
+  /// On iOS the picked directory is a security-scoped URL whose access
+  /// token is only valid on the main isolate, so we scan synchronously
+  /// there. On all other platforms we use a background isolate.
   static Future<List<PdfEntry>> scanAsync(String? folderPath) async {
     if (folderPath == null || folderPath.isEmpty) return [];
     try {
+      if (_isIos) {
+        // Security-scoped resource — must stay on the main isolate.
+        return _scanSync(folderPath);
+      }
       return await Isolate.run(() => _scanSync(folderPath));
     } on Object catch (e, st) {
       dev.log(
@@ -26,10 +37,17 @@ class FolderScannerService {
     }
   }
 
-  /// Synchronous scan — intended to run inside an isolate.
+  /// Synchronous scan — runs in an isolate on Android/desktop,
+  /// or on the main isolate on iOS (security-scoped access).
   static List<PdfEntry> _scanSync(String folderPath) {
     final dir = Directory(folderPath);
-    if (!dir.existsSync()) return [];
+    if (!dir.existsSync()) {
+      dev.log(
+        'Directory does not exist: $folderPath',
+        name: 'folder_scanner',
+      );
+      return [];
+    }
 
     final entries = <PdfEntry>[];
 
