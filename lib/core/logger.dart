@@ -1,38 +1,54 @@
+import 'dart:collection';
 import 'dart:developer' as dev;
 import 'dart:io';
 
-/// Simple file + DevTools logger for Windows desktop debugging.
+/// Simple file + DevTools logger with an in-memory ring buffer.
 ///
-/// On Windows, debugPrint() goes to a GUI process with no console attached,
-/// so nothing appears in `flutter run` terminal output.
+/// On Windows, writes to %TEMP%\speedy_boy_debug.log.
+/// On all platforms, keeps the last [_maxEntries] lines in memory
+/// so they can be shown in an in-app log viewer.
 ///
-/// Usage: appLog('MyTag', 'message here');
-///
-/// Read while the app runs (PowerShell):
+/// Read while running on desktop (PowerShell):
 ///   gc $env:TEMP\speedy_boy_debug.log -Wait
-/// Or after the run:
-///   type %TEMP%\speedy_boy_debug.log
 class AppLogger {
   AppLogger._();
 
   static IOSink? _sink;
   static String? _path;
 
+  static const int _maxEntries = 200;
+  static final Queue<String> _buffer = Queue<String>();
+
   static void init() {
     if (_sink != null) return;
-    final path = '${Platform.environment['TEMP'] ?? '.'}/speedy_boy_debug.log';
-    _path = path;
-    _sink = File(path).openWrite(); // overwrites on every launch
-    log('AppLogger', 'log file: $path');
+    try {
+      final path =
+          '${Platform.environment['TEMP'] ?? '.'}/speedy_boy_debug.log';
+      _path = path;
+      _sink = File(path).openWrite(); // overwrites on every launch
+    } on Object {
+      // iOS / sandboxed platforms may not have writable TEMP
+    }
+    log('AppLogger', 'init — platform=${Platform.operatingSystem}');
   }
 
   static void log(String tag, String msg) {
-    final line = '[${DateTime.now().toIso8601String()}] [$tag] $msg\n';
-    _sink?.write(line);
+    final line = '[${DateTime.now().toIso8601String()}] [$tag] $msg';
+    _sink?.writeln(line);
     dev.log(msg, name: tag);
+    _buffer.addLast(line);
+    while (_buffer.length > _maxEntries) {
+      _buffer.removeFirst();
+    }
   }
 
   static String? get logPath => _path;
+
+  /// Returns all buffered log lines (most recent last).
+  static List<String> get entries => _buffer.toList();
+
+  /// Clears the in-memory buffer.
+  static void clear() => _buffer.clear();
 }
 
 /// Convenience top-level function — same as AppLogger.log().

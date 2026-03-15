@@ -1,9 +1,9 @@
-import 'dart:developer' as dev;
 import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/store/config.dart';
 
@@ -13,13 +13,19 @@ class FolderScannerService {
 
   static bool get _isIos => !kIsWeb && Platform.isIOS;
 
+  static const String _tag = 'folder_scanner';
+
   /// Scan for PDFs.
   ///
   /// On iOS the picked directory is a security-scoped URL whose access
   /// token is only valid on the main isolate, so we scan synchronously
   /// there. On all other platforms we use a background isolate.
   static Future<List<PdfEntry>> scanAsync(String? folderPath) async {
-    if (folderPath == null || folderPath.isEmpty) return [];
+    appLog(_tag, 'scanAsync called — path=$folderPath isIos=$_isIos');
+    if (folderPath == null || folderPath.isEmpty) {
+      appLog(_tag, 'scanAsync — empty path, returning []');
+      return [];
+    }
     try {
       if (_isIos) {
         // Security-scoped resource — must stay on the main isolate.
@@ -27,12 +33,7 @@ class FolderScannerService {
       }
       return await Isolate.run(() => _scanSync(folderPath));
     } on Object catch (e, st) {
-      dev.log(
-        'Folder scan failed: $e',
-        name: 'folder_scanner',
-        error: e,
-        stackTrace: st,
-      );
+      appLog(_tag, 'scanAsync EXCEPTION: $e\n$st');
       return [];
     }
   }
@@ -40,27 +41,34 @@ class FolderScannerService {
   /// Synchronous scan — runs in an isolate on Android/desktop,
   /// or on the main isolate on iOS (security-scoped access).
   static List<PdfEntry> _scanSync(String folderPath) {
+    appLog(_tag, '_scanSync — path=$folderPath');
+
     final dir = Directory(folderPath);
-    if (!dir.existsSync()) {
-      dev.log(
-        'Directory does not exist: $folderPath',
-        name: 'folder_scanner',
-      );
+    final exists = dir.existsSync();
+    appLog(_tag, '_scanSync — existsSync=$exists');
+
+    if (!exists) {
+      appLog(_tag, '_scanSync — directory does not exist, returning []');
       return [];
     }
 
     final entries = <PdfEntry>[];
 
     try {
-      // On iOS, security-scoped folder access only covers the picked
-      // directory itself. Recursive traversal and followLinks:false both
-      // break in the iOS sandbox. Use the simple top-level listing that
-      // worked in build 2.
       final entities = _isIos
           ? dir.listSync()
           : dir.listSync(recursive: true, followLinks: false);
 
+      appLog(_tag, '_scanSync — listSync returned ${entities.length} entities');
+
       for (final entity in entities) {
+        final type = entity is File
+            ? 'File'
+            : entity is Directory
+                ? 'Dir'
+                : entity.runtimeType.toString();
+        appLog(_tag, '  entity: $type ${entity.path}');
+
         if (entity is File) {
           final path = entity.path;
           if (path.toLowerCase().endsWith('.pdf')) {
@@ -70,16 +78,13 @@ class FolderScannerService {
         }
       }
     } on FileSystemException catch (e) {
-      dev.log(
-        'Cannot read folder: ${e.message}',
-        name: 'folder_scanner',
-      );
-      // Return whatever we found before the error
+      appLog(_tag, '_scanSync FileSystemException: ${e.message} (${e.path})');
+    } on Object catch (e) {
+      appLog(_tag, '_scanSync unexpected error: $e');
     }
 
-    entries.sort(
-      (a, b) => a.fileName.compareTo(b.fileName),
-    );
+    appLog(_tag, '_scanSync — found ${entries.length} PDFs');
+    entries.sort((a, b) => a.fileName.compareTo(b.fileName));
     return entries;
   }
 }
@@ -89,8 +94,17 @@ class FolderScannerService {
 final pdfListProvider = FutureProvider<List<PdfEntry>>((ref) async {
   final config = ref.watch(configProvider);
   return config.when(
-    data: (c) => FolderScannerService.scanAsync(c.pdfFolderPath),
-    loading: () async => [],
-    error: (_, __) async => [],
+    data: (c) {
+      appLog('pdfListProvider', 'config loaded — folder=${c.pdfFolderPath}');
+      return FolderScannerService.scanAsync(c.pdfFolderPath);
+    },
+    loading: () async {
+      appLog('pdfListProvider', 'config loading…');
+      return [];
+    },
+    error: (e, __) async {
+      appLog('pdfListProvider', 'config error: $e');
+      return [];
+    },
   );
 });

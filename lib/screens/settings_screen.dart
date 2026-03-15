@@ -4,8 +4,10 @@ import 'dart:io' show Platform;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
@@ -26,12 +28,16 @@ class SettingsScreen extends ConsumerWidget {
     ConfigNotifier notifier,
   ) async {
     try {
+      appLog('settings', '_pickFolder — isIos=$_isIos');
+
       // Storage permission is Android-only; on iOS the document picker
       // handles its own sandbox access.
       if (!_isIos) {
         final status = await Permission.storage.status;
+        appLog('settings', 'storage permission status=$status');
         if (status.isDenied) {
           final result = await Permission.storage.request();
+          appLog('settings', 'storage permission request result=$result');
           if (result.isPermanentlyDenied && context.mounted) {
             _showPermissionDeniedDialog(context);
             return;
@@ -40,9 +46,12 @@ class SettingsScreen extends ConsumerWidget {
         }
       }
 
+      appLog('settings', 'calling FilePicker.getDirectoryPath()…');
       final result = await FilePicker.platform.getDirectoryPath();
+      appLog('settings', 'FilePicker result=$result');
       if (result != null) {
         await notifier.setPdfFolderPath(result);
+        appLog('settings', 'folder path saved to config');
       }
     } on Object catch (e) {
       dev.log('Folder pick failed: $e', name: 'settings');
@@ -84,6 +93,76 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showLogViewer(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: SpeedyBoyTokens.shellBase,
+      builder: (context) {
+        final logs = AppLogger.entries;
+        final text = logs.isEmpty ? '(no logs yet)' : logs.join('\n');
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.3,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Debug Logs',
+                          style: SpeedyBoyTypography.title),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 18),
+                            tooltip: 'Copy to clipboard',
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: text));
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Logs copied to clipboard')),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      text,
+                      style: SpeedyBoyTypography.caption.copyWith(
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -287,6 +366,24 @@ class SettingsScreen extends ConsumerWidget {
                   style: SpeedyBoyTypography.caption,
                 ),
               ],
+            ),
+          ),
+
+          // ── Debug Logs ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Center(
+              child: TextButton.icon(
+                onPressed: () => _showLogViewer(context),
+                icon: const Icon(Icons.bug_report,
+                    size: 16, color: SpeedyBoyTokens.shellTextSecondary),
+                label: Text(
+                  'View Debug Logs',
+                  style: SpeedyBoyTypography.caption.copyWith(
+                    color: SpeedyBoyTokens.shellTextSecondary,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
