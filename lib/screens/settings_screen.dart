@@ -1,11 +1,11 @@
-import 'dart:developer' as dev;
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/design/design.dart';
@@ -30,20 +30,22 @@ class SettingsScreen extends ConsumerWidget {
     try {
       appLog('settings', '_pickFolder — isIos=$_isIos');
 
-      // Storage permission is Android-only; on iOS the document picker
-      // handles its own sandbox access.
-      if (!_isIos) {
-        final status = await Permission.storage.status;
-        appLog('settings', 'storage permission status=$status');
-        if (status.isDenied) {
-          final result = await Permission.storage.request();
-          appLog('settings', 'storage permission request result=$result');
-          if (result.isPermanentlyDenied && context.mounted) {
-            _showPermissionDeniedDialog(context);
-            return;
-          }
-          if (!result.isGranted) return;
+      if (_isIos) {
+        await _pickPdfsIos(context, notifier);
+        return;
+      }
+
+      // Android / desktop: pick a directory
+      final status = await Permission.storage.status;
+      appLog('settings', 'storage permission status=$status');
+      if (status.isDenied) {
+        final result = await Permission.storage.request();
+        appLog('settings', 'storage permission request result=$result');
+        if (result.isPermanentlyDenied && context.mounted) {
+          _showPermissionDeniedDialog(context);
+          return;
         }
+        if (!result.isGranted) return;
       }
 
       appLog('settings', 'calling FilePicker.getDirectoryPath()…');
@@ -54,15 +56,67 @@ class SettingsScreen extends ConsumerWidget {
         appLog('settings', 'folder path saved to config');
       }
     } on Object catch (e) {
-      dev.log('Folder pick failed: $e', name: 'settings');
+      appLog('settings', 'Folder pick failed: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open folder picker: $e'),
+            content: Text('Could not open file picker: $e'),
             backgroundColor: SpeedyBoyTokens.shellError,
           ),
         );
       }
+    }
+  }
+
+  /// iOS: pick PDF files directly (bypasses broken directory
+  /// security-scoped access), copy to app-local directory.
+  Future<void> _pickPdfsIos(
+    BuildContext context,
+    ConfigNotifier notifier,
+  ) async {
+    appLog('settings', 'iOS: calling pickFiles(pdf, multi)…');
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      allowMultiple: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      appLog('settings', 'iOS: user cancelled or no files selected');
+      return;
+    }
+
+    appLog('settings', 'iOS: ${result.files.length} files picked');
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final pdfDir = Directory('${docsDir.path}/pdfs');
+    if (!pdfDir.existsSync()) pdfDir.createSync(recursive: true);
+    appLog('settings', 'iOS: local PDF dir = ${pdfDir.path}');
+
+    var copied = 0;
+    for (final pf in result.files) {
+      if (pf.path == null) {
+        appLog('settings', 'iOS: file "${pf.name}" has null path, skipping');
+        continue;
+      }
+      final dest = '${pdfDir.path}/${pf.name}';
+      try {
+        await File(pf.path!).copy(dest);
+        copied++;
+        appLog('settings', 'iOS: copied "${pf.name}" → $dest');
+      } on Object catch (e) {
+        appLog('settings', 'iOS: failed to copy "${pf.name}": $e');
+      }
+    }
+
+    appLog('settings', 'iOS: $copied files copied to ${pdfDir.path}');
+    await notifier.setPdfFolderPath(pdfDir.path);
+    appLog('settings', 'iOS: pdfFolderPath set to ${pdfDir.path}');
+
+    if (context.mounted && copied > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$copied PDF(s) added')),
+      );
     }
   }
 
@@ -213,8 +267,8 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'PDF Folder',
+                Text(
+                  _isIos ? 'PDF Library' : 'PDF Folder',
                   style: SpeedyBoyTypography.title,
                 ),
                 const SizedBox(height: 12),
@@ -222,7 +276,11 @@ class SettingsScreen extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        config.pdfFolderPath ?? 'No folder selected',
+                        _isIos
+                            ? (config.pdfFolderPath != null
+                                ? 'PDFs stored locally'
+                                : 'No PDFs added yet')
+                            : (config.pdfFolderPath ?? 'No folder selected'),
                         style: SpeedyBoyTypography.body.copyWith(
                           color: config.pdfFolderPath != null
                               ? SpeedyBoyTokens.shellTextPrimary
@@ -240,7 +298,7 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       onPressed: () => _pickFolder(context, notifier),
                       child: Text(
-                        'Browse',
+                        _isIos ? 'Add PDFs' : 'Browse',
                         style: SpeedyBoyTypography.body.copyWith(
                           color: SpeedyBoyTokens.stageText,
                         ),
