@@ -52,7 +52,15 @@ class FolderScannerService {
     final entries = <PdfEntry>[];
 
     try {
-      for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+      // On iOS, security-scoped folder access only covers the picked
+      // directory itself. Recursive traversal and followLinks:false both
+      // break in the iOS sandbox. Use the simple top-level listing that
+      // worked in build 2.
+      final entities = _isIos
+          ? dir.listSync()
+          : dir.listSync(recursive: true, followLinks: false);
+
+      for (final entity in entities) {
         if (entity is File) {
           final path = entity.path;
           if (path.toLowerCase().endsWith('.pdf')) {
