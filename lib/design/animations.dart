@@ -55,14 +55,6 @@ class SpeedyBoyAnimations {
   // ── A-011: Cube breathe (idle oscillation) ──
   static const Duration cubeBreatheDuration = Duration(milliseconds: 8000);
 
-  // ── A-012: Stereo lock-on ──
-  static const Duration stereoLockOnDuration = Duration(milliseconds: 400);
-  static const Curve stereoLockOnCurve = Curves.easeOut;
-
-  // ── A-013: Stereo lost ──
-  static const Duration stereoLostDuration = Duration(milliseconds: 300);
-  static const Curve stereoLostCurve = Curves.easeIn;
-
   /// Configure an AnimationController for a given animation.
   /// If [reducedMotion] is true, duration is zero (instant).
   static AnimationController createController({

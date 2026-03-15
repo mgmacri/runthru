@@ -2,9 +2,9 @@
 class SpeedyBoyMaterials {
   SpeedyBoyMaterials._();
 
-  /// PBR-approximation material for cube interior walls.
+  /// PBR-approximation material for marble box interior walls.
   static const MaterialParams stageWall = MaterialParams(
-    roughness: 0.85,
+    roughness: 0.25,
     metalness: 0.0,
     emissive: 0.0,
   );
@@ -13,26 +13,26 @@ class SpeedyBoyMaterials {
   static const MaterialParams wordFront = MaterialParams(
     roughness: 0.4,
     metalness: 0.0,
-    emissive: 0.02,
+    emissive: 0.01,
   );
 
   /// Material for the ORP anchor letter (slight glow).
   static const MaterialParams anchorLetter = MaterialParams(
     roughness: 0.3,
     metalness: 0.0,
-    emissive: 0.15,
+    emissive: 0.10,
   );
 
-  /// Material for extrusion side faces (darker).
+  /// Material for extrusion side faces.
   static const MaterialParams extrusionSide = MaterialParams(
-    roughness: 0.9,
+    roughness: 0.6,
     metalness: 0.0,
     emissive: 0.0,
   );
 
   /// Material for the WPM dial disc.
   static const MaterialParams dialDisc = MaterialParams(
-    roughness: 0.7,
+    roughness: 0.5,
     metalness: 0.05,
     emissive: 0.0,
   );

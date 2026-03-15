@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speedy_boy/services/folder_scanner.dart';
@@ -6,7 +7,10 @@ import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/pdf_cache.dart';
 import 'package:speedy_boy/services/pdf_extractor.dart';
 
-/// FIFO queue processing PDFs in background Isolates.
+/// Maximum number of concurrent isolate workers.
+const int _maxWorkers = 3;
+
+/// FIFO queue with parallel workers, priority preemption, and dead-letter queue.
 class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   PreprocessingQueue(this._ref) : super({}) {
     _init();
@@ -14,18 +18,39 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   final Ref _ref;
   final _queue = <String>[];
-  bool _isProcessing = false;
+
+  /// Tracks actively running workers by filePath.
+  final _activeWorkers = <String>{};
+
+  bool _isPaused = false;
+
   final _progressController = StreamController<PdfEntry>.broadcast();
 
   Stream<PdfEntry> get progress => _progressController.stream;
 
+  /// Number of files that failed permanently.
+  int get failedCount =>
+      state.values.where((e) => e.status == PdfStatus.permanentlyFailed).length;
+
+  /// Number of files with transient errors.
+  int get errorCount =>
+      state.values.where((e) => e.status == PdfStatus.error).length;
+
   void _init() {
     _ref.listen(pdfListProvider, (previous, next) {
-      _enqueueAll(next);
+      next.when(
+        data: _enqueueAll,
+        loading: () {},
+        error: (_, __) {},
+      );
     });
     // Initial enqueue
     final entries = _ref.read(pdfListProvider);
-    _enqueueAll(entries);
+    entries.when(
+      data: _enqueueAll,
+      loading: () {},
+      error: (_, __) {},
+    );
   }
 
   void _enqueueAll(List<PdfEntry> entries) {
@@ -34,71 +59,165 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
         state = {
           ...state,
           entry.filePath: entry.copyWith(
-            status: PdfStatus.pending,
+            status: PdfStatus.queued,
           ),
         };
         _queue.add(entry.filePath);
       }
     }
-    _processNext();
+    _fillWorkers();
   }
 
-  Future<void> _processNext() async {
-    if (_isProcessing || _queue.isEmpty) return;
-    _isProcessing = true;
+  /// Pause all background processing (called when user opens a PDF).
+  void pauseBackground() {
+    _isPaused = true;
+  }
 
-    while (_queue.isNotEmpty) {
+  /// Resume background processing.
+  void resumeBackground() {
+    _isPaused = false;
+    _fillWorkers();
+  }
+
+  /// Prioritize a single file — pauses background and processes it first.
+  Future<void> prioritize(String filePath) async {
+    // Already ready?
+    final existing = state[filePath];
+    if (existing?.status == PdfStatus.ready) return;
+
+    pauseBackground();
+
+    // Remove from queue if present so we won't double-process
+    _queue.remove(filePath);
+
+    // Process immediately (outside the worker pool)
+    await _processFile(filePath, isPriority: true);
+
+    resumeBackground();
+  }
+
+  /// Fill worker slots up to [_maxWorkers].
+  void _fillWorkers() {
+    if (_isPaused) return;
+
+    while (_activeWorkers.length < _maxWorkers && _queue.isNotEmpty) {
       final filePath = _queue.removeAt(0);
       final entry = state[filePath];
       if (entry == null) continue;
 
-      // Check cache first
+      // Skip permanently failed
+      if (entry.status == PdfStatus.permanentlyFailed) continue;
+
+      _activeWorkers.add(filePath);
+      _processFile(filePath).whenComplete(() {
+        _activeWorkers.remove(filePath);
+        _fillWorkers();
+      });
+    }
+  }
+
+  Future<void> _processFile(
+    String filePath, {
+    bool isPriority = false,
+  }) async {
+    final entry = state[filePath];
+    if (entry == null) return;
+
+    // Check cache first
+    try {
       final cached = await PdfCache.load(filePath);
       if (cached != null) {
         final updated = entry.copyWith(
           status: PdfStatus.ready,
           document: cached,
         );
-        state = {...state, filePath: updated};
-        _progressController.add(updated);
-        continue;
+        _update(filePath, updated);
+        return;
       }
-
-      // Mark processing
-      final processing = entry.copyWith(
-        status: PdfStatus.processing,
-      );
-      state = {...state, filePath: processing};
-      _progressController.add(processing);
-
-      try {
-        final doc = await extractPdfInIsolate(filePath);
-        await PdfCache.save(filePath, doc);
-
-        final ready = entry.copyWith(
-          status: PdfStatus.ready,
-          document: doc,
-        );
-        state = {...state, filePath: ready};
-        _progressController.add(ready);
-      } on UnsupportedPdfError catch (e) {
-        final unsupported = entry.copyWith(
-          status: PdfStatus.unsupported,
-          errorMessage: e.message,
-        );
-        state = {...state, filePath: unsupported};
-        _progressController.add(unsupported);
-      } on Object catch (e) {
-        final errored = entry.copyWith(
-          status: PdfStatus.error,
-          errorMessage: e.toString(),
-        );
-        state = {...state, filePath: errored};
-        _progressController.add(errored);
-      }
+    } on Object catch (e) {
+      dev.log('Cache check failed: $e', name: 'preprocessing');
     }
 
-    _isProcessing = false;
+    // Mark processing
+    final processing = entry.copyWith(status: PdfStatus.processing);
+    _update(filePath, processing);
+
+    try {
+      final doc = await extractPdfInIsolate(filePath);
+
+      // Don't block on cache save
+      PdfCache.save(filePath, doc).catchError((Object e) {
+        dev.log('Cache save failed: $e', name: 'preprocessing');
+      });
+
+      final ready = entry.copyWith(
+        status: PdfStatus.ready,
+        document: doc,
+        retryCount: 0,
+      );
+      _update(filePath, ready);
+    } on UnsupportedPdfError catch (e) {
+      final unsupported = entry.copyWith(
+        status: PdfStatus.unsupported,
+        errorMessage: e.message,
+      );
+      _update(filePath, unsupported);
+    } on PdfTimeoutError catch (e) {
+      _handleRetry(filePath, entry, e.toString());
+    } on Object catch (e, st) {
+      dev.log(
+        'PDF processing failed: $e',
+        name: 'preprocessing',
+        error: e,
+        stackTrace: st,
+      );
+      _handleRetry(filePath, entry, e.toString());
+    }
+  }
+
+  void _handleRetry(String filePath, PdfEntry entry, String errorMessage) {
+    final retries = entry.retryCount + 1;
+    if (retries >= PdfEntry.maxRetries) {
+      final failed = entry.copyWith(
+        status: PdfStatus.permanentlyFailed,
+        errorMessage: 'Failed after ${PdfEntry.maxRetries} attempts: '
+            '$errorMessage',
+        retryCount: retries,
+      );
+      _update(filePath, failed);
+      dev.log(
+        'Permanently failed: $filePath ($errorMessage)',
+        name: 'preprocessing',
+      );
+    } else {
+      final errored = entry.copyWith(
+        status: PdfStatus.error,
+        errorMessage: errorMessage,
+        retryCount: retries,
+      );
+      _update(filePath, errored);
+      // Re-queue for retry
+      _queue.add(filePath);
+    }
+  }
+
+  void _update(String filePath, PdfEntry entry) {
+    if (!mounted) return;
+    state = {...state, filePath: entry};
+    _progressController.add(entry);
+  }
+
+  /// Retry all failed (non-permanent) entries.
+  void retryErrors() {
+    final errorPaths = state.entries
+        .where((e) => e.value.status == PdfStatus.error)
+        .map((e) => e.key)
+        .toList();
+
+    for (final path in errorPaths) {
+      _queue.add(path);
+    }
+    _fillWorkers();
   }
 
   @override

@@ -39,7 +39,15 @@ class ExtractedDocument {
       };
 }
 
-enum PdfStatus { pending, processing, ready, error, unsupported }
+enum PdfStatus {
+  pending,
+  queued,
+  processing,
+  ready,
+  error,
+  unsupported,
+  permanentlyFailed,
+}
 
 class PdfEntry {
   const PdfEntry({
@@ -48,6 +56,7 @@ class PdfEntry {
     this.status = PdfStatus.pending,
     this.document,
     this.errorMessage,
+    this.retryCount = 0,
   });
 
   final String filePath;
@@ -55,11 +64,16 @@ class PdfEntry {
   final PdfStatus status;
   final ExtractedDocument? document;
   final String? errorMessage;
+  final int retryCount;
+
+  /// Max retries before marking as permanently failed.
+  static const int maxRetries = 3;
 
   PdfEntry copyWith({
     PdfStatus? status,
     ExtractedDocument? document,
     String? errorMessage,
+    int? retryCount,
   }) {
     return PdfEntry(
       filePath: filePath,
@@ -67,6 +81,7 @@ class PdfEntry {
       status: status ?? this.status,
       document: document ?? this.document,
       errorMessage: errorMessage ?? this.errorMessage,
+      retryCount: retryCount ?? this.retryCount,
     );
   }
 }
@@ -76,4 +91,12 @@ class UnsupportedPdfError implements Exception {
   final String message;
   @override
   String toString() => 'UnsupportedPdfError: $message';
+}
+
+class PdfTimeoutError implements Exception {
+  const PdfTimeoutError(this.filePath);
+  final String filePath;
+  @override
+  String toString() =>
+      'PdfTimeoutError: extraction exceeded timeout for $filePath';
 }

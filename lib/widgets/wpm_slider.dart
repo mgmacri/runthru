@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:speedy_boy/design/design.dart';
 
 /// WPM slider for Settings screen with neumorphic appearance.
-class WpmSlider extends StatelessWidget {
+///
+/// Tracks local drag state internally for smooth interaction.
+/// Calls [onChanged] only when the drag finishes (finger lifts).
+class WpmSlider extends StatefulWidget {
   const WpmSlider({
     super.key,
     required this.value,
@@ -13,12 +16,30 @@ class WpmSlider extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   @override
+  State<WpmSlider> createState() => _WpmSliderState();
+}
+
+class _WpmSliderState extends State<WpmSlider> {
+  double? _dragging;
+
+  double get _displayValue => _dragging ?? widget.value.toDouble();
+
+  @override
+  void didUpdateWidget(WpmSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If external value changed and we're not dragging, reset
+    if (_dragging == null && widget.value != oldWidget.value) {
+      // No setState needed — build will use new widget.value
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '$value WPM',
+          '${_displayValue.round()} WPM',
           style: SpeedyBoyTypography.badge,
         ),
         const SizedBox(height: 8),
@@ -27,17 +48,21 @@ class WpmSlider extends StatelessWidget {
             activeTrackColor: SpeedyBoyTokens.shellAccent,
             inactiveTrackColor: SpeedyBoyTokens.shellDarkShadow,
             thumbColor: SpeedyBoyTokens.shellTextPrimary,
-            overlayColor: SpeedyBoyTokens.shellAccent.withOpacity(0.2),
+            overlayColor: SpeedyBoyTokens.shellAccent.withAlpha(51),
             thumbShape: const RoundSliderThumbShape(
               enabledThumbRadius: 12,
             ),
             trackHeight: 6,
           ),
           child: Slider(
-            value: value.toDouble(),
+            value: _displayValue,
             min: 30,
             max: 1000,
-            onChanged: (v) => onChanged(v.round()),
+            onChanged: (v) => setState(() => _dragging = v),
+            onChangeEnd: (v) {
+              setState(() => _dragging = null);
+              widget.onChanged(v.round());
+            },
           ),
         ),
       ],

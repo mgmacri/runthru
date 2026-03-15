@@ -6,12 +6,6 @@ import 'package:speedy_boy/design/tokens.dart';
 void main() {
   /// Compute WCAG relative luminance of a Color.
   double luminance(Color color) {
-    double channel(int c) {
-      final s = c / 255.0;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055);
-    }
-
-    // Approximate — pow not available without dart:math import
     // Using the standard formula with linearized sRGB
     final r = _linearize(color.red / 255.0);
     final g = _linearize(color.green / 255.0);

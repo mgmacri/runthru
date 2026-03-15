@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:speedy_boy/core/orp.dart';
-import 'package:speedy_boy/design/tokens.dart';
 import 'package:speedy_boy/design/typography.dart';
 import 'package:speedy_boy/three_d/glyph_measurer.dart';
+import 'package:speedy_boy/three_d/text_painter_pool.dart';
 
 /// CustomPainter for word rendering with ORP-anchored centering.
 /// The anchor letter is always pinned to the horizontal center of the canvas.
+///
+/// Uses a [TextPainterPool] to avoid allocating TextPainters in paint().
 class WordPainter extends CustomPainter {
   WordPainter({
     required this.word,
     required this.fontSize,
     required this.animationValue,
+    required this.painterPool,
     this.anchorColor,
+    this.fontFamily = 'BricolageGrotesque',
     super.repaint,
   })  : _anchorIndex = orpIndexInOriginal(word),
         _glyphs = GlyphMeasurer.instance.measureWord(
@@ -24,6 +28,8 @@ class WordPainter extends CustomPainter {
   final double fontSize;
   final double animationValue;
   final Color? anchorColor;
+  final String fontFamily;
+  final TextPainterPool painterPool;
   final int _anchorIndex;
   final List<GlyphPosition> _glyphs;
 
@@ -46,19 +52,19 @@ class WordPainter extends CustomPainter {
     canvas.scale(scale, scale);
     canvas.translate(-size.width / 2, -centerY);
 
-    // ── Draw each glyph ──
+    // ── Draw each glyph using pooled painters (round-robin) ──
     for (var i = 0; i < _glyphs.length; i++) {
       final glyph = _glyphs[i];
       final isAnchor = i == anchorIdx;
 
       final style = isAnchor
-          ? SpeedyBoyTypography.readingAnchor(fontSize, color: anchorColor)
-          : SpeedyBoyTypography.readingWord(fontSize);
+          ? SpeedyBoyTypography.readingAnchor(fontSize,
+              color: anchorColor, fontFamily: fontFamily)
+          : SpeedyBoyTypography.readingWord(fontSize, fontFamily: fontFamily);
 
-      final tp = TextPainter(
-        text: TextSpan(text: glyph.character, style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      final poolIndex = i % TextPainterPool.maxSize;
+      painterPool.configure(poolIndex, glyph.character, style);
+      final tp = painterPool[poolIndex];
 
       tp.paint(
         canvas,
@@ -67,18 +73,9 @@ class WordPainter extends CustomPainter {
           centerY - tp.height / 2,
         ),
       );
-      tp.dispose();
     }
 
-    // ── Vertical anchor line (subtle) ──
-    final linePaint = Paint()
-      ..color = (anchorColor ?? SpeedyBoyTokens.stageAnchor).withAlpha(64)
-      ..strokeWidth = 1.0;
-    canvas.drawLine(
-      Offset(size.width / 2, centerY - fontSize * 0.7),
-      Offset(size.width / 2, centerY + fontSize * 0.7),
-      linePaint,
-    );
+    // Anchor line removed — it was drawing through the middle of the letter.
 
     canvas.restore();
   }
@@ -87,6 +84,7 @@ class WordPainter extends CustomPainter {
   bool shouldRepaint(WordPainter oldDelegate) {
     return word != oldDelegate.word ||
         fontSize != oldDelegate.fontSize ||
-        animationValue != oldDelegate.animationValue;
+        animationValue != oldDelegate.animationValue ||
+        fontFamily != oldDelegate.fontFamily;
   }
 }

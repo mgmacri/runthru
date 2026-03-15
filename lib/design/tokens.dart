@@ -7,23 +7,23 @@ import 'package:flutter/material.dart';
 class SpeedyBoyTokens extends ThemeExtension<SpeedyBoyTokens> {
   const SpeedyBoyTokens._();
 
-  // ── Reading Stage (dark cube interior) ──
-  // stageBase = Black Bean
-  static const Color stageBase = Color(0xFF2E272A);
-  // stageLightShadow = Fudge
-  static const Color stageLightShadow = Color(0xFF493338);
-  // stageDarkShadow = derived deep brown
-  static const Color stageDarkShadow = Color(0xFF1A1517);
-  // stageText = Bright White
-  static const Color stageText = Color(0xFFF4F5F0);
-  // stageAnchor default = Hot Coral (user can override)
-  static const Color stageAnchor = Color(0xFFED5656);
+  // ── Reading Stage (neumorphic raised surface) ──
+  // stageBase = Antique White (warm light card surface)
+  static const Color stageBase = Color(0xFFEDE3D2);
+  // stageLightShadow = Bright White (neumorphic highlight)
+  static const Color stageLightShadow = Color(0xFFF4F5F0);
+  // stageDarkShadow = Birch (neumorphic shadow)
+  static const Color stageDarkShadow = Color(0xFFDDD5C7);
+  // stageText = Black Bean (dark on light)
+  static const Color stageText = Color(0xFF2E272A);
+  // stageAnchor default = High Risk Red (better contrast on light surface)
+  static const Color stageAnchor = Color(0xFFC71F2D);
   // stageProgress = Sea Green
   static const Color stageProgress = Color(0xFF149C88);
-  // stagePauseOverlay = Dress Blues
-  static const Color stagePauseOverlay = Color(0xFF2A3244);
-  // stageWpmBadge = Wild Dove
-  static const Color stageWpmBadge = Color(0xFF8B8E8D);
+  // stagePauseOverlay = translucent Nimbus Cloud
+  static const Color stagePauseOverlay = Color(0xCCD5D5D8);
+  // stageWpmBadge = Dark Gull Gray
+  static const Color stageWpmBadge = Color(0xFF625D5D);
 
   // ── UI Shell (warm off-white neumorphic) ──
   // shellBase = Antique White
@@ -51,29 +51,63 @@ class SpeedyBoyTokens extends ThemeExtension<SpeedyBoyTokens> {
   static const Color dialRingMid = Color(0xFFFDAC53);
   static const Color dialRingHigh = Color(0xFFED5656);
 
-  // ── 3D Cube wall faces ──
-  // Back wall: darkest (derived)
-  static const Color cubeBackWall = Color(0xFF1A1517);
-  // Left wall: Dress Blues
-  static const Color cubeLeftWall = Color(0xFF2A3244);
-  // Right wall: Fudge
-  static const Color cubeRightWall = Color(0xFF493338);
-  // Top wall: Dark Slate
-  static const Color cubeTopWall = Color(0xFF46515A);
-  // Bottom wall: Majolica Blue
-  static const Color cubeBottomWall = Color(0xFF274357);
-  // Edge highlight: Marsala
-  static const Color cubeEdgeGlow = Color(0xFF964F4C);
-  // Ambient = same as back wall
-  static const Color cubeAmbient = Color(0xFF1A1517);
-  // Directional light hint = Bright White
-  static const Color cubeDirectional = Color(0xFFF4F5F0);
-  // Rim shadow
-  static const Color cubeRimShadow = Color(0x80000000);
+  // ── 3D Marble Box (warm polished marble interior) ──
+  // Warm whites and soft greys create an elegant Carrara marble feel.
+  // Base surface: soft warm white marble
+  static const Color cubeBase = Color(0xFFF5F0EA);
+  // Back wall: slightly cooler white (subtle depth)
+  static const Color cubeBackWall = Color(0xFFEDE8E2);
+  // Left wall: warm grey with pink undertone
+  static const Color cubeLeftWall = Color(0xFFE8E0D8);
+  // Right wall: warm grey (mirrored)
+  static const Color cubeRightWall = Color(0xFFE8E0D8);
+  // Top wall: lightest (lit from above)
+  static const Color cubeTopWall = Color(0xFFF0EBE5);
+  // Bottom wall: slightly deeper warm grey
+  static const Color cubeBottomWall = Color(0xFFE2DAD0);
+  // Edge highlight: soft white glow
+  static const Color cubeEdgeGlow = Color(0xFFFAF7F4);
+  // Ambient = base
+  static const Color cubeAmbient = Color(0xFFF5F0EA);
+  // Directional light hint = warm cream
+  static const Color cubeDirectional = Color(0xFFF8F4EE);
+  // Neumorphic light shadow (highlight) — bright white edge
+  static const Color cubeNeuLight = Color(0xFFFFFEFC);
+  // Neumorphic dark shadow — soft warm shadow
+  static const Color cubeNeuDark = Color(0xFFD5CCC0);
+  // Rim shadow — subtle warm inset
+  static const Color cubeRimShadow = Color(0x20A09080);
 
-  // ── Stereoscopic ──
-  // stereoIndicator = Sea Green
-  static const Color stereoIndicator = Color(0xFF149C88);
+  // ── Marble Box interior ──
+  // Vein primary — soft grey-blue marble veining
+  static const Color marbleVeinPrimary = Color(0xFFB8B0A8);
+  // Vein secondary — faint warm blush veining
+  static const Color marbleVeinSecondary = Color(0xFFD0C4B8);
+  // Vein highlight — translucent crystalline gleam
+  static const Color marbleVeinHighlight = Color(0x30FFFFFF);
+  // Marble surface glow — warm light pooling on polished surface
+  static const Color marbleSurfaceGlow = Color(0x18F0E0D0);
+  // Grid lines — subtle etched lines in marble
+  static const Color roomGridLine = Color(0xFFD0C8BE);
+  // Grid far — barely visible at depth
+  static const Color roomGridFar = Color(0xFFE8E2DC);
+  // Room background — warm marble white
+  static const Color roomBackground = Color(0xFFF2EDE7);
+  // Room fog — warm atmospheric haze
+  static const Color roomFog = Color(0xFFF0EBE5);
+  // Text glow — warm golden glow around text
+  static const Color roomTextGlow = Color(0x28C0A080);
+  // Text shadow — soft warm shadow behind text
+  static const Color roomTextShadow = Color(0x30A09080);
+
+  // ── 3D Text on marble ──
+  // Front face gradient (dark charcoal for contrast on marble)
+  static const Color textFaceTop = Color(0xFF3A3530);
+  static const Color textFaceBottom = Color(0xFF2A2520);
+  // Side faces — medium warm grey
+  static const Color textSide = Color(0xFF504840);
+  // Text primary — rich dark for maximum contrast on marble
+  static const Color textPrimary = Color(0xFF2E272A);
 
   // ── Anchor color palette (Bright group from design palette) ──
   static const List<Color> anchorColors = [

@@ -13,8 +13,10 @@ class GlyphPosition {
   final double width;
 }
 
-/// Pre-computes glyph widths for Space Mono to avoid
+/// Pre-computes per-character glyph widths for any font family to avoid
 /// TextPainter.layout() calls during paint().
+///
+/// Caches widths at a reference size and scales linearly.
 class GlyphMeasurer {
   GlyphMeasurer._();
 
@@ -22,64 +24,101 @@ class GlyphMeasurer {
   static GlyphMeasurer get instance => _instance ??= GlyphMeasurer._();
 
   static const double _referenceSize = 48.0;
-  final Map<String, double> _regularWidths = {};
-  final Map<String, double> _boldWidths = {};
+
+  // font family → (character → width) for regular weight
+  final Map<String, Map<String, double>> _regularCache = {};
+  // font family → (character → width) for bold weight
+  final Map<String, Map<String, double>> _boldCache = {};
+
+  String _currentFamily = 'BricolageGrotesque';
   bool _initialized = false;
+
+  static const _chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+      '0123456789'
+      '.,;:!?\'"-()[]{}/@#\$%^&*+=<>~`_|\\';
+
+  /// Set the active font family. Re-measures if changed.
+  void setFontFamily(String family) {
+    if (family == _currentFamily && _initialized) return;
+    _currentFamily = family;
+    _ensureMeasured(family);
+  }
 
   /// Must be called once before use, e.g., in initState.
   void initialize() {
-    if (_initialized) return;
+    _ensureMeasured(_currentFamily);
+    _initialized = true;
+  }
 
-    // Space Mono is monospaced — all glyphs have the same width
-    // at a given size. Measure one representative character.
-    final tp = TextPainter(
-      text: const TextSpan(
-        text: 'M',
+  void _ensureMeasured(String family) {
+    if (_regularCache.containsKey(family)) return;
+
+    final regularWidths = <String, double>{};
+    final boldWidths = <String, double>{};
+
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+
+    // Measure each printable ASCII character individually
+    for (var i = 0; i < _chars.length; i++) {
+      final c = _chars[i];
+
+      tp.text = TextSpan(
+        text: c,
         style: TextStyle(
-          fontFamily: 'SpaceMono',
+          fontFamily: family,
           fontSize: _referenceSize,
           fontWeight: FontWeight.w400,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      );
+      tp.layout();
+      regularWidths[c] = tp.width;
 
-    final regularWidth = tp.width;
-
-    final tpBold = TextPainter(
-      text: const TextSpan(
-        text: 'M',
+      tp.text = TextSpan(
+        text: c,
         style: TextStyle(
-          fontFamily: 'SpaceMono',
+          fontFamily: family,
           fontSize: _referenceSize,
           fontWeight: FontWeight.w700,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    final boldWidth = tpBold.width;
-
-    // All printable ASCII characters share the monospace width
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-        '0123456789'
-        '.,;:!?\'"-()[]{}/@#\$%^&*+=<>~`_|\\';
-
-    for (var i = 0; i < chars.length; i++) {
-      final c = chars[i];
-      _regularWidths[c] = regularWidth;
-      _boldWidths[c] = boldWidth;
+      );
+      tp.layout();
+      boldWidths[c] = tp.width;
     }
-    // Space character
-    _regularWidths[' '] = regularWidth;
-    _boldWidths[' '] = boldWidth;
 
+    // Space character
+    tp.text = TextSpan(
+      text: ' ',
+      style: TextStyle(
+        fontFamily: family,
+        fontSize: _referenceSize,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+    tp.layout();
+    regularWidths[' '] = tp.width;
+
+    tp.text = TextSpan(
+      text: ' ',
+      style: TextStyle(
+        fontFamily: family,
+        fontSize: _referenceSize,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+    tp.layout();
+    boldWidths[' '] = tp.width;
+
+    tp.dispose();
+
+    _regularCache[family] = regularWidths;
+    _boldCache[family] = boldWidths;
     _initialized = true;
   }
 
   /// Get width of a character at the reference size.
   double _widthAt(String char, {bool bold = false}) {
-    final map = bold ? _boldWidths : _regularWidths;
+    final map =
+        bold ? _boldCache[_currentFamily]! : _regularCache[_currentFamily]!;
     return map[char] ?? map['M']!;
   }
 

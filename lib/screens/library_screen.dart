@@ -14,9 +14,10 @@ class LibraryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pdfList = ref.watch(pdfListProvider);
+    final pdfListAsync = ref.watch(pdfListProvider);
     final processed = ref.watch(preprocessingQueueProvider);
     final config = ref.watch(configProvider);
+    final queue = ref.read(preprocessingQueueProvider.notifier);
 
     return Scaffold(
       backgroundColor: SpeedyBoyTokens.shellBase,
@@ -33,12 +34,22 @@ class LibraryScreen extends ConsumerWidget {
                     'Speedy Boy',
                     style: SpeedyBoyTypography.display,
                   ),
-                  IconButton(
-                    onPressed: () => context.push('/settings'),
-                    icon: const Icon(
-                      Icons.settings,
-                      color: SpeedyBoyTokens.shellTextSecondary,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (queue.failedCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _ErrorBadge(count: queue.failedCount),
+                        ),
+                      IconButton(
+                        onPressed: () => context.push('/settings'),
+                        icon: const Icon(
+                          Icons.settings,
+                          color: SpeedyBoyTokens.shellTextSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -46,11 +57,26 @@ class LibraryScreen extends ConsumerWidget {
 
             // ── PDF List ──
             Expanded(
-              child: _buildList(
-                context,
-                pdfList,
-                processed,
-                config,
+              child: pdfListAsync.when(
+                data: (pdfList) => _buildList(
+                  context,
+                  ref,
+                  pdfList,
+                  processed,
+                  config,
+                ),
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                error: (error, _) => Center(
+                  child: Text(
+                    'Failed to scan folder:\n$error',
+                    style: SpeedyBoyTypography.body.copyWith(
+                      color: SpeedyBoyTokens.shellError,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               ),
             ),
           ],
@@ -61,6 +87,7 @@ class LibraryScreen extends ConsumerWidget {
 
   Widget _buildList(
     BuildContext context,
+    WidgetRef ref,
     List<PdfEntry> pdfList,
     Map<String, PdfEntry> processed,
     AsyncValue<dynamic> config,
@@ -101,6 +128,30 @@ class LibraryScreen extends ConsumerWidget {
               : null,
         );
       },
+    );
+  }
+}
+
+/// Small badge showing count of permanently failed files.
+class _ErrorBadge extends StatelessWidget {
+  const _ErrorBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: SpeedyBoyTokens.shellError,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$count failed',
+        style: SpeedyBoyTypography.caption.copyWith(
+          color: SpeedyBoyTokens.stageText,
+        ),
+      ),
     );
   }
 }

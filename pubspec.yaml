@@ -18,6 +18,7 @@ dependencies:
   file_picker: ^8.1.6
   permission_handler: ^11.3.1
   flutter_animate: ^4.5.2
+  window_manager: ^0.4.3
 
 dev_dependencies:
   flutter_test:
@@ -31,18 +32,22 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  assets:
+    - assets/fonts/
+
   fonts:
-    - family: DMSans
+    - family: BricolageGrotesque
       fonts:
-        - asset: assets/fonts/DMSans-Regular.ttf
+        - asset: assets/fonts/BricolageGrotesque-400.ttf
           weight: 400
-        - asset: assets/fonts/DMSans-Medium.ttf
+        - asset: assets/fonts/BricolageGrotesque-500.ttf
           weight: 500
-        - asset: assets/fonts/DMSans-SemiBold.ttf
+        - asset: assets/fonts/BricolageGrotesque-600.ttf
           weight: 600
-    - family: SpaceMono
-      fonts:
-        - asset: assets/fonts/SpaceMono-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/SpaceMono-Bold.ttf
+        - asset: assets/fonts/BricolageGrotesque-700.ttf
           weight: 700
+    - family: Satoshi
+      fonts:
+        - asset: assets/fonts/Satoshi-Variable.ttf
+        - asset: assets/fonts/Satoshi-VariableItalic.ttf
+          style: italic

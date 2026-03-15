@@ -67,8 +67,10 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
         return SpeedyBoyTokens.shellProcessing;
       case PdfStatus.error:
       case PdfStatus.unsupported:
+      case PdfStatus.permanentlyFailed:
         return SpeedyBoyTokens.shellError;
       case PdfStatus.pending:
+      case PdfStatus.queued:
         return SpeedyBoyTokens.shellTextSecondary;
     }
   }
@@ -195,10 +197,13 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
       case PdfStatus.processing:
         return 'Preparing…';
       case PdfStatus.error:
-        return 'Error';
+        return 'Error (retry ${widget.entry.retryCount}/${PdfEntry.maxRetries})';
       case PdfStatus.unsupported:
         return 'Not supported';
+      case PdfStatus.permanentlyFailed:
+        return 'Failed';
       case PdfStatus.pending:
+      case PdfStatus.queued:
         return 'Pending';
     }
   }

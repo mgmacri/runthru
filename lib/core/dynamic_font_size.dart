@@ -9,9 +9,9 @@ double dynamicFontSize(BoxConstraints constraints) {
   final height = constraints.maxHeight;
   final shorter = math.min(width, height);
 
-  // ~7% of width, clamped to readable range
-  final calculated = shorter * 0.07;
-  return calculated.clamp(24.0, 144.0);
+  // ~20% of shorter dimension, clamped to readable range
+  final calculated = shorter * 0.20;
+  return calculated.clamp(28.0, 400.0);
 }
 
 /// Extrusion depth for pseudo-3D text effect.

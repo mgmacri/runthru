@@ -53,20 +53,4 @@ class SpeedyBoyAnimations3D {
       return Matrix4.identity()..rotateY(angle);
     };
   }
-
-  /// A-012/A-013: Stereo engage/disengage — smooth parallax offset.
-  static Matrix4 Function(double t) stereoTransition({
-    required Offset from,
-    required Offset to,
-    bool reducedMotion = false,
-  }) {
-    if (reducedMotion) {
-      return (_) => Matrix4.translationValues(to.dx, to.dy, 0);
-    }
-    return (double t) {
-      final dx = from.dx + (to.dx - from.dx) * t;
-      final dy = from.dy + (to.dy - from.dy) * t;
-      return Matrix4.translationValues(dx, dy, 0);
-    };
-  }
 }

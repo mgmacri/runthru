@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Camera permission for head tracking (face detection) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Declare camera features as NOT required — app falls back gracefully -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
     <application
         android:label="speedy_boy"
         android:name="${applicationName}"

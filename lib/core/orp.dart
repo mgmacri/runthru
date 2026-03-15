@@ -1,5 +1,6 @@
 /// ORP (Optimal Recognition Point) calculation.
 /// Returns 1-indexed anchor position for a given word.
+/// Uses the center character of the word.
 int orpIndex(String word) {
   // Strip leading/trailing punctuation
   final stripped = word.replaceAll(
@@ -10,11 +11,8 @@ int orpIndex(String word) {
   final length = stripped.length;
   if (length <= 0) return 1;
 
-  if (length <= 3) return 1;
-  if (length <= 5) return 2;
-  if (length <= 9) return 3;
-  if (length <= 13) return 4;
-  return 5;
+  // Center letter (1-indexed), slightly left of center for even lengths
+  return (length + 1) ~/ 2;
 }
 
 /// Returns the number of leading punctuation characters in [word].

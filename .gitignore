@@ -48,7 +48,17 @@ app.*.map.json
 # Spec / bootstrap docs (not source code)
 agent-bootstrap-dart.md
 speedy-boy-srs-v2-dart.md
+digest.txt
 tasks-v2-dart.json
+speedy_boy_*_prompt.md
+speedy_boy_rendering_overhaul.md
+speedy_boy_3d_parallax_prompt.md
+CLAUDE.md
+.claude/
+python-example/
+Satoshi_Complete/
 
 # Apple API keys — NEVER commit
 *.p8
+
+.fake

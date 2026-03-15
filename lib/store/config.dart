@@ -63,25 +63,16 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   }
 
-  Future<void> setStereoscopicEnabled(bool enabled) async {
-    final config = state.valueOrNull ?? const AppConfig();
-    final updated = config.copyWith(stereoscopicEnabled: enabled);
-    state = AsyncData<AppConfig>(updated);
-    await _persist(updated);
-  }
-
-  Future<void> setParallaxFactor(double factor) async {
-    final config = state.valueOrNull ?? const AppConfig();
-    final updated = config.copyWith(
-      parallaxFactor: factor.clamp(0.0, 2.0),
-    );
-    state = AsyncData<AppConfig>(updated);
-    await _persist(updated);
-  }
-
   Future<void> setAnchorColorIndex(int index) async {
     final config = state.valueOrNull ?? const AppConfig();
     final updated = config.copyWith(anchorColorIndex: index);
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  }
+
+  Future<void> setFontFamily(String fontFamily) async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(fontFamily: fontFamily);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   }

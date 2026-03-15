@@ -80,7 +80,7 @@ class CubeViewportPainter extends CustomPainter {
       ui.Gradient.linear(
         const Offset(fLeft, 0),
         Offset(bLeft, 0),
-        [const Color(0x00000000), const Color(0x60000000)],
+        [const Color(0x00000000), const Color(0x0A000000)],
       ),
     );
 
@@ -97,7 +97,7 @@ class CubeViewportPainter extends CustomPainter {
       ui.Gradient.linear(
         Offset(fRight, 0),
         Offset(bRight, 0),
-        [const Color(0x00000000), const Color(0x50000000)],
+        [const Color(0x00000000), const Color(0x0C000000)],
       ),
     );
 
@@ -114,7 +114,7 @@ class CubeViewportPainter extends CustomPainter {
       ui.Gradient.linear(
         const Offset(0, fTop),
         Offset(0, bTop),
-        [const Color(0x00000000), const Color(0x50000000)],
+        [const Color(0x00000000), const Color(0x08000000)],
       ),
     );
 
@@ -131,13 +131,13 @@ class CubeViewportPainter extends CustomPainter {
       ui.Gradient.linear(
         Offset(0, fBottom),
         Offset(0, bBottom),
-        [const Color(0x00000000), const Color(0x60000000)],
+        [const Color(0x00000000), const Color(0x0E000000)],
       ),
     );
 
-    // ── Edge highlight lines ──
+    // ── Edge highlight lines (subtle neumorphic crease) ──
     final edgePaint = Paint()
-      ..color = SpeedyBoyTokens.cubeEdgeGlow
+      ..color = SpeedyBoyTokens.cubeNeuDark.withAlpha(40)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     canvas.drawRect(backRect, edgePaint);
@@ -147,13 +147,22 @@ class CubeViewportPainter extends CustomPainter {
     canvas.drawLine(
         Offset(fRight, fBottom), Offset(bRight, bBottom), edgePaint);
 
-    // ── Rim shadow at the front opening ──
-    final rimShadow = Paint()
+    // ── Neumorphic rim — light highlight top-left, dark shadow bottom-right ──
+    final neuDarkRim = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 10.0
-      ..color = SpeedyBoyTokens.cubeRimShadow
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), rimShadow);
+      ..strokeWidth = 8.0
+      ..color = SpeedyBoyTokens.cubeNeuDark.withAlpha(35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawLine(Offset(0, h), Offset(w, h), neuDarkRim);
+    canvas.drawLine(Offset(w, 0), Offset(w, h), neuDarkRim);
+
+    final neuLightRim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6.0
+      ..color = SpeedyBoyTokens.cubeNeuLight.withAlpha(50)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawLine(Offset.zero, Offset(w, 0), neuLightRim);
+    canvas.drawLine(Offset.zero, Offset(0, h), neuLightRim);
 
     canvas.restore();
   }

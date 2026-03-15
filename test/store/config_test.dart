@@ -8,8 +8,6 @@ void main() {
       expect(config.defaultWpm, 300);
       expect(config.pdfFolderPath, isNull);
       expect(config.bookmarks, isEmpty);
-      expect(config.stereoscopicEnabled, false);
-      expect(config.parallaxFactor, 1.0);
     });
 
     test('roundtrip JSON serialization', () {
@@ -22,8 +20,6 @@ void main() {
             timestamp: DateTime(2026),
           ),
         },
-        stereoscopicEnabled: true,
-        parallaxFactor: 1.5,
       );
 
       final json = config.toJson();
@@ -32,15 +28,12 @@ void main() {
       expect(restored.defaultWpm, 500);
       expect(restored.pdfFolderPath, '/docs');
       expect(restored.bookmarks['/test.pdf']?.wordIndex, 42);
-      expect(restored.stereoscopicEnabled, true);
-      expect(restored.parallaxFactor, 1.5);
     });
 
     test('fromJson handles missing fields gracefully', () {
       final config = AppConfig.fromJson({});
       expect(config.defaultWpm, 300);
       expect(config.pdfFolderPath, isNull);
-      expect(config.stereoscopicEnabled, false);
     });
   });
 

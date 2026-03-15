@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,13 +25,22 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
   }
 
   Future<void> _persist() async {
-    await _ref.read(configProvider.notifier).updateBookmark(
-          _filePath,
-          BookmarkData(
-            wordIndex: state,
-            timestamp: DateTime.now(),
-          ),
-        );
+    try {
+      await _ref.read(configProvider.notifier).updateBookmark(
+            _filePath,
+            BookmarkData(
+              wordIndex: state,
+              timestamp: DateTime.now(),
+            ),
+          );
+    } on Object catch (e, st) {
+      dev.log(
+        'Failed to persist bookmark: $e',
+        name: 'bookmark',
+        error: e,
+        stackTrace: st,
+      );
+    }
   }
 
   @override

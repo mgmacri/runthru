@@ -30,9 +30,8 @@ class AppConfig {
     this.defaultWpm = 300,
     this.pdfFolderPath,
     this.bookmarks = const {},
-    this.stereoscopicEnabled = false,
-    this.parallaxFactor = 1.0,
     this.anchorColorIndex = 0,
+    this.fontFamily = 'BricolageGrotesque',
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
@@ -48,36 +47,32 @@ class AppConfig {
       defaultWpm: json['defaultWpm'] as int? ?? 300,
       pdfFolderPath: json['pdfFolderPath'] as String?,
       bookmarks: bookmarks,
-      stereoscopicEnabled: json['stereoscopicEnabled'] as bool? ?? false,
-      parallaxFactor: (json['parallaxFactor'] as num?)?.toDouble() ?? 1.0,
       anchorColorIndex: json['anchorColorIndex'] as int? ?? 0,
+      fontFamily: json['fontFamily'] as String? ?? 'BricolageGrotesque',
     );
   }
 
   final int defaultWpm;
   final String? pdfFolderPath;
   final Map<String, BookmarkData> bookmarks;
-  final bool stereoscopicEnabled;
-  final double parallaxFactor;
   final int anchorColorIndex;
+  final String fontFamily;
 
   AppConfig copyWith({
     int? defaultWpm,
     String? pdfFolderPath,
     bool clearPdfFolderPath = false,
     Map<String, BookmarkData>? bookmarks,
-    bool? stereoscopicEnabled,
-    double? parallaxFactor,
     int? anchorColorIndex,
+    String? fontFamily,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
       pdfFolderPath:
           clearPdfFolderPath ? null : (pdfFolderPath ?? this.pdfFolderPath),
       bookmarks: bookmarks ?? this.bookmarks,
-      stereoscopicEnabled: stereoscopicEnabled ?? this.stereoscopicEnabled,
-      parallaxFactor: parallaxFactor ?? this.parallaxFactor,
       anchorColorIndex: anchorColorIndex ?? this.anchorColorIndex,
+      fontFamily: fontFamily ?? this.fontFamily,
     );
   }
 
@@ -87,8 +82,7 @@ class AppConfig {
         'bookmarks': bookmarks.map(
           (key, value) => MapEntry(key, value.toJson()),
         ),
-        'stereoscopicEnabled': stereoscopicEnabled,
-        'parallaxFactor': parallaxFactor,
         'anchorColorIndex': anchorColorIndex,
+        'fontFamily': fontFamily,
       };
 }

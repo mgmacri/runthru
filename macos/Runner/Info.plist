@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Speedy Boy uses your camera to track head position for the 3D parallax reading experience. The camera feed is processed on-device and never recorded or transmitted.</string>
 </dict>
 </plist>
