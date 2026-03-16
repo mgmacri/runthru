@@ -9,7 +9,7 @@
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <application
-        android:label="speedy_boy"
+        android:label="Speedy Boy"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
