@@ -21,5 +21,6 @@
       "source.organizeImports": "explicit",
       "source.fixAll": "explicit"
     }
-  }
+  },
+  "java.configuration.updateBuildConfiguration": "interactive"
 }

@@ -3,6 +3,9 @@
     <!-- Camera permission for head tracking (face detection) -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- Required for Android 13+ (API 33) to post notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Declare camera features as NOT required — app falls back gracefully -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
