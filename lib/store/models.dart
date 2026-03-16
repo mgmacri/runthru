@@ -60,6 +60,7 @@ class AppConfig {
     this.bookmarks = const {},
     this.anchorColorIndex = 0,
     this.fontFamily = 'BricolageGrotesque',
+    this.fontScale = 1.0,
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
@@ -77,6 +78,7 @@ class AppConfig {
       bookmarks: bookmarks,
       anchorColorIndex: json['anchorColorIndex'] as int? ?? 0,
       fontFamily: json['fontFamily'] as String? ?? 'BricolageGrotesque',
+      fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -85,6 +87,7 @@ class AppConfig {
   final Map<String, BookmarkData> bookmarks;
   final int anchorColorIndex;
   final String fontFamily;
+  final double fontScale;
 
   AppConfig copyWith({
     int? defaultWpm,
@@ -93,6 +96,7 @@ class AppConfig {
     Map<String, BookmarkData>? bookmarks,
     int? anchorColorIndex,
     String? fontFamily,
+    double? fontScale,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
@@ -101,6 +105,7 @@ class AppConfig {
       bookmarks: bookmarks ?? this.bookmarks,
       anchorColorIndex: anchorColorIndex ?? this.anchorColorIndex,
       fontFamily: fontFamily ?? this.fontFamily,
+      fontScale: fontScale ?? this.fontScale,
     );
   }
 
@@ -112,5 +117,6 @@ class AppConfig {
         ),
         'anchorColorIndex': anchorColorIndex,
         'fontFamily': fontFamily,
+        'fontScale': fontScale,
       };
 }

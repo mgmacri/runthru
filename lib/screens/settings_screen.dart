@@ -11,6 +11,7 @@ import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
+import 'package:speedy_boy/widgets/font_size_slider.dart';
 import 'package:speedy_boy/widgets/neumorphic_card.dart';
 import 'package:speedy_boy/widgets/wpm_slider.dart';
 
@@ -325,6 +326,25 @@ class SettingsScreen extends ConsumerWidget {
                 WpmSlider(
                   value: config.defaultWpm,
                   onChanged: notifier.setDefaultWpm,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Text Size ──
+          NeumorphicCard(
+            surface: SpeedyBoySurface.shell,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Text Size',
+                  style: SpeedyBoyTypography.title,
+                ),
+                const SizedBox(height: 12),
+                FontSizeSlider(
+                  value: config.fontScale,
+                  onChanged: notifier.setFontScale,
                 ),
               ],
             ),

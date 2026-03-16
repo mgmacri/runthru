@@ -257,9 +257,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                       constraints.maxHeight,
                       currentWord,
                     );
-                    final fontSize = (!kIsWeb && Platform.isIOS)
-                        ? baseFontSize * 1.3
-                        : baseFontSize;
+                    final fontSize = baseFontSize * config.fontScale;
 
                     return ParallaxRoom(
                       headX: 0,

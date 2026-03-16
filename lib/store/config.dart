@@ -76,6 +76,13 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   }
+
+  Future<void> setFontScale(double scale) async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(fontScale: scale.clamp(0.5, 2.0));
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  }
 }
 
 final configProvider = AsyncNotifierProvider<ConfigNotifier, AppConfig>(
