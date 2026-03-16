@@ -68,8 +68,8 @@ class _WordDisplay3DState extends State<WordDisplay3D>
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _animation,
+      child: ListenableBuilder(
+        listenable: _animation,
         builder: (context, _) {
           return CustomPaint(
             painter: WordPainter(

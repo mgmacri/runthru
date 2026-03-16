@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/core/dynamic_font_size.dart';
 import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/core/sentence_resolver.dart';
 import 'package:speedy_boy/core/word_timer.dart';
@@ -16,6 +15,8 @@ import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/preprocessing_queue.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
+import 'package:speedy_boy/three_d/back_wall_font_sizer.dart';
+import 'package:speedy_boy/three_d/off_axis_projection.dart';
 import 'package:speedy_boy/three_d/parallax_room.dart';
 import 'package:speedy_boy/widgets/pause_fog_3d.dart';
 import 'package:speedy_boy/widgets/progress_hairline_3d.dart';
@@ -36,6 +37,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     with WidgetsBindingObserver {
   final ValueNotifier<String> _wordNotifier = ValueNotifier('');
   final FocusNode _focusNode = FocusNode();
+  final BackWallFontSizer _fontSizer = BackWallFontSizer();
   List<String> _words = [];
   int _wordAdvanceCount = 0;
 
@@ -235,7 +237,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           color: SpeedyBoyTokens.roomBackground,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final fontSize = dynamicFontSize(constraints);
+              // Use BackWallFontSizer for parallax screen
+              // (dynamicFontSize is only for the non-parallax fallback)
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final roomConfig = RoomConfig.fromScreen(size);
 
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -244,6 +249,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                 child: ValueListenableBuilder<String>(
                   valueListenable: _wordNotifier,
                   builder: (context, currentWord, _) {
+                    final fontSize = _fontSizer.computeFontSize(
+                      roomConfig,
+                      0, // headX
+                      0, // headY
+                      constraints.maxWidth,
+                      constraints.maxHeight,
+                      currentWord,
+                    );
+
                     return ParallaxRoom(
                       headX: 0,
                       headY: 0,

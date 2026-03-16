@@ -22,12 +22,20 @@ class AppLogger {
   static void init() {
     if (_sink != null) return;
     try {
-      final path =
-          '${Platform.environment['TEMP'] ?? '.'}/speedy_boy_debug.log';
+      // On iOS/Android, TEMP is not set and '.' is not writable.
+      // Only open file logging on desktop where TEMP exists.
+      final temp =
+          Platform.environment['TEMP'] ?? Platform.environment['TMPDIR'];
+      if (temp == null || temp.isEmpty) {
+        // Mobile platform — skip file logging, use in-memory + DevTools only.
+        log('AppLogger', 'init — platform=${Platform.operatingSystem}');
+        return;
+      }
+      final path = '$temp/speedy_boy_debug.log';
       _path = path;
       _sink = File(path).openWrite(); // overwrites on every launch
     } on Object {
-      // iOS / sandboxed platforms may not have writable TEMP
+      // Sandboxed platforms may not have writable TEMP
     }
     log('AppLogger', 'init — platform=${Platform.operatingSystem}');
   }

@@ -55,6 +55,23 @@ class SpeedyBoyAnimations {
   // ── A-011: Cube breathe (idle oscillation) ──
   static const Duration cubeBreatheDuration = Duration(milliseconds: 8000);
 
+  // ── A-012: Water Ripple Loading ──
+  static const Duration waterRippleDuration = Duration(milliseconds: 2400);
+  static const Curve waterRippleCurve = Curves.easeOut;
+  static const int waterRippleRingCount = 3;
+  static const Duration waterRippleStagger = Duration(milliseconds: 800);
+
+  /// Vertical squash factor for neumorphic perspective on ripple ellipses.
+  static const double waterRippleSquash = 0.85;
+
+  // ── A-013: Word Depth Bounce-In ──
+  // "Felt, not seen" — a barely perceptible depth cue.
+  static const Duration wordDepthBounceDuration = Duration(milliseconds: 120);
+  static const Curve wordDepthBounceCurve = SubtleBounceIn();
+
+  /// Per-glyph stagger delay for the micro wave settling effect.
+  static const int glyphStaggerMs = 6;
+
   /// Configure an AnimationController for a given animation.
   /// If [reducedMotion] is true, duration is zero (instant).
   static AnimationController createController({
@@ -100,5 +117,36 @@ class SpeedyBoyAnimations {
   /// Returns ±1.5° in radians.
   static double cubeBreatheAngle(double controllerValue) {
     return math.sin(controllerValue * 2 * math.pi) * 1.5 * math.pi / 180.0;
+  }
+}
+
+/// Custom curve with a single very subtle overshoot (4%).
+///
+/// t=0 → 0.0, t≈0.7 → 1.04 (4% overshoot), t=1.0 → 1.0.
+/// The overshoot is imperceptible at reading speed — it's felt, not seen.
+///
+/// Implemented as a piecewise function:
+/// - Phase 1 (0–0.7): quadratic ease-out to overshoot peak
+/// - Phase 2 (0.7–1.0): settle back from overshoot to 1.0
+class SubtleBounceIn extends Curve {
+  const SubtleBounceIn();
+
+  /// Maximum overshoot fraction (4%).
+  static const double _overshoot = 0.04;
+
+  @override
+  double transformInternal(double t) {
+    if (t <= 0.7) {
+      // Phase 1: ease-out to 1.0 + overshoot
+      final normalized = t / 0.7;
+      // Quadratic ease-out: 1 - (1-t)^2, scaled to reach 1+overshoot
+      final eased = 1.0 - (1.0 - normalized) * (1.0 - normalized);
+      return eased * (1.0 + _overshoot);
+    } else {
+      // Phase 2: settle back from 1+overshoot to 1.0
+      final normalized = (t - 0.7) / 0.3;
+      const overshootValue = 1.0 + _overshoot;
+      return overshootValue + (1.0 - overshootValue) * normalized;
+    }
   }
 }

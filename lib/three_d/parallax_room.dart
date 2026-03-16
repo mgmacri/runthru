@@ -57,8 +57,10 @@ class _ParallaxRoomState extends State<ParallaxRoom>
     with TickerProviderStateMixin {
   late final AnimationController _buildController;
   late final AnimationController _wordController;
+  late final AnimationController _depthBounceController;
   late final Animation<double> _buildAnimation;
   late final Animation<double> _wordAnimation;
+  late final Animation<double> _depthBounceAnimation;
   final TextPainterPool _painterPool = TextPainterPool();
 
   @override
@@ -77,7 +79,7 @@ class _ParallaxRoomState extends State<ParallaxRoom>
       curve: Curves.easeOutCubic,
     );
 
-    // Word entrance animation
+    // Word entrance animation (A-001: scale breathe)
     _wordController = AnimationController(
       vsync: this,
       duration: SpeedyBoyAnimations.wordAdvanceDuration,
@@ -85,6 +87,16 @@ class _ParallaxRoomState extends State<ParallaxRoom>
     _wordAnimation = CurvedAnimation(
       parent: _wordController,
       curve: SpeedyBoyAnimations.wordAdvanceCurve,
+    );
+
+    // Depth bounce animation (A-013: subtle forward Z motion)
+    _depthBounceController = AnimationController(
+      vsync: this,
+      duration: SpeedyBoyAnimations.wordDepthBounceDuration,
+    );
+    _depthBounceAnimation = CurvedAnimation(
+      parent: _depthBounceController,
+      curve: SpeedyBoyAnimations.wordDepthBounceCurve,
     );
 
     // Start build animation
@@ -110,8 +122,10 @@ class _ParallaxRoomState extends State<ParallaxRoom>
         final reducedMotion = isReducedMotion(context);
         if (!reducedMotion) {
           _wordController.forward(from: 0);
+          _depthBounceController.forward(from: 0);
         } else {
           _wordController.value = 1.0;
+          _depthBounceController.value = 1.0;
         }
       }
     }
@@ -121,6 +135,7 @@ class _ParallaxRoomState extends State<ParallaxRoom>
   void dispose() {
     _buildController.dispose();
     _wordController.dispose();
+    _depthBounceController.dispose();
     _painterPool.dispose();
     super.dispose();
   }
@@ -133,10 +148,11 @@ class _ParallaxRoomState extends State<ParallaxRoom>
           final size = Size(constraints.maxWidth, constraints.maxHeight);
           final config = widget.config ?? RoomConfig.fromScreen(size);
 
-          return AnimatedBuilder(
-            animation: Listenable.merge([
+          return ListenableBuilder(
+            listenable: Listenable.merge([
               _buildAnimation,
               _wordAnimation,
+              _depthBounceAnimation,
             ]),
             builder: (context, child) {
               // Focus dimming when playing
@@ -169,6 +185,8 @@ class _ParallaxRoomState extends State<ParallaxRoom>
                           config: config,
                           painterPool: _painterPool,
                           animationValue: _wordAnimation.value,
+                          depthBounceValue: _depthBounceAnimation.value,
+                          reducedMotion: isReducedMotion(context),
                           anchorColor: widget.anchorColor,
                           fontFamily: widget.fontFamily,
                         ),

@@ -9,6 +9,14 @@ workflows:
       flutter: stable
       xcode: latest
     scripts:
+      # CFBundleVersion must strictly increase for App Store Connect.
+      # Never rely on the +N in pubspec.yaml being manually bumped.
+      - name: Auto-increment build number
+        script: |
+          BUILD_NUM=$((${PROJECT_BUILD_NUMBER:-8} + 1))
+          echo "Setting build number to $BUILD_NUM"
+          sed -i.bak "s/^version: .*/version: 2.0.0+${BUILD_NUM}/" pubspec.yaml
+          cat pubspec.yaml | grep "^version:"
       - name: Get Flutter packages
         script: flutter pub get
       - name: Set up CocoaPods
@@ -37,6 +45,17 @@ workflows:
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
             --scheme Runner
+      - name: Validate build number
+        script: |
+          IPA_PATH=$(find build/ios/ipa -name '*.ipa' | head -1)
+          if [ -z "$IPA_PATH" ]; then echo "ERROR: No IPA found"; exit 1; fi
+          BUNDLE_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" \
+            <(unzip -p "$IPA_PATH" Payload/*.app/Info.plist))
+          echo "CFBundleVersion in IPA: $BUNDLE_VER"
+          if [ "$BUNDLE_VER" -le 8 ]; then
+            echo "ERROR: CFBundleVersion ($BUNDLE_VER) must be > 8"
+            exit 1
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:

@@ -30,8 +30,8 @@ Page<void> cubeTransitionPage({
         curve: SpeedyBoyAnimations.cubeRotateCurve,
       );
 
-      return AnimatedBuilder(
-        animation: curved,
+      return ListenableBuilder(
+        listenable: curved,
         builder: (BuildContext context, Widget? _) {
           final angle = direction * (math.pi / 2) * (1 - curved.value);
           final transform = Matrix4.identity()

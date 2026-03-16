@@ -69,8 +69,8 @@ class _PauseFog3DState extends State<PauseFog3D>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _opacity,
+    return ListenableBuilder(
+      listenable: _opacity,
       builder: (context, _) {
         if (_opacity.value == 0) return const SizedBox.shrink();
         return Container(

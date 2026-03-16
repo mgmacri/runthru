@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 /// Single source of truth for all Speedy Boy colors.
 /// This is the ONLY file that may contain raw Color(0xFF...) constructors.
 ///
+/// RULE: shell* tokens are for the library/settings UI.
+///       stage* tokens are for the reading viewport interior.
+///       Never cross-reference. See copilot-instructions.md rule 7.
+///
 /// Palette sourced from the Speedy Boy Design-Colors spec.
 class SpeedyBoyTokens extends ThemeExtension<SpeedyBoyTokens> {
   const SpeedyBoyTokens._();
@@ -44,6 +48,8 @@ class SpeedyBoyTokens extends ThemeExtension<SpeedyBoyTokens> {
   static const Color shellReady = Color(0xFF149C88);
   // shellError = Hot Coral
   static const Color shellError = Color(0xFFED5656);
+  // shellOnError = near-white for text on error surfaces
+  static const Color shellOnError = Color(0xFFF4F5F0);
 
   // ── WPM Dial ring gradient ──
   // Low = Brittany Blue, Mid = Marigold, High = Hot Coral

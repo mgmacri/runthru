@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/services/models.dart';
+import 'package:speedy_boy/widgets/neumorphic_ripple_loading.dart';
 
 /// 3D neumorphic PDF card with press/release animations.
 class PdfCard3D extends StatefulWidget {
@@ -21,7 +22,6 @@ class PdfCard3D extends StatefulWidget {
 
 class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
   late final AnimationController _pressController;
-  late final AnimationController _pulseController;
 
   @override
   void initState() {
@@ -30,32 +30,11 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
       vsync: this,
       duration: SpeedyBoyAnimations.cardPressDuration,
     );
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: SpeedyBoyAnimations.processingPulseDuration,
-    );
-
-    if (widget.entry.status == PdfStatus.processing) {
-      _pulseController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void didUpdateWidget(PdfCard3D oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.entry.status == PdfStatus.processing) {
-      if (!_pulseController.isAnimating) {
-        _pulseController.repeat(reverse: true);
-      }
-    } else {
-      _pulseController.stop();
-    }
   }
 
   @override
   void dispose() {
     _pressController.dispose();
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -64,6 +43,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
       case PdfStatus.ready:
         return SpeedyBoyTokens.shellReady;
       case PdfStatus.processing:
+      case PdfStatus.preview:
         return SpeedyBoyTokens.shellProcessing;
       case PdfStatus.error:
       case PdfStatus.unsupported:
@@ -100,8 +80,8 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
           );
         }
       },
-      child: AnimatedBuilder(
-        animation: _pressController,
+      child: ListenableBuilder(
+        listenable: _pressController,
         builder: (context, child) {
           final pressValue = _pressController.value;
           final zTranslate = 3.0 - (3.0 * pressValue);
@@ -114,16 +94,20 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
             child: child,
           );
         },
-        child: Container(
-          margin: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 8,
-          ),
-          padding: const EdgeInsets.all(16),
-          decoration: SpeedyBoyDecorations.raisedDecoration(
-            SpeedyBoySurface.shell,
-          ),
-          child: Column(
+        child: NeumorphicRippleLoading(
+          isLoading: widget.entry.status == PdfStatus.processing ||
+              widget.entry.status == PdfStatus.preview,
+          surface: SpeedyBoySurface.shell,
+          child: Container(
+            margin: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            padding: const EdgeInsets.all(16),
+            decoration: SpeedyBoyDecorations.raisedDecoration(
+              SpeedyBoySurface.shell,
+            ),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── PDF name ──
@@ -159,22 +143,13 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
               // ── Status row ──
               Row(
                 children: [
-                  AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, _) {
-                      return Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _statusColor().withOpacity(
-                            widget.entry.status == PdfStatus.processing
-                                ? 0.5 + 0.5 * _pulseController.value
-                                : 1.0,
-                          ),
-                        ),
-                      );
-                    },
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _statusColor(),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -186,6 +161,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -196,6 +172,8 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
         return 'Ready';
       case PdfStatus.processing:
         return 'Preparing…';
+      case PdfStatus.preview:
+        return 'Preview ready';
       case PdfStatus.error:
         return 'Error (retry ${widget.entry.retryCount}/${PdfEntry.maxRetries})';
       case PdfStatus.unsupported:

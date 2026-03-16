@@ -1,10 +1,14 @@
 /// Data models for persistent configuration.
 library;
 
+import 'package:speedy_boy/services/models.dart';
+
 class BookmarkData {
   const BookmarkData({
     required this.wordIndex,
     this.timestamp,
+    this.readingRange,
+    this.readingProgress = 0.0,
   });
 
   factory BookmarkData.fromJson(Map<String, Object?> json) {
@@ -13,15 +17,39 @@ class BookmarkData {
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'] as String)
           : null,
+      readingRange: json['readingRange'] != null
+          ? ReadingRange.fromJson(json['readingRange'] as Map<String, Object?>)
+          : null,
+      readingProgress: (json['readingProgress'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
   final int wordIndex;
   final DateTime? timestamp;
+  final ReadingRange? readingRange;
+  final double readingProgress;
+
+  BookmarkData copyWith({
+    int? wordIndex,
+    DateTime? timestamp,
+    ReadingRange? readingRange,
+    bool clearReadingRange = false,
+    double? readingProgress,
+  }) {
+    return BookmarkData(
+      wordIndex: wordIndex ?? this.wordIndex,
+      timestamp: timestamp ?? this.timestamp,
+      readingRange:
+          clearReadingRange ? null : (readingRange ?? this.readingRange),
+      readingProgress: readingProgress ?? this.readingProgress,
+    );
+  }
 
   Map<String, Object?> toJson() => {
         'wordIndex': wordIndex,
         'timestamp': timestamp?.toIso8601String(),
+        'readingRange': readingRange?.toJson(),
+        'readingProgress': readingProgress,
       };
 }
 

@@ -42,6 +42,26 @@ class SpeedyBoyMaterials {
 
   /// Bevel radius for extruded letter edges.
   static const double bevelRadius = 0.5;
+
+  // ── A-013: Word Depth Bounce-In constants ──
+  // "Felt, not seen" — all values are tuned to be barely perceptible.
+
+  /// Room units of forward Z-travel during word bounce-in.
+  static const double wordBounceDepthDeltaZ = 0.8;
+
+  /// Shadow blur range: (start, resting).
+  static const double wordBounceShadowBlurMin = 44.0;
+  static const double wordBounceShadowBlurMax = 52.0;
+
+  /// Shadow opacity range: (start dim, resting full).
+  static const double wordBounceShadowOpacityMin = 0.252; // 0.36 * 0.7
+  static const double wordBounceShadowOpacityMax = 0.36;
+
+  /// Shadow Y offset at full bounce (room units).
+  static const double wordBounceShadowOffsetY = 2.0;
+
+  /// Bounce overshoot fraction (4%).
+  static const double wordBounceOvershoot = 0.04;
 }
 
 class MaterialParams {

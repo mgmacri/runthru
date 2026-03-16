@@ -4,6 +4,11 @@ import 'package:flutter/widgets.dart';
 
 /// Dynamic font size calculation for 3D word display.
 /// Adapts to viewport size and device pixel ratio.
+///
+/// NOTE: This is used only by the non-parallax reading_screen.dart.
+/// The parallax reading screen uses [BackWallFontSizer] from
+/// `lib/three_d/back_wall_font_sizer.dart` which sizes text relative
+/// to the projected back wall width.
 double dynamicFontSize(BoxConstraints constraints) {
   final width = constraints.maxWidth;
   final height = constraints.maxHeight;

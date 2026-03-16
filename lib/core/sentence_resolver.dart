@@ -6,14 +6,20 @@ import 'package:speedy_boy/store/models.dart';
 ///
 /// Sentences are flattened to a global word index space.
 /// If the bookmark is already at a sentence start, returns same.
+///
+/// If a [ReadingRange] is set on the bookmark and the index falls
+/// before the range start, snaps to [resolvedStartWordIndex].
 int resumeIndex(BookmarkData bookmark, ExtractedDocument doc) {
   if (doc.sentences.isEmpty) return 0;
+
+  final range = bookmark.readingRange;
+  final minIndex = range?.resolvedStartWordIndex ?? 0;
 
   var globalIndex = 0;
   for (final sentence in doc.sentences) {
     final sentenceEnd = globalIndex + sentence.words.length;
     if (bookmark.wordIndex < sentenceEnd) {
-      return globalIndex;
+      return globalIndex < minIndex ? minIndex : globalIndex;
     }
     globalIndex = sentenceEnd;
   }
@@ -23,5 +29,5 @@ int resumeIndex(BookmarkData bookmark, ExtractedDocument doc) {
   for (var i = 0; i < doc.sentences.length - 1; i++) {
     lastStart += doc.sentences[i].words.length;
   }
-  return lastStart;
+  return lastStart < minIndex ? minIndex : lastStart;
 }

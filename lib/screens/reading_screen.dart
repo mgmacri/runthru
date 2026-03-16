@@ -169,8 +169,8 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                     behavior: HitTestBehavior.opaque,
                     onTap: _togglePause,
                     onLongPress: _showDial,
-                    child: AnimatedBuilder(
-                      animation: _breatheController,
+                    child: ListenableBuilder(
+                      listenable: _breatheController,
                       builder: (context, child) {
                         return CubeViewport(
                           parallaxOffset: Offset.zero,

@@ -1,7 +1,8 @@
+# Audit dependencies quarterly. Remove any package with zero imports in lib/.
 name: speedy_boy
 description: "Speedy Boy — Cross-platform speed reading app with 3D neumorphic cube viewport."
 publish_to: 'none'
-version: 2.0.0+8
+version: 2.0.0+10
 
 environment:
   sdk: ^3.5.3
@@ -17,8 +18,8 @@ dependencies:
   path_provider: ^2.1.5
   file_picker: ^8.1.6
   permission_handler: ^11.3.1
-  flutter_animate: ^4.5.2
   window_manager: ^0.4.3
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:

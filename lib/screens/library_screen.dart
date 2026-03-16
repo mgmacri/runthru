@@ -65,8 +65,13 @@ class LibraryScreen extends ConsumerWidget {
                   processed,
                   config,
                 ),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
+                loading: () => Center(
+                  child: Text(
+                    'Loading…',
+                    style: SpeedyBoyTypography.body.copyWith(
+                      color: SpeedyBoyTokens.shellTextSecondary,
+                    ),
+                  ),
                 ),
                 error: (error, _) => Center(
                   child: Text(
@@ -149,7 +154,7 @@ class _ErrorBadge extends StatelessWidget {
       child: Text(
         '$count failed',
         style: SpeedyBoyTypography.caption.copyWith(
-          color: SpeedyBoyTokens.stageText,
+          color: SpeedyBoyTokens.shellOnError,
         ),
       ),
     );

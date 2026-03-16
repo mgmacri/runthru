@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -7,7 +8,8 @@ import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/store/config.dart';
 
-/// Scans a folder recursively for .pdf files.
+/// Scans one or more folders recursively for .pdf files.
+/// Supports multi-directory concurrent scanning with streaming results.
 class FolderScannerService {
   FolderScannerService._();
 
@@ -15,7 +17,10 @@ class FolderScannerService {
 
   static const String _tag = 'folder_scanner';
 
-  /// Scan for PDFs.
+  /// Maximum concurrent scan isolates when batching >4 directories.
+  static const int _maxConcurrentScans = 4;
+
+  /// Scan a single directory for PDFs.
   ///
   /// On iOS the picked directory is a security-scoped URL whose access
   /// token is only valid on the main isolate, so we scan synchronously
@@ -28,13 +33,67 @@ class FolderScannerService {
     }
     try {
       if (_isIos) {
-        // Security-scoped resource — must stay on the main isolate.
         return _scanSync(folderPath);
       }
       return await Isolate.run(() => _scanSync(folderPath));
     } on Object catch (e, st) {
       appLog(_tag, 'scanAsync EXCEPTION: $e\n$st');
       return [];
+    }
+  }
+
+  /// Scan multiple directories concurrently.
+  /// Results are deduplicated by canonical file path.
+  static Future<List<PdfEntry>> scanMultipleAsync(
+    List<String> folderPaths,
+  ) async {
+    if (folderPaths.isEmpty) return [];
+
+    final seen = <String>{};
+    final results = <PdfEntry>[];
+
+    // Batch concurrency: scan up to _maxConcurrentScans at a time.
+    for (var i = 0; i < folderPaths.length; i += _maxConcurrentScans) {
+      final batch = folderPaths.skip(i).take(_maxConcurrentScans);
+      final futures = batch.map(scanAsync);
+      final batchResults = await Future.wait(futures);
+
+      for (final entries in batchResults) {
+        for (final entry in entries) {
+          final canonical = _canonicalPath(entry.filePath);
+          if (seen.add(canonical)) {
+            results.add(entry);
+          }
+        }
+      }
+    }
+
+    results.sort((a, b) => a.fileName.compareTo(b.fileName));
+    return results;
+  }
+
+  /// Stream scanned PdfEntry objects incrementally from multiple directories.
+  /// Cards appear one-by-one as they are discovered.
+  static Stream<PdfEntry> scanMultipleStream(
+    List<String> folderPaths,
+  ) async* {
+    if (folderPaths.isEmpty) return;
+
+    final seen = <String>{};
+
+    for (var i = 0; i < folderPaths.length; i += _maxConcurrentScans) {
+      final batch = folderPaths.skip(i).take(_maxConcurrentScans).toList();
+      final futures = batch.map(scanAsync);
+      final batchResults = await Future.wait(futures);
+
+      for (final entries in batchResults) {
+        for (final entry in entries) {
+          final canonical = _canonicalPath(entry.filePath);
+          if (seen.add(canonical)) {
+            yield entry;
+          }
+        }
+      }
     }
   }
 
@@ -62,13 +121,6 @@ class FolderScannerService {
       appLog(_tag, '_scanSync — listSync returned ${entities.length} entities');
 
       for (final entity in entities) {
-        final type = entity is File
-            ? 'File'
-            : entity is Directory
-                ? 'Dir'
-                : entity.runtimeType.toString();
-        appLog(_tag, '  entity: $type ${entity.path}');
-
         if (entity is File) {
           final path = entity.path;
           if (path.toLowerCase().endsWith('.pdf')) {
@@ -87,16 +139,28 @@ class FolderScannerService {
     entries.sort((a, b) => a.fileName.compareTo(b.fileName));
     return entries;
   }
+
+  /// Normalize a file path for deduplication.
+  static String _canonicalPath(String path) {
+    // On Windows, normalize separators and lower-case for case-insensitive FS.
+    var canonical = path.replaceAll('\\', '/');
+    if (!kIsWeb && Platform.isWindows) {
+      canonical = canonical.toLowerCase();
+    }
+    return canonical;
+  }
 }
 
 /// Riverpod provider that watches config for folder path changes.
-/// Returns a FutureProvider since folder scanning now runs in an isolate.
 final pdfListProvider = FutureProvider<List<PdfEntry>>((ref) async {
   final config = ref.watch(configProvider);
   return config.when(
     data: (c) {
       appLog('pdfListProvider', 'config loaded — folder=${c.pdfFolderPath}');
-      return FolderScannerService.scanAsync(c.pdfFolderPath);
+      final path = c.pdfFolderPath;
+      if (path == null || path.isEmpty) return Future.value([]);
+      // Support single path via scanAsync for backward compatibility.
+      return FolderScannerService.scanAsync(path);
     },
     loading: () async {
       appLog('pdfListProvider', 'config loading…');
@@ -107,4 +171,10 @@ final pdfListProvider = FutureProvider<List<PdfEntry>>((ref) async {
       return [];
     },
   );
+});
+
+/// Stream-based provider for incremental multi-directory scanning.
+final pdfStreamProvider =
+    StreamProvider.family<PdfEntry, List<String>>((ref, folderPaths) {
+  return FolderScannerService.scanMultipleStream(folderPaths);
 });

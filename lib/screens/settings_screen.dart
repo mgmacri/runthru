@@ -1,4 +1,4 @@
-import 'dart:io' show Directory, File, FileSystemEntity, FileSystemException, Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -68,8 +68,9 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  /// iOS: pick a folder, immediately scan with async list() while the
-  /// security scope is active, copy found PDFs to app-local storage.
+  /// iOS: pick a folder, use native security-scoped access to list and copy
+  /// PDF files to app-local storage. Falls back to multi-file picker if
+  /// directory access fails.
   Future<void> _pickPdfsIos(
     BuildContext context,
     ConfigNotifier notifier,
@@ -83,65 +84,103 @@ class SettingsScreen extends ConsumerWidget {
       return;
     }
 
-    // Scan immediately while the security scope is still active.
-    // MUST use async dir.list(), not listSync().
-    final directory = Directory(selectedPath);
-    appLog('settings', 'iOS: listing directory (async)…');
-    final List<FileSystemEntity> entities;
+    // Use native platform channel for security-scoped directory access.
+    final docsDir = await getApplicationDocumentsDirectory();
+    final pdfDirPath = '${docsDir.path}/pdfs';
+
     try {
-      entities = await directory.list(recursive: false).toList();
-    } on FileSystemException catch (e) {
-      appLog('settings', 'iOS: dir.list() failed: ${e.message}');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cannot read folder: ${e.message}'),
-            backgroundColor: SpeedyBoyTokens.shellError,
-          ),
+      const channel = MethodChannel('com.speedyboy/ios_file_access');
+      final result = await channel.invokeMapMethod<String, dynamic>(
+        'copyPdfsToLocal',
+        {'sourcePath': selectedPath, 'destPath': pdfDirPath},
+      );
+      appLog('settings', 'iOS: native copy result=$result');
+
+      if (result == null) {
+        throw PlatformException(
+          code: 'NULL_RESULT',
+          message: 'Native channel returned null',
         );
       }
+
+      final copied = result['copied'] as int? ?? 0;
+      final total = result['total'] as int? ?? 0;
+      appLog('settings', 'iOS: $copied/$total PDFs copied to $pdfDirPath');
+
+      if (copied == 0 && total == 0) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No PDF files found in that folder')),
+          );
+        }
+        return;
+      }
+
+      await notifier.setPdfFolderPath(pdfDirPath);
+      appLog('settings', 'iOS: pdfFolderPath set to $pdfDirPath');
+
+      if (context.mounted && copied > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$copied PDF(s) added')),
+        );
+      }
+    } on PlatformException catch (e) {
+      appLog('settings', 'iOS: native channel failed: ${e.message}');
+      appLog('settings', 'iOS: falling back to multi-file picker');
+
+      // Fallback — let the user pick individual PDF files.
+      if (context.mounted) {
+        await _pickPdfsIosFallback(context, notifier);
+      }
+    } on MissingPluginException {
+      appLog('settings', 'iOS: native channel not available, using fallback');
+      if (context.mounted) {
+        await _pickPdfsIosFallback(context, notifier);
+      }
+    }
+  }
+
+  /// Fallback: pick individual PDF files (works without security-scoped
+  /// directory access because file_picker handles per-file scope).
+  Future<void> _pickPdfsIosFallback(
+    BuildContext context,
+    ConfigNotifier notifier,
+  ) async {
+    appLog('settings', 'iOS fallback: calling pickFiles(allowMultiple)…');
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      allowMultiple: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      appLog('settings', 'iOS fallback: user cancelled or no files');
       return;
     }
 
-    appLog('settings', 'iOS: found ${entities.length} entities');
-    final pdfFiles = entities
-        .whereType<File>()
-        .where((f) => f.path.toLowerCase().endsWith('.pdf'))
-        .toList();
-    appLog('settings', 'iOS: ${pdfFiles.length} PDFs in folder');
-
-    if (pdfFiles.isEmpty) {
-      appLog('settings', 'iOS: no PDFs found in picked folder');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No PDF files found in that folder')),
-        );
-      }
-      return;
-    }
-
-    // Copy to app-local storage for persistence across app restarts.
     final docsDir = await getApplicationDocumentsDirectory();
     final pdfDir = Directory('${docsDir.path}/pdfs');
     if (!pdfDir.existsSync()) pdfDir.createSync(recursive: true);
-    appLog('settings', 'iOS: local PDF dir = ${pdfDir.path}');
+    appLog('settings', 'iOS fallback: local PDF dir = ${pdfDir.path}');
 
     var copied = 0;
-    for (final file in pdfFiles) {
-      final name = file.path.split('/').last;
+    for (final pickedFile in result.files) {
+      final sourcePath = pickedFile.path;
+      if (sourcePath == null) continue;
+      final name = pickedFile.name;
       final dest = '${pdfDir.path}/$name';
       try {
-        await file.copy(dest);
+        await File(sourcePath).copy(dest);
         copied++;
-        appLog('settings', 'iOS: copied "$name" → $dest');
+        appLog('settings', 'iOS fallback: copied "$name" → $dest');
       } on Object catch (e) {
-        appLog('settings', 'iOS: failed to copy "$name": $e');
+        appLog('settings', 'iOS fallback: failed to copy "$name": $e');
       }
     }
 
-    appLog('settings', 'iOS: $copied files copied to ${pdfDir.path}');
+    appLog('settings', 'iOS fallback: $copied files copied to ${pdfDir.path}');
     await notifier.setPdfFolderPath(pdfDir.path);
-    appLog('settings', 'iOS: pdfFolderPath set to ${pdfDir.path}');
+    appLog('settings', 'iOS fallback: pdfFolderPath set to ${pdfDir.path}');
 
     if (context.mounted && copied > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -324,13 +363,13 @@ class SettingsScreen extends ConsumerWidget {
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: SpeedyBoyTokens.shellAccent,
-                        foregroundColor: SpeedyBoyTokens.stageText,
+                        foregroundColor: SpeedyBoyTokens.shellBase,
                       ),
                       onPressed: () => _pickFolder(context, notifier),
                       child: Text(
                         _isIos ? 'Import Folder' : 'Browse',
                         style: SpeedyBoyTypography.body.copyWith(
-                          color: SpeedyBoyTokens.stageText,
+                          color: SpeedyBoyTokens.shellBase,
                         ),
                       ),
                     ),
@@ -386,7 +425,7 @@ class SettingsScreen extends ConsumerWidget {
                           child: selected
                               ? const Icon(
                                   Icons.check,
-                                  color: SpeedyBoyTokens.stageText,
+                                  color: SpeedyBoyTokens.shellTextPrimary,
                                   size: 20,
                                 )
                               : null,

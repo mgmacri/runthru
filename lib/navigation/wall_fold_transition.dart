@@ -71,8 +71,8 @@ Page<void> libraryTransitionPage({
           parent: secondaryAnimation,
           curve: Curves.easeOutCubic,
         );
-        result = AnimatedBuilder(
-          animation: zoomCurved,
+        result = ListenableBuilder(
+          listenable: zoomCurved,
           child: result,
           builder: (context, animChild) {
             // secondary 1.0 = covered (small), 0.0 = uncovered (normal)

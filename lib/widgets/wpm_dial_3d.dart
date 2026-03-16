@@ -94,8 +94,8 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _emergeAnimation,
+    return ListenableBuilder(
+      listenable: _emergeAnimation,
       builder: (context, child) {
         if (_emergeAnimation.value == 0) {
           return const SizedBox.shrink();
