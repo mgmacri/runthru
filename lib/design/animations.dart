@@ -66,7 +66,7 @@ class SpeedyBoyAnimations {
 
   // ── A-013: Word Depth Bounce-In ──
   // "Felt, not seen" — a barely perceptible depth cue.
-  static const Duration wordDepthBounceDuration = Duration(milliseconds: 120);
+  static const Duration wordDepthBounceDuration = Duration(milliseconds: 160);
   static const Curve wordDepthBounceCurve = SubtleBounceIn();
 
   /// Per-glyph stagger delay for the micro wave settling effect.
@@ -131,8 +131,8 @@ class SpeedyBoyAnimations {
 class SubtleBounceIn extends Curve {
   const SubtleBounceIn();
 
-  /// Maximum overshoot fraction (4%).
-  static const double _overshoot = 0.04;
+  /// Maximum overshoot fraction (8%).
+  static const double _overshoot = 0.08;
 
   @override
   double transformInternal(double t) {

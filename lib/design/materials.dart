@@ -47,7 +47,7 @@ class SpeedyBoyMaterials {
   // "Felt, not seen" — all values are tuned to be barely perceptible.
 
   /// Room units of forward Z-travel during word bounce-in.
-  static const double wordBounceDepthDeltaZ = 0.8;
+  static const double wordBounceDepthDeltaZ = 1.2;
 
   /// Shadow blur range: (start, resting).
   static const double wordBounceShadowBlurMin = 44.0;
@@ -60,8 +60,8 @@ class SpeedyBoyMaterials {
   /// Shadow Y offset at full bounce (room units).
   static const double wordBounceShadowOffsetY = 2.0;
 
-  /// Bounce overshoot fraction (4%).
-  static const double wordBounceOvershoot = 0.04;
+  /// Bounce overshoot fraction (8%).
+  static const double wordBounceOvershoot = 0.08;
 }
 
 class MaterialParams {

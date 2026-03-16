@@ -249,7 +249,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                 child: ValueListenableBuilder<String>(
                   valueListenable: _wordNotifier,
                   builder: (context, currentWord, _) {
-                    final fontSize = _fontSizer.computeFontSize(
+                    final baseFontSize = _fontSizer.computeFontSize(
                       roomConfig,
                       0, // headX
                       0, // headY
@@ -257,6 +257,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                       constraints.maxHeight,
                       currentWord,
                     );
+                    final fontSize = (!kIsWeb && Platform.isIOS)
+                        ? baseFontSize * 1.3
+                        : baseFontSize;
 
                     return ParallaxRoom(
                       headX: 0,

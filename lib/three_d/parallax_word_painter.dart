@@ -68,29 +68,12 @@ class ParallaxWordPainter extends CustomPainter {
   // ── Pre-allocated paints ─────────────────────────────────────────────
   static final Paint _glowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
-  static final Paint _shadowPaint = Paint();
   static final Paint _vignettePaint = Paint();
   static final Path _facePath = Path();
-
-  // ── Pre-computed MaskFilter LUT for shadow blur animation ────────────
-  // 8 entries covering blur range [44, 52]. Selected by nearest index
-  // in paint() to avoid allocating MaskFilter objects per frame.
-  static final List<MaskFilter> _shadowBlurLut = List.generate(
-    8,
-    (i) {
-      final blur = SpeedyBoyMaterials.wordBounceShadowBlurMin +
-          (SpeedyBoyMaterials.wordBounceShadowBlurMax -
-                  SpeedyBoyMaterials.wordBounceShadowBlurMin) *
-              i /
-              7.0;
-      return MaskFilter.blur(BlurStyle.normal, blur);
-    },
-  );
 
   // ── Colours (marble aesthetic) ───────────────────────────────────────
   static const Color _textColor = Color(0xFF2E272A);
   static const Color _glowColor = Color(0x30F0DCC0);
-  static const Color _shadowColor = Color(0x30A09080);
   static const List<Color> _vignetteColors = [
     Color(0x00000000),
     Color(0x18A09080),
@@ -116,77 +99,14 @@ class ParallaxWordPainter extends CustomPainter {
 
     // ── A-013: Depth bounce Z motion ────────────────────────────────
     // Text starts at textZ + deltaZ (behind resting) and settles forward.
-    // bounceValue follows SubtleBounceIn — includes 4% overshoot.
+    // bounceValue follows SubtleBounceIn — includes overshoot.
     final bounceValue = reducedMotion ? 1.0 : depthBounceValue;
 
-    // ── A-013: Shadow animation ─────────────────────────────────────
-    // Shadow blur scales with bounce: tighter when far, larger at rest.
-    final shadowBlurNorm = bounceValue.clamp(0.0, 1.0);
-    final lutIndex = (shadowBlurNorm * 7).round().clamp(0, 7);
-    _shadowPaint.maskFilter = _shadowBlurLut[lutIndex];
-
-    // Shadow opacity: faint → full strength
-    final shadowOpacity = SpeedyBoyMaterials.wordBounceShadowOpacityMin +
-        (SpeedyBoyMaterials.wordBounceShadowOpacityMax -
-                SpeedyBoyMaterials.wordBounceShadowOpacityMin) *
-            shadowBlurNorm;
-    _shadowPaint.color = _shadowColor.withOpacity(shadowOpacity);
-
-    // Shadow Y offset: shifts downward as text comes forward
-    final shadowOffsetY =
-        SpeedyBoyMaterials.wordBounceShadowOffsetY * bounceValue;
-
-    // ── Pass 1: Shadow behind word ──────────────────────────────────
     final wordHalfW = (totalGlyphWidth / config.unitScale) / 2.0;
     final cx = -anchorOffsetRoomUnits;
     final halfH = ((textHeight / config.unitScale) / 2.0) * entranceScale;
 
-    for (var i = 0; i < _glyphs.length; i++) {
-      final glyph = _glyphs[i];
-      // Per-glyph Z from stagger
-      final glyphZ = _glyphZ(i, baseTextZ, bounceValue);
-      // Shadow sits behind the text at a fixed depth offset
-      final shadowZ = glyphZ + 1.0;
-
-      final leftRoom = cx +
-          ((glyph.xOffset / config.unitScale) - wordHalfW) * entranceScale +
-          _glyphGap;
-      final rightRoom = cx +
-          (((glyph.xOffset + glyph.width) / config.unitScale) - wordHalfW) *
-              entranceScale -
-          _glyphGap;
-      final midX = (leftRoom + rightRoom) / 2;
-
-      final pMid =
-          _p(Point3D(midX, -shadowOffsetY / config.unitScale, shadowZ), size);
-      if (pMid == null) continue;
-
-      final pLeft = _p(
-          Point3D(leftRoom, halfH - shadowOffsetY / config.unitScale, shadowZ),
-          size);
-      final pRight = _p(
-          Point3D(rightRoom, halfH - shadowOffsetY / config.unitScale, shadowZ),
-          size);
-      if (pLeft == null || pRight == null) continue;
-
-      final projW = (pRight.dx - pLeft.dx).abs();
-      final textScale = glyph.width > 0 ? projW / glyph.width : 1.0;
-      final efs = fontSize * textScale;
-
-      final poolIndex = i % TextPainterPool.maxSize;
-      painterPool.configure(
-        poolIndex,
-        glyph.character,
-        SpeedyBoyTypography.readingWord(efs, fontFamily: fontFamily),
-      );
-      final tp = painterPool[poolIndex];
-      tp.paint(
-        canvas,
-        Offset(pMid.dx - tp.width / 2, pMid.dy - tp.height / 2),
-      );
-    }
-
-    // ── Pass 2: Warm centered glow behind word ──────────────────
+    // ── Pass 1: Warm centered glow behind word ──────────────────
     _glowPaint.color = _glowColor;
 
     for (var i = 0; i < _glyphs.length; i++) {
@@ -207,7 +127,7 @@ class ParallaxWordPainter extends CustomPainter {
       canvas.drawPath(_facePath, _glowPaint);
     }
 
-    // ── Pass 3: Single-layer text (no extrusion) ─────────────────────
+    // ── Pass 2: Single-layer text (no extrusion) ─────────────────────
     for (var i = 0; i < _glyphs.length; i++) {
       final glyph = _glyphs[i];
       final isAnchor = i == anchorIdx;
