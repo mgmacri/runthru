@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:speedy_boy/design/design.dart';
@@ -6,6 +7,7 @@ import 'package:speedy_boy/services/folder_scanner.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/preprocessing_queue.dart';
 import 'package:speedy_boy/store/config.dart';
+import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/widgets/pdf_card_3d.dart';
 
 /// Library screen — lists PDFs as 3D neumorphic cards.
@@ -121,12 +123,47 @@ class LibraryScreen extends ConsumerWidget {
         final processedEntry = processed[entry.filePath];
         final displayEntry = processedEntry ?? entry;
 
+        // Compute range-aware progress and label.
+        final appConfig = config.valueOrNull;
+        final bookmark =
+            appConfig is AppConfig ? appConfig.bookmarks[entry.filePath] : null;
+        final range = bookmark?.readingRange;
+        double readingProgress = 0.0;
+        String? rangeLabel;
+
+        if (range != null) {
+          final rangeStart = range.resolvedStartWordIndex;
+          final rangeEnd = range.resolvedEndWordIndex;
+          final rangeSize = rangeEnd - rangeStart;
+          if (rangeSize > 0 && bookmark != null) {
+            readingProgress =
+                ((bookmark.wordIndex - rangeStart) / rangeSize).clamp(0.0, 1.0);
+          }
+          rangeLabel = 'Pages ${range.startPage + 1}\u2013${range.endPage + 1}';
+        } else if (bookmark != null && displayEntry.document != null) {
+          final totalWords = displayEntry.document!.totalWords;
+          if (totalWords > 0) {
+            readingProgress = (bookmark.wordIndex / totalWords).clamp(0.0, 1.0);
+          }
+        }
+
         return PdfCard3D(
           entry: displayEntry,
+          readingProgress: readingProgress,
+          rangeLabel: rangeLabel,
           onTap: displayEntry.status == PdfStatus.ready
               ? () {
                   context.push(Uri(
                     path: '/read',
+                    queryParameters: {'path': entry.filePath},
+                  ).toString());
+                }
+              : null,
+          onLongPress: displayEntry.status == PdfStatus.ready
+              ? () {
+                  HapticFeedback.mediumImpact();
+                  context.push(Uri(
+                    path: '/range-picker',
                     queryParameters: {'path': entry.filePath},
                   ).toString());
                 }

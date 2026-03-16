@@ -9,12 +9,18 @@ class PdfCard3D extends StatefulWidget {
     super.key,
     required this.entry,
     this.readingProgress = 0.0,
+    this.rangeLabel,
     this.onTap,
+    this.onLongPress,
   });
 
   final PdfEntry entry;
   final double readingProgress;
+
+  /// Optional label like "Pages 42–87" shown when a range is set.
+  final String? rangeLabel;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   State<PdfCard3D> createState() => _PdfCard3DState();
@@ -80,6 +86,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
           );
         }
       },
+      onLongPress: widget.onLongPress,
       child: ListenableBuilder(
         listenable: _pressController,
         builder: (context, child) {
@@ -108,59 +115,68 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
               SpeedyBoySurface.shell,
             ),
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── PDF name ──
-              Text(
-                widget.entry.fileName,
-                style: SpeedyBoyTypography.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-
-              // ── Progress bar (inset) ──
-              Container(
-                height: 6,
-                decoration: SpeedyBoyDecorations.insetDecoration(
-                  SpeedyBoySurface.shell,
-                  size: SpeedyBoyShadowSize.small,
-                  borderRadius: 3,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── PDF name ──
+                Text(
+                  widget.entry.fileName,
+                  style: SpeedyBoyTypography.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: widget.readingProgress.clamp(0.0, 1.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: SpeedyBoyTokens.shellAccent,
-                      borderRadius: BorderRadius.circular(3),
+                const SizedBox(height: 8),
+
+                // ── Progress bar (inset) ──
+                Container(
+                  height: 6,
+                  decoration: SpeedyBoyDecorations.insetDecoration(
+                    SpeedyBoySurface.shell,
+                    size: SpeedyBoyShadowSize.small,
+                    borderRadius: 3,
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: widget.readingProgress.clamp(0.0, 1.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: SpeedyBoyTokens.shellAccent,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-              // ── Status row ──
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _statusColor(),
+                // ── Status row ──
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _statusColor(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _statusLabel(),
-                    style: SpeedyBoyTypography.caption,
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 8),
+                    Text(
+                      _statusLabel(),
+                      style: SpeedyBoyTypography.caption,
+                    ),
+                    if (widget.rangeLabel != null) ...[
+                      const SizedBox(width: 12),
+                      Text(
+                        widget.rangeLabel!,
+                        style: SpeedyBoyTypography.caption.copyWith(
+                          color: SpeedyBoyTokens.shellAccent,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

@@ -67,7 +67,10 @@ class PdfCache {
 
       final raw = await cacheFile.readAsString();
       final json = jsonDecode(raw) as Map<String, Object?>;
-      return ExtractedDocument.fromJson(json);
+      final doc = ExtractedDocument.fromJson(json);
+      // Invalidate cache entries without page boundaries (old format).
+      if (!doc.hasPageBoundaries) return null;
+      return doc;
     } on Object catch (e) {
       dev.log('Cache load failed: $e', name: 'pdf_cache');
       return null;
@@ -92,7 +95,10 @@ class PdfCache {
 
       final raw = await cacheFile.readAsString();
       final json = jsonDecode(raw) as Map<String, Object?>;
-      return ExtractedDocument.fromJson(json);
+      final doc = ExtractedDocument.fromJson(json);
+      // Invalidate cache entries without page boundaries (old format).
+      if (!doc.hasPageBoundaries) return null;
+      return doc;
     } on Object catch (e) {
       dev.log('Preview cache load failed: $e', name: 'pdf_cache');
       return null;

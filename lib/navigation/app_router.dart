@@ -3,6 +3,7 @@ import 'package:speedy_boy/navigation/cube_transition.dart';
 import 'package:speedy_boy/navigation/wall_fold_transition.dart';
 import 'package:speedy_boy/screens/library_screen.dart';
 import 'package:speedy_boy/screens/parallax_reading_screen.dart';
+import 'package:speedy_boy/screens/range_picker_screen.dart';
 import 'package:speedy_boy/screens/reading_screen.dart';
 import 'package:speedy_boy/screens/settings_screen.dart';
 
@@ -34,6 +35,16 @@ final appRouter = GoRouter(
           key: state.pageKey,
           direction: -1,
           child: ReadingScreen(filePath: filePath),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/range-picker',
+      pageBuilder: (context, state) {
+        final filePath = state.uri.queryParameters['path'] ?? '';
+        return cubeTransitionPage(
+          key: state.pageKey,
+          child: RangePickerScreen(filePath: filePath),
         );
       },
     ),

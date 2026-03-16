@@ -16,17 +16,31 @@ class Sentence {
 }
 
 class ExtractedDocument {
-  const ExtractedDocument({required this.sentences});
+  const ExtractedDocument({
+    required this.sentences,
+    this.pageBoundaries = const [],
+    this.totalPages = 0,
+  });
 
   factory ExtractedDocument.fromJson(Map<String, Object?> json) {
     final sentences = (json['sentences'] as List<Object?>?)
             ?.map((e) => Sentence.fromJson(e as Map<String, Object?>))
             .toList() ??
         <Sentence>[];
-    return ExtractedDocument(sentences: sentences);
+    final pageBoundaries = (json['pageBoundaries'] as List<Object?>?)
+            ?.map((e) => PageBoundary.fromJson(e as Map<String, Object?>))
+            .toList() ??
+        <PageBoundary>[];
+    return ExtractedDocument(
+      sentences: sentences,
+      pageBoundaries: pageBoundaries,
+      totalPages: json['totalPages'] as int? ?? 0,
+    );
   }
 
   final List<Sentence> sentences;
+  final List<PageBoundary> pageBoundaries;
+  final int totalPages;
 
   /// Total word count across all sentences.
   int get totalWords => sentences.fold(0, (sum, s) => sum + s.words.length);
@@ -34,15 +48,22 @@ class ExtractedDocument {
   /// Flat list of all words in reading order.
   List<String> get allWords => sentences.expand((s) => s.words).toList();
 
+  /// Whether this document has page boundary data (for range picker support).
+  bool get hasPageBoundaries => pageBoundaries.isNotEmpty;
+
   /// Append sentences from another document (used for progressive extraction).
   ExtractedDocument merge(ExtractedDocument other) {
     return ExtractedDocument(
       sentences: [...sentences, ...other.sentences],
+      pageBoundaries: [...pageBoundaries, ...other.pageBoundaries],
+      totalPages: other.totalPages > 0 ? other.totalPages : totalPages,
     );
   }
 
   Map<String, Object?> toJson() => {
         'sentences': sentences.map((s) => s.toJson()).toList(),
+        'pageBoundaries': pageBoundaries.map((b) => b.toJson()).toList(),
+        'totalPages': totalPages,
       };
 }
 

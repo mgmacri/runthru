@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:speedy_boy/core/dynamic_font_size.dart';
+import 'package:speedy_boy/core/reading_range_resolver.dart';
 import 'package:speedy_boy/core/sentence_resolver.dart';
 import 'package:speedy_boy/core/word_timer.dart';
 import 'package:speedy_boy/design/design.dart';
@@ -15,6 +16,7 @@ import 'package:speedy_boy/services/preprocessing_queue.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/three_d/cube_viewport.dart';
+import 'package:speedy_boy/widgets/finished_range_overlay.dart';
 import 'package:speedy_boy/widgets/pause_fog_3d.dart';
 import 'package:speedy_boy/widgets/progress_hairline_3d.dart';
 import 'package:speedy_boy/widgets/word_display_3d.dart';
@@ -36,6 +38,14 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
   bool _dialVisible = false;
   bool _isFullScreen = false;
   List<String> _words = [];
+  List<String> _allDocWords = [];
+  int _sliceOffset = 0;
+  ReadingRange? _readingRange;
+  bool _isRangeComplete = false;
+  ExtractedDocument? _fullDoc;
+
+  /// Cached reference for safe use in dispose().
+  late final PreprocessingQueue _queue;
 
   static bool get _isDesktop {
     if (kIsWeb) return false;
@@ -45,6 +55,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
   @override
   void initState() {
     super.initState();
+    _queue = ref.read(preprocessingQueueProvider.notifier);
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
@@ -71,18 +82,82 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
   }
 
   void _loadDocument(ExtractedDocument doc) {
-    _words = doc.allWords;
-    if (_words.isEmpty) return;
+    _fullDoc = doc;
+    _allDocWords = doc.allWords;
+    if (_allDocWords.isEmpty) return;
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
     final bookmark = config.bookmarks[widget.filePath];
-    final startIndex = bookmark != null ? resumeIndex(bookmark, doc) : 0;
+    final range = bookmark?.readingRange;
 
+    if (range != null && doc.hasPageBoundaries) {
+      final resolved = resolveAndValidateRange(
+        range,
+        doc.pageBoundaries,
+        _allDocWords,
+      );
+      if (resolved != null) {
+        _readingRange = resolved;
+        final rangeStart = resolved.resolvedStartWordIndex;
+        final rangeEnd =
+            resolved.resolvedEndWordIndex.clamp(0, _allDocWords.length - 1);
+        _sliceOffset = rangeStart;
+        _words = _allDocWords.sublist(rangeStart, rangeEnd + 1);
+
+        final lastPosition = bookmark?.wordIndex ?? 0;
+        int startIndex;
+        if (lastPosition <= rangeStart) {
+          startIndex = 0;
+        } else if (lastPosition >= rangeEnd) {
+          startIndex = _words.length - 1;
+          _isRangeComplete = true;
+        } else {
+          final globalResume = resumeIndex(bookmark!, doc);
+          startIndex = (globalResume - rangeStart).clamp(0, _words.length - 1);
+        }
+
+        final timer = ref.read(wordTimerProvider.notifier);
+        timer.loadDocument(_words.length, startIndex: startIndex);
+        timer.setWpm(config.defaultWpm);
+        if (_isRangeComplete) {
+          timer.pause();
+        } else {
+          timer.play();
+        }
+        _breatheController.stop();
+        return;
+      }
+    }
+
+    // No range — full document.
+    _words = _allDocWords;
+    _sliceOffset = 0;
+    _readingRange = null;
+
+    final startIndex = bookmark != null ? resumeIndex(bookmark, doc) : 0;
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
     timer.setWpm(config.defaultWpm);
     timer.play();
+    _breatheController.stop();
+  }
 
+  void _continueReadingPastRange() {
+    if (_fullDoc == null || _readingRange == null) return;
+
+    final rangeEnd = _readingRange!.resolvedEndWordIndex;
+    final remaining = _allDocWords.sublist(rangeEnd + 1);
+    if (remaining.isEmpty) return;
+
+    setState(() {
+      _isRangeComplete = false;
+      _words = remaining;
+      _sliceOffset = rangeEnd + 1;
+    });
+
+    final timer = ref.read(wordTimerProvider.notifier);
+    timer.loadDocument(_words.length, startIndex: 0);
+    timer.play();
     _breatheController.stop();
   }
 
@@ -96,7 +171,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
   @override
   void dispose() {
-    ref.read(preprocessingQueueProvider.notifier).resumeBackground();
+    _queue.resumeBackground();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.removeObserver(this);
     _breatheController.dispose();
@@ -145,9 +220,14 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
       if (prev?.currentIndex != next.currentIndex) {
+        final globalIndex = _sliceOffset + next.currentIndex;
         ref
             .read(bookmarkProvider(widget.filePath).notifier)
-            .updateIndex(next.currentIndex);
+            .updateIndex(globalIndex);
+
+        if (_readingRange != null && !_isRangeComplete && next.isFinished) {
+          setState(() => _isRangeComplete = true);
+        }
       }
     });
 
@@ -206,6 +286,35 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                               wpm: timerState.wpm,
                             ),
                           ),
+                          if (_isRangeComplete && _readingRange != null)
+                            Positioned.fill(
+                              child: FinishedRangeOverlay(
+                                visible: _isRangeComplete,
+                                startPage: _readingRange!.startPage,
+                                endPage: _readingRange!.endPage,
+                                wordCount: _words.length,
+                                averageWpm: timerState.wpm,
+                                onContinueReading: _continueReadingPastRange,
+                                onSetNewRange: () {
+                                  ref
+                                      .read(bookmarkProvider(widget.filePath)
+                                          .notifier)
+                                      .save();
+                                  context.push(Uri(
+                                    path: '/range-picker',
+                                    queryParameters: {'path': widget.filePath},
+                                  ).toString());
+                                },
+                                onGoToLibrary: () {
+                                  ref
+                                      .read(bookmarkProvider(widget.filePath)
+                                          .notifier)
+                                      .save();
+                                  ref.read(wordTimerProvider.notifier).pause();
+                                  context.go('/');
+                                },
+                              ),
+                            ),
                           Positioned(
                             bottom: 40,
                             left: 0,

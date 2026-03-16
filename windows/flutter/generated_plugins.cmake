@@ -5,6 +5,8 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   permission_handler_windows
   screen_retriever_windows
+  syncfusion_pdfviewer_windows
+  url_launcher_windows
   window_manager
 )
 

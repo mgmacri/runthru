@@ -53,6 +53,7 @@ class PageRangeResult {
 
 /// Top-level function for Isolate.run() — extracts text from PDF.
 /// Must be top-level or static (Dart Isolate requirement).
+/// Extracts page-by-page and records [PageBoundary] markers.
 ExtractedDocument pdfExtract(String filePath) {
   final file = File(filePath);
   if (!file.existsSync()) {
@@ -63,22 +64,47 @@ ExtractedDocument pdfExtract(String filePath) {
   final document = PdfDocument(inputBytes: bytes);
 
   try {
-    final allText = StringBuffer();
-    for (var i = 0; i < document.pages.count; i++) {
+    final totalPages = document.pages.count;
+    final allSentences = <Sentence>[];
+    final pageBoundaries = <PageBoundary>[];
+    var globalWordIndex = 0;
+
+    for (var i = 0; i < totalPages; i++) {
       final extractor = PdfTextExtractor(document);
-      final text = extractor.extractText(startPageIndex: i);
-      allText.write(text);
-      allText.write(' ');
+      final text =
+          extractor.extractText(startPageIndex: i, endPageIndex: i);
+      final trimmed = text.trim();
+
+      // Record page boundary before adding sentences.
+      final startSentenceIndex = allSentences.length;
+      final firstWords = trimmed.split(RegExp(r'\s+')).take(5).join(' ');
+      pageBoundaries.add(PageBoundary(
+        pageNumber: i,
+        startSentenceIndex: startSentenceIndex,
+        startWordIndex: globalWordIndex,
+        firstWords: firstWords,
+      ));
+
+      if (trimmed.isNotEmpty) {
+        final pageSentences = _textToSentences(trimmed);
+        for (final s in pageSentences) {
+          globalWordIndex += s.words.length;
+        }
+        allSentences.addAll(pageSentences);
+      }
     }
 
-    final rawText = allText.toString().trim();
-    if (rawText.isEmpty) {
+    if (allSentences.isEmpty) {
       throw const UnsupportedPdfError(
         'Image-only PDF — no extractable text',
       );
     }
 
-    return _parseToSentences(rawText);
+    return ExtractedDocument(
+      sentences: allSentences,
+      pageBoundaries: pageBoundaries,
+      totalPages: totalPages,
+    );
   } finally {
     document.dispose();
   }
@@ -107,7 +133,8 @@ PageRangeResult _pdfExtractPages(_PageRangeRequest request) {
 
     for (var i = clampedStart; i <= clampedEnd; i++) {
       final extractor = PdfTextExtractor(document);
-      final text = extractor.extractText(startPageIndex: i);
+      final text =
+          extractor.extractText(startPageIndex: i, endPageIndex: i);
       final trimmed = text.trim();
 
       // Record page boundary before adding sentences
@@ -136,7 +163,11 @@ PageRangeResult _pdfExtractPages(_PageRangeRequest request) {
     }
 
     return PageRangeResult(
-      document: ExtractedDocument(sentences: allSentences),
+      document: ExtractedDocument(
+        sentences: allSentences,
+        pageBoundaries: pageBoundaries,
+        totalPages: totalPages,
+      ),
       totalPages: totalPages,
       extractedStartPage: clampedStart,
       extractedEndPage: clampedEnd,
@@ -194,11 +225,6 @@ Future<int> pdfPageCountInIsolate(String filePath) async {
     const Duration(seconds: 10),
     onTimeout: () => throw PdfTimeoutError(filePath),
   );
-}
-
-/// Splits raw text into sentences, each with its word list.
-ExtractedDocument _parseToSentences(String text) {
-  return ExtractedDocument(sentences: _textToSentences(text));
 }
 
 /// Splits raw text into a list of Sentence objects.

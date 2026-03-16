@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:speedy_boy/core/logger.dart';
+import 'package:speedy_boy/core/reading_range_resolver.dart';
 import 'package:speedy_boy/core/sentence_resolver.dart';
 import 'package:speedy_boy/core/word_timer.dart';
 import 'package:speedy_boy/design/design.dart';
@@ -18,6 +19,7 @@ import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/three_d/back_wall_font_sizer.dart';
 import 'package:speedy_boy/three_d/off_axis_projection.dart';
 import 'package:speedy_boy/three_d/parallax_room.dart';
+import 'package:speedy_boy/widgets/finished_range_overlay.dart';
 import 'package:speedy_boy/widgets/pause_fog_3d.dart';
 import 'package:speedy_boy/widgets/progress_hairline_3d.dart';
 import 'package:speedy_boy/widgets/wpm_dial_3d.dart';
@@ -39,10 +41,26 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   final FocusNode _focusNode = FocusNode();
   final BackWallFontSizer _fontSizer = BackWallFontSizer();
   List<String> _words = [];
+  List<String> _allDocWords = [];
   int _wordAdvanceCount = 0;
+
+  /// Offset of the current word slice in the global word stream.
+  int _sliceOffset = 0;
+
+  /// Active reading range, if any.
+  ReadingRange? _readingRange;
+
+  /// Whether the user has completed the reading range.
+  bool _isRangeComplete = false;
+
+  /// The full extracted document (kept for "Continue Reading" past range end).
+  ExtractedDocument? _fullDoc;
 
   bool _dialVisible = false;
   bool _isFullScreen = false;
+
+  /// Cached reference for safe use in dispose().
+  late final PreprocessingQueue _queue;
 
   static bool get _isDesktop {
     if (kIsWeb) return false;
@@ -52,6 +70,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   @override
   void initState() {
     super.initState();
+    _queue = ref.read(preprocessingQueueProvider.notifier);
     appLog('ParallaxReadingScreen', 'initState filePath=${widget.filePath}');
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -68,7 +87,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   void dispose() {
     _wordNotifier.dispose();
     _focusNode.dispose();
-    ref.read(preprocessingQueueProvider.notifier).resumeBackground();
+    _queue.resumeBackground();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (_isDesktop && _isFullScreen) windowManager.setFullScreen(false);
     WidgetsBinding.instance.removeObserver(this);
@@ -113,17 +132,77 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   }
 
   void _loadDocument(ExtractedDocument doc) {
-    _words = doc.allWords;
-    appLog(
-        'ParallaxReadingScreen', '_loadDocument: totalWords=${_words.length}');
+    _fullDoc = doc;
+    _allDocWords = doc.allWords;
+    appLog('ParallaxReadingScreen',
+        '_loadDocument: totalWords=${_allDocWords.length}');
 
-    if (_words.isEmpty) {
+    if (_allDocWords.isEmpty) {
       appLog('ParallaxReadingScreen', 'WARN: allWords is empty');
       return;
     }
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
     final bookmark = config.bookmarks[widget.filePath];
+    final range = bookmark?.readingRange;
+
+    if (range != null && doc.hasPageBoundaries) {
+      // Resolve the range to global indices.
+      final resolved = resolveAndValidateRange(
+        range,
+        doc.pageBoundaries,
+        _allDocWords,
+      );
+      if (resolved != null) {
+        _readingRange = resolved;
+        final rangeStart = resolved.resolvedStartWordIndex;
+        final rangeEnd =
+            resolved.resolvedEndWordIndex.clamp(0, _allDocWords.length - 1);
+        _sliceOffset = rangeStart;
+        _words = _allDocWords.sublist(
+          rangeStart,
+          rangeEnd + 1,
+        );
+
+        // Compute start index within the slice.
+        final lastPosition = bookmark?.wordIndex ?? 0;
+        int startIndex;
+        if (lastPosition <= rangeStart) {
+          startIndex = 0;
+        } else if (lastPosition >= rangeEnd) {
+          // Finished range — show overlay.
+          startIndex = _words.length - 1;
+          _isRangeComplete = true;
+        } else {
+          // Resume within slice — resolve sentence boundary.
+          final globalResume = resumeIndex(bookmark!, doc);
+          startIndex = (globalResume - rangeStart).clamp(0, _words.length - 1);
+        }
+
+        appLog('ParallaxReadingScreen',
+            'range: $rangeStart-$rangeEnd, sliceLen=${_words.length}, startIdx=$startIndex');
+
+        _wordNotifier.value = _words[startIndex.clamp(0, _words.length - 1)];
+        final timer = ref.read(wordTimerProvider.notifier);
+        timer.loadDocument(_words.length, startIndex: startIndex);
+        timer.setWpm(config.defaultWpm);
+
+        if (_isRangeComplete) {
+          timer.pause();
+        } else {
+          timer.play();
+        }
+        appLog('ParallaxReadingScreen',
+            'timer loaded with range slice, wpm=${config.defaultWpm}');
+        return;
+      }
+    }
+
+    // No range — full document.
+    _words = _allDocWords;
+    _sliceOffset = 0;
+    _readingRange = null;
+
     final startIndex = bookmark != null ? resumeIndex(bookmark, doc) : 0;
     appLog('ParallaxReadingScreen', 'startIndex=$startIndex');
 
@@ -146,6 +225,26 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     } else {
       timer.play();
     }
+  }
+
+  /// Extends reading past the original range end to the end of the document.
+  void _continueReadingPastRange() {
+    if (_fullDoc == null || _readingRange == null) return;
+
+    final rangeEnd = _readingRange!.resolvedEndWordIndex;
+    final remaining = _allDocWords.sublist(rangeEnd + 1);
+    if (remaining.isEmpty) return;
+
+    setState(() {
+      _isRangeComplete = false;
+      _words = remaining;
+      _sliceOffset = rangeEnd + 1;
+    });
+
+    _wordNotifier.value = _words.first;
+    final timer = ref.read(wordTimerProvider.notifier);
+    timer.loadDocument(_words.length, startIndex: 0);
+    timer.play();
   }
 
   void _toggleFullScreen() {
@@ -218,9 +317,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
       if (prev?.currentIndex != next.currentIndex) {
+        // Save global word index (sliceOffset + slice-local index).
+        final globalIndex = _sliceOffset + next.currentIndex;
         ref
             .read(bookmarkProvider(widget.filePath).notifier)
-            .updateIndex(next.currentIndex);
+            .updateIndex(globalIndex);
+
+        // Detect range completion.
+        if (_readingRange != null && !_isRangeComplete && next.isFinished) {
+          setState(() => _isRangeComplete = true);
+        }
       }
     });
 
@@ -282,6 +388,35 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                               wpm: wpm,
                             ),
                           ),
+                          if (_isRangeComplete && _readingRange != null)
+                            Positioned.fill(
+                              child: FinishedRangeOverlay(
+                                visible: _isRangeComplete,
+                                startPage: _readingRange!.startPage,
+                                endPage: _readingRange!.endPage,
+                                wordCount: _words.length,
+                                averageWpm: wpm,
+                                onContinueReading: _continueReadingPastRange,
+                                onSetNewRange: () {
+                                  ref
+                                      .read(bookmarkProvider(widget.filePath)
+                                          .notifier)
+                                      .save();
+                                  context.push(Uri(
+                                    path: '/range-picker',
+                                    queryParameters: {'path': widget.filePath},
+                                  ).toString());
+                                },
+                                onGoToLibrary: () {
+                                  ref
+                                      .read(bookmarkProvider(widget.filePath)
+                                          .notifier)
+                                      .save();
+                                  ref.read(wordTimerProvider.notifier).pause();
+                                  context.go('/');
+                                },
+                              ),
+                            ),
                           Positioned(
                             bottom: 40,
                             left: 0,

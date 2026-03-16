@@ -26,12 +26,15 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
 
   Future<void> _persist() async {
     try {
+      final config = _ref.read(configProvider).valueOrNull ?? const AppConfig();
+      final existing = config.bookmarks[_filePath];
+      final data = (existing ?? const BookmarkData(wordIndex: 0)).copyWith(
+        wordIndex: state,
+        timestamp: DateTime.now(),
+      );
       await _ref.read(configProvider.notifier).updateBookmark(
             _filePath,
-            BookmarkData(
-              wordIndex: state,
-              timestamp: DateTime.now(),
-            ),
+            data,
           );
     } on Object catch (e, st) {
       dev.log(
