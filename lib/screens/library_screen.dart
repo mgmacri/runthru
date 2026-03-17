@@ -32,42 +32,9 @@ class LibraryScreen extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Speedy Boy',
-                    style: SpeedyBoyTypography.display,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (queue.failedCount > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _ErrorBadge(count: queue.failedCount),
-                        ),
-                      IconButton(
-                        onPressed: () => context.push('/discover'),
-                        icon: const Icon(
-                          Icons.explore,
-                          color: SpeedyBoyTokens.shellTextSecondary,
-                        ),
-                        tooltip: 'Discover Books',
-                      ),
-                      IconButton(
-                        onPressed: () => context.push('/analytics'),
-                        icon: const Icon(
-                          Icons.auto_graph,
-                          color: SpeedyBoyTokens.shellTextSecondary,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => context.push('/settings'),
-                        icon: const Icon(
-                          Icons.settings,
-                          color: SpeedyBoyTokens.shellTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+                  const Text('Speedy Boy', style: SpeedyBoyTypography.display),
+                  if (queue.failedCount > 0)
+                    _ErrorBadge(count: queue.failedCount),
                 ],
               ),
             ),
@@ -75,13 +42,8 @@ class LibraryScreen extends ConsumerWidget {
             // ── PDF List ──
             Expanded(
               child: pdfListAsync.when(
-                data: (pdfList) => _buildList(
-                  context,
-                  ref,
-                  pdfList,
-                  processed,
-                  config,
-                ),
+                data: (pdfList) =>
+                    _buildList(context, ref, pdfList, processed, config),
                 loading: () => Center(
                   child: Text(
                     'Loading…',
@@ -140,8 +102,9 @@ class LibraryScreen extends ConsumerWidget {
 
         // Compute range-aware progress and label.
         final appConfig = config.valueOrNull;
-        final bookmark =
-            appConfig is AppConfig ? appConfig.bookmarks[entry.filePath] : null;
+        final bookmark = appConfig is AppConfig
+            ? appConfig.bookmarks[entry.filePath]
+            : null;
         final range = bookmark?.readingRange;
         double readingProgress = 0.0;
         String? rangeLabel;
@@ -151,8 +114,8 @@ class LibraryScreen extends ConsumerWidget {
           final rangeEnd = range.resolvedEndWordIndex;
           final rangeSize = rangeEnd - rangeStart;
           if (rangeSize > 0 && bookmark != null) {
-            readingProgress =
-                ((bookmark.wordIndex - rangeStart) / rangeSize).clamp(0.0, 1.0);
+            readingProgress = ((bookmark.wordIndex - rangeStart) / rangeSize)
+                .clamp(0.0, 1.0);
           }
           rangeLabel = 'Pages ${range.startPage + 1}\u2013${range.endPage + 1}';
         } else if (bookmark != null && displayEntry.document != null) {
@@ -168,19 +131,23 @@ class LibraryScreen extends ConsumerWidget {
           rangeLabel: rangeLabel,
           onTap: displayEntry.status == PdfStatus.ready
               ? () {
-                  context.push(Uri(
-                    path: '/read',
-                    queryParameters: {'path': entry.filePath},
-                  ).toString());
+                  context.push(
+                    Uri(
+                      path: '/read',
+                      queryParameters: {'path': entry.filePath},
+                    ).toString(),
+                  );
                 }
               : null,
           onLongPress: displayEntry.status == PdfStatus.ready
               ? () {
                   HapticFeedback.mediumImpact();
-                  context.push(Uri(
-                    path: '/range-picker',
-                    queryParameters: {'path': entry.filePath},
-                  ).toString());
+                  context.push(
+                    Uri(
+                      path: '/range-picker',
+                      queryParameters: {'path': entry.filePath},
+                    ).toString(),
+                  );
                 }
               : null,
         );

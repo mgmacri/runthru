@@ -4,13 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/navigation/cube_transition.dart';
 import 'package:speedy_boy/navigation/wall_fold_transition.dart';
-import 'package:speedy_boy/screens/analytics_screen.dart';
-import 'package:speedy_boy/screens/discover_screen.dart';
-import 'package:speedy_boy/screens/library_screen.dart';
+import 'package:speedy_boy/screens/home_shell.dart';
 import 'package:speedy_boy/screens/parallax_reading_screen.dart';
 import 'package:speedy_boy/screens/range_picker_screen.dart';
 import 'package:speedy_boy/screens/reading_screen.dart';
-import 'package:speedy_boy/screens/settings_screen.dart';
 import 'package:speedy_boy/services/purchase_service.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
@@ -20,10 +17,13 @@ final appRouter = GoRouter(
   routes: [
     GoRoute(
       path: '/',
-      pageBuilder: (context, state) => libraryTransitionPage(
-        key: state.pageKey,
-        child: const LibraryScreen(),
-      ),
+      pageBuilder: (context, state) {
+        final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+        return libraryTransitionPage(
+          key: state.pageKey,
+          child: HomeShell(initialTab: tab),
+        );
+      },
     ),
     GoRoute(
       path: '/read',
@@ -56,27 +56,9 @@ final appRouter = GoRouter(
         );
       },
     ),
-    GoRoute(
-      path: '/analytics',
-      pageBuilder: (context, state) => cubeTransitionPage(
-        key: state.pageKey,
-        child: const _PremiumAnalyticsGuard(),
-      ),
-    ),
-    GoRoute(
-      path: '/discover',
-      pageBuilder: (context, state) => cubeTransitionPage(
-        key: state.pageKey,
-        child: const DiscoverScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/settings',
-      pageBuilder: (context, state) => cubeTransitionPage(
-        key: state.pageKey,
-        child: const SettingsScreen(),
-      ),
-    ),
+    GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=2'),
+    GoRoute(path: '/discover', redirect: (_, __) => '/?tab=1'),
+    GoRoute(path: '/settings', redirect: (_, __) => '/?tab=3'),
   ],
 );
 
@@ -96,83 +78,6 @@ class _PremiumReadGuard extends ConsumerWidget {
       return ParallaxReadingScreen(filePath: filePath);
     }
     return ReadingScreen(filePath: filePath);
-  }
-}
-
-/// Gates analytics behind premium. Free users see an upgrade prompt.
-class _PremiumAnalyticsGuard extends ConsumerWidget {
-  const _PremiumAnalyticsGuard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
-    if (config.hasPremium) {
-      return const AnalyticsScreen();
-    }
-    return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
-      appBar: AppBar(
-        backgroundColor: SpeedyBoyTokens.shellBase,
-        elevation: 0,
-        title: const Text('Premium Feature', style: SpeedyBoyTypography.title),
-        iconTheme: const IconThemeData(
-          color: SpeedyBoyTokens.shellTextPrimary,
-        ),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.lock_outline,
-                size: 48,
-                color: SpeedyBoyTokens.shellTextSecondary,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Reading Analytics is a premium feature',
-                style: SpeedyBoyTypography.title,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Upgrade to track your reading speed, streaks, and progress over time.',
-                style: SpeedyBoyTypography.body,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: SpeedyBoyTokens.shellAccent,
-                  foregroundColor: SpeedyBoyTokens.shellBase,
-                ),
-                icon: const Icon(Icons.lock_open, size: 18),
-                label: Text(
-                  'Unlock Premium',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellBase,
-                  ),
-                ),
-                onPressed: () =>
-                    ref.read(purchaseServiceProvider).purchasePremium(),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => context.go('/'),
-                child: Text(
-                  'Back to Library',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -211,10 +116,7 @@ class _RangePickerUpsellScreen extends ConsumerWidget {
                 color: SpeedyBoyTokens.shellTextSecondary,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Reading Ranges',
-                style: SpeedyBoyTypography.title,
-              ),
+              const Text('Reading Ranges', style: SpeedyBoyTypography.title),
               const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),

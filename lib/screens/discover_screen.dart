@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/services/opds_service.dart';
@@ -57,8 +56,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
 
     try {
       final service = ref.read(opdsServiceProvider);
-      appLog('discover',
-          'download tap title="${entry.title}" linkCount=${entry.links.length}');
+      appLog(
+        'discover',
+        'download tap title="${entry.title}" linkCount=${entry.links.length}',
+      );
       await service.downloadBook(entry);
 
       if (!mounted) return;
@@ -93,19 +94,11 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         child: Column(
           children: [
             // ── Header ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 16, 16, 8),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: SpeedyBoyTokens.shellTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Discover Books',
                       style: SpeedyBoyTypography.display,
@@ -150,8 +143,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             // ── Status message ──
             if (_statusMessage != null)
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 4,
+                ),
                 child: Text(
                   _statusMessage!,
                   style: SpeedyBoyTypography.caption.copyWith(
@@ -344,10 +339,7 @@ class _BookCard extends StatelessWidget {
             Expanded(
               flex: 3,
               child: entry.coverUrl != null
-                  ? _AdaptiveImage(
-                      url: entry.coverUrl!,
-                      fit: BoxFit.cover,
-                    )
+                  ? _AdaptiveImage(url: entry.coverUrl!, fit: BoxFit.cover)
                   : const _CoverPlaceholder(),
             ),
 
@@ -414,10 +406,7 @@ class _BookCard extends StatelessWidget {
 
 /// Adaptive image widget that handles both network URLs and data: URIs.
 class _AdaptiveImage extends StatelessWidget {
-  const _AdaptiveImage({
-    required this.url,
-    this.fit = BoxFit.cover,
-  });
+  const _AdaptiveImage({required this.url, this.fit = BoxFit.cover});
 
   final String url;
   final BoxFit fit;
@@ -445,7 +434,9 @@ class _AdaptiveImage extends StatelessWidget {
         );
       } catch (e) {
         appLog(
-            'discover', 'cover image (memory) decode error url=$url error=$e');
+          'discover',
+          'cover image (memory) decode error url=$url error=$e',
+        );
         return const _CoverPlaceholder();
       }
     } else {
@@ -455,7 +446,9 @@ class _AdaptiveImage extends StatelessWidget {
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
           appLog(
-              'discover', 'cover image (network) failed url=$url error=$error');
+            'discover',
+            'cover image (network) failed url=$url error=$error',
+          );
           return const _CoverPlaceholder();
         },
       );
