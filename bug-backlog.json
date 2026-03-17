@@ -1,0 +1,272 @@
+{
+  "meta": {
+    "createdAt": "2026-03-16",
+    "riskScore": "6/10",
+    "description": "Bug backlog from deep QA analysis. 6 confirmed bugs + 8 potential issues organized into 5 dependency-ordered phases."
+  },
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Independent Quick Wins",
+      "parallel": true,
+      "dependsOn": [],
+      "items": ["BUG-6", "BUG-5", "BUG-3"]
+    },
+    {
+      "id": "phase-2",
+      "name": "Listener Consolidation",
+      "parallel": true,
+      "dependsOn": [],
+      "items": ["BUG-1"]
+    },
+    {
+      "id": "phase-3",
+      "name": "Bookmark Persistence Safety",
+      "parallel": false,
+      "dependsOn": ["phase-2"],
+      "items": ["BUG-4"]
+    },
+    {
+      "id": "phase-4",
+      "name": "Timer Scoping",
+      "parallel": false,
+      "dependsOn": ["phase-1", "phase-2", "phase-3"],
+      "items": ["BUG-2"]
+    },
+    {
+      "id": "phase-5",
+      "name": "Potential Issues",
+      "parallel": true,
+      "dependsOn": ["phase-1"],
+      "items": ["P-1", "P-3", "P-4", "P-5", "P-6", "P-7", "P-8"]
+    }
+  ],
+  "bugs": [
+    {
+      "id": "BUG-1",
+      "title": "Double ref.listen fires two state cycles per word advance",
+      "severity": "HIGH",
+      "status": "fixed",
+      "phase": "phase-2",
+      "description": "parallax_reading_screen.dart had two separate ref.listen calls on wordTimerProvider — one selecting currentIndex, one watching full state. Both fired on every word advance, causing double bookmark updates and doubled state propagation.",
+      "tasks": [
+        {
+          "file": "lib/screens/parallax_reading_screen.dart",
+          "description": "Consolidated two ref.listen calls into a single ref.listen<WordTimerState> that handles: _wordNotifier update, _sessionWordCount increment, bookmark persist, and range completion check.",
+          "status": "done"
+        },
+        {
+          "file": "lib/screens/reading_screen.dart",
+          "description": "Verified existing single ref.listen is already correct — no change needed.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "BUG-2",
+      "title": "wordTimerProvider is global singleton — shared across reading sessions",
+      "severity": "HIGH",
+      "status": "fixed",
+      "phase": "phase-4",
+      "description": "The global StateNotifierProvider was never disposed between reading sessions. If a user navigated from PDF A to PDF B, the previous timer state persisted until loadDocument() was called in the new screen, briefly showing stale words.",
+      "tasks": [
+        {
+          "file": "lib/core/word_timer.dart",
+          "description": "Changed wordTimerProvider from StateNotifierProvider to StateNotifierProvider.autoDispose so it cleans up when no reading screen is listening.",
+          "status": "done"
+        },
+        {
+          "file": "lib/screens/parallax_reading_screen.dart",
+          "description": "No changes needed — ref.watch in build() automatically keeps autoDispose provider alive while screen is mounted.",
+          "status": "done"
+        },
+        {
+          "file": "lib/screens/reading_screen.dart",
+          "description": "No changes needed — same as above.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "BUG-3",
+      "title": "_PremiumReadGuard rebuilds reading screen on every config change",
+      "severity": "HIGH",
+      "status": "fixed",
+      "phase": "phase-1",
+      "description": "The guard used ref.watch(configProvider) which triggered rebuilds on every bookmark update (every word advance). This propagated unnecessary rebuilds at reading-speed frequency through the widget tree.",
+      "tasks": [
+        {
+          "file": "lib/navigation/app_router.dart",
+          "description": "Replaced ref.watch(configProvider) with ref.watch(configProvider.select((c) => c.valueOrNull?.hasPremium ?? false)) to rebuild only when premium status changes.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "BUG-4",
+      "title": "BookmarkNotifier._persist() in dispose() is fire-and-forget",
+      "severity": "MEDIUM",
+      "status": "fixed",
+      "phase": "phase-3",
+      "description": "_persist() is async but called from synchronous dispose(). The Future fires but the notifier tears down immediately, potentially losing the user's last reading position on fast exit or force-kill.",
+      "tasks": [
+        {
+          "file": "lib/hooks/bookmark_notifier.dart",
+          "description": "Added _lastPersistedIndex tracking. _persist() now short-circuits if state == _lastPersistedIndex (no unsaved changes). save() updates _lastPersistedIndex on success. This narrows the data-loss window to only the gap between the last auto-save and dispose.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "BUG-5",
+      "title": "seekTo on empty document edge case",
+      "severity": "MEDIUM",
+      "status": "fixed",
+      "phase": "phase-1",
+      "description": "If totalWords == 0, seekTo computed clamp(0, -1) which returns 0 in Dart. While not a crash, this set state on an empty document and the timer considered it 'finished'. Added an explicit early-return guard.",
+      "tasks": [
+        {
+          "file": "lib/core/word_timer.dart",
+          "description": "Added 'if (state.totalWords == 0) return;' guard at the top of seekTo().",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "BUG-6",
+      "title": "Drift correction causes first word to display at 2x interval",
+      "severity": "LOW",
+      "status": "fixed",
+      "phase": "phase-1",
+      "description": "In _scheduleNext(), _lastTick was just set in _startTimer() so elapsed ≈ 0ms, drift = -interval, delay = 2×interval. Every play/resume caused the first word transition to feel sluggish.",
+      "tasks": [
+        {
+          "file": "lib/core/word_timer.dart",
+          "description": "Added _isFirstTick flag set true in _startTimer(), cleared in _scheduleNext(). When true, uses raw interval (no drift correction) for the first tick.",
+          "status": "done"
+        }
+      ]
+    }
+  ],
+  "potentialIssues": [
+    {
+      "id": "P-1",
+      "title": "ConfigNotifier concurrent mutation race condition",
+      "severity": "MEDIUM",
+      "status": "fixed",
+      "phase": "phase-5",
+      "description": "All setter methods read state.valueOrNull, modify, and write back. If two mutations interleave (e.g., updateBookmark + setDefaultWpm), the second read can see stale state from before the first write, losing data.",
+      "tasks": [
+        {
+          "file": "lib/store/config.dart",
+          "description": "Added Completer-based async mutex (_lock). All setter methods now go through _synchronized() which serializes concurrent read-modify-write-persist cycles.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "P-3",
+      "title": "Retry timer fires after PreprocessingQueue disposal",
+      "severity": "LOW",
+      "status": "accepted",
+      "phase": "phase-5",
+      "description": "Future.delayed in _handleRetry captures 'this'. If notifier is disposed before the delay completes, the 'if (!mounted) return' guard prevents a crash but the retry is silently lost.",
+      "tasks": [
+        {
+          "file": "lib/services/preprocessing_queue.dart",
+          "description": "Accepted risk — the mounted guard is sufficient. If user navigates away and back, the queue re-initializes and retries from scratch.",
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "P-4",
+      "title": "PurchaseService.purchasePremium() always returns true",
+      "severity": "HIGH",
+      "status": "fixed",
+      "phase": "phase-5",
+      "description": "The stub grants premium unconditionally with no receipt validation. Any user can unlock premium for free by triggering the purchase flow.",
+      "tasks": [
+        {
+          "file": "lib/services/purchase_service.dart",
+          "description": "Added prominent FIXME warnings on the class and method documenting that this must not ship to production without StoreKit/Play Billing integration and server-side receipt verification.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "P-5",
+      "title": "appLog() called inside Isolate.run() context",
+      "severity": "MEDIUM",
+      "status": "fixed",
+      "phase": "phase-5",
+      "description": "appLog writes to a main-isolate global list. Calling it from _scanSync (which runs in Isolate.run on non-iOS) either crashes silently or writes to separate isolate memory. Log entries from isolate scans were lost.",
+      "tasks": [
+        {
+          "file": "lib/services/folder_scanner.dart",
+          "description": "Replaced all appLog() calls inside _scanSync with dart:developer dev.log() which works cross-isolate. Added import for dart:developer. Main-isolate callers (scanAsync, pdfListProvider) still use appLog correctly.",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "P-6",
+      "title": "Analytics session wordCount can drift from actual words displayed",
+      "severity": "LOW",
+      "status": "accepted",
+      "phase": "phase-5",
+      "description": "If Riverpod listener callbacks coalesce during long frames, some currentIndex changes could be missed, under-counting _sessionWordCount. In practice, Riverpod fires per state emission, so this is extremely unlikely.",
+      "tasks": [
+        {
+          "file": "lib/screens/parallax_reading_screen.dart",
+          "description": "Accepted risk — Riverpod listeners fire per state emission, not per frame. The drift is theoretical, not observed.",
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "P-7",
+      "title": "Fullscreen desync on rapid navigation",
+      "severity": "LOW",
+      "status": "accepted",
+      "phase": "phase-5",
+      "description": "dispose() always calls SystemChrome.setEnabledSystemUIMode(edgeToEdge) which restores system UI. On rapid navigation there could be a brief flash of incorrect fullscreen state.",
+      "tasks": [
+        {
+          "file": "lib/screens/parallax_reading_screen.dart",
+          "description": "Accepted risk — dispose() always restores the correct state. The flash is imperceptible in practice.",
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "P-8",
+      "title": "Duplicate word selection in range picker picks first occurrence",
+      "severity": "MEDIUM",
+      "status": "documented",
+      "phase": "phase-5",
+      "description": "_findWordIndexOnPage returns the first occurrence of a word on a page. If a common word like 'the' appears multiple times, the wrong range boundary may be selected. A proper fix requires positional data from pdfrx's text selection callback.",
+      "tasks": [
+        {
+          "file": "lib/screens/range_picker_screen.dart",
+          "description": "Added TODO(P-8) documentation on _findWordIndexOnPage explaining the limitation and noting that positional data from the text selection callback is needed for disambiguation.",
+          "status": "done"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "automated": [
+      "dart analyze lib/ — zero warnings",
+      "flutter test — zero failures"
+    ],
+    "manual": [
+      "BUG-6: Play at 300 WPM, verify first word fires at normal interval (not 2x delay)",
+      "BUG-3: Read a PDF, change WPM via dial — verify no full reading screen rebuild",
+      "BUG-2: Open PDF A, navigate back, open PDF B — verify no stale words flash",
+      "BUG-4: Read for 30 seconds, force-kill app, relaunch — verify bookmark within 5 seconds of last position",
+      "BUG-1: Read at 300 WPM — verify bookmark updates exactly once per word advance (check via log output)",
+      "P-1: Rapidly change WPM while auto-save timer fires — verify no data loss"
+    ]
+  }
+}

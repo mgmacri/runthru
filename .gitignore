@@ -50,13 +50,7 @@ agent-bootstrap-dart.md
 speedy-boy-srs-v2-dart.md
 digest.txt
 tasks-v2-dart.json
-speedy_boy_*_prompt.md
-speedy_boy_rendering_overhaul.md
-speedy_boy_3d_parallax_prompt.md
-speedy_boy_feature_prompts.md
-prompt_reading_range_pdf_viewer.md
-brainstorm_llm_quiz_feature.md
-brainstorm_code_walkthrough_mode.md
+research/
 CLAUDE.md
 .claude/
 python-example/

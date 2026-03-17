@@ -45,6 +45,21 @@ class LibraryScreen extends ConsumerWidget {
                           child: _ErrorBadge(count: queue.failedCount),
                         ),
                       IconButton(
+                        onPressed: () => context.push('/discover'),
+                        icon: const Icon(
+                          Icons.explore,
+                          color: SpeedyBoyTokens.shellTextSecondary,
+                        ),
+                        tooltip: 'Discover Books',
+                      ),
+                      IconButton(
+                        onPressed: () => context.push('/analytics'),
+                        icon: const Icon(
+                          Icons.auto_graph,
+                          color: SpeedyBoyTokens.shellTextSecondary,
+                        ),
+                      ),
+                      IconButton(
                         onPressed: () => context.push('/settings'),
                         icon: const Icon(
                           Icons.settings,

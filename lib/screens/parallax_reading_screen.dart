@@ -12,8 +12,10 @@ import 'package:speedy_boy/core/sentence_resolver.dart';
 import 'package:speedy_boy/core/word_timer.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/hooks/bookmark_notifier.dart';
+import 'package:speedy_boy/services/analytics_service.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/preprocessing_queue.dart';
+import 'package:speedy_boy/store/analytics_models.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/three_d/back_wall_font_sizer.dart';
@@ -59,6 +61,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   bool _dialVisible = false;
   bool _isFullScreen = false;
 
+  // ── Analytics session tracking ──
+  DateTime? _sessionStart;
+  int _sessionWordCount = 0;
+
   /// Cached reference for safe use in dispose().
   late final PreprocessingQueue _queue;
 
@@ -85,6 +91,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   @override
   void dispose() {
+    _endAnalyticsSession();
     _wordNotifier.dispose();
     _focusNode.dispose();
     _queue.resumeBackground();
@@ -92,6 +99,28 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (_isDesktop && _isFullScreen) windowManager.setFullScreen(false);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _endAnalyticsSession() {
+    if (_sessionStart == null || _sessionWordCount <= 0) return;
+    final duration = DateTime.now().difference(_sessionStart!);
+    if (duration.inSeconds < 1) return;
+
+    final minutes = duration.inMilliseconds / 60000.0;
+    final avgWpm = minutes > 0 ? _sessionWordCount / minutes : 0.0;
+
+    final session = ReadingSession(
+      startTime: _sessionStart!,
+      endTime: DateTime.now(),
+      wordsRead: _sessionWordCount,
+      avgWpm: avgWpm,
+      filePath: widget.filePath,
+    );
+    _sessionStart = null;
+    _sessionWordCount = 0;
+
+    // Fire-and-forget — don't block dispose.
+    ref.read(analyticsServiceProvider).saveSession(session);
   }
 
   @override
@@ -190,6 +219,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         if (_isRangeComplete) {
           timer.pause();
         } else {
+          _sessionStart = DateTime.now();
+          _sessionWordCount = 0;
           timer.play();
         }
         appLog('ParallaxReadingScreen',
@@ -213,6 +244,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
     timer.setWpm(config.defaultWpm);
+    _sessionStart = DateTime.now();
+    _sessionWordCount = 0;
     timer.play();
     appLog('ParallaxReadingScreen', 'timer.play() wpm=${config.defaultWpm}');
   }
@@ -222,7 +255,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (ref.read(wordTimerProvider).isPlaying) {
       timer.pause();
       ref.read(bookmarkProvider(widget.filePath).notifier).save();
+      _endAnalyticsSession();
     } else {
+      _sessionStart = DateTime.now();
+      _sessionWordCount = 0;
       timer.play();
     }
   }
@@ -235,6 +271,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final remaining = _allDocWords.sublist(rangeEnd + 1);
     if (remaining.isEmpty) return;
 
+    _endAnalyticsSession();
+
     setState(() {
       _isRangeComplete = false;
       _words = remaining;
@@ -244,6 +282,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _wordNotifier.value = _words.first;
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: 0);
+    _sessionStart = DateTime.now();
+    _sessionWordCount = 0;
     timer.play();
   }
 
@@ -263,6 +303,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   }
 
   void _goBack() {
+    _endAnalyticsSession();
     ref.read(bookmarkProvider(widget.filePath).notifier).save();
     ref.read(wordTimerProvider.notifier).pause();
     if (mounted) context.pop();
@@ -298,12 +339,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final wpm = ref.watch(wordTimerProvider.select((s) => s.wpm));
     final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
 
-    ref.listen(
-      wordTimerProvider.select((s) => s.currentIndex),
-      (_, idx) {
+    ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
+      if (prev?.currentIndex != next.currentIndex) {
+        final idx = next.currentIndex;
+
+        // Update word display.
         if (_words.isNotEmpty && idx < _words.length) {
           _wordNotifier.value = _words[idx];
           _wordAdvanceCount++;
+          _sessionWordCount++;
           if (_wordAdvanceCount <= 5) {
             appLog('ParallaxReadingScreen',
                 'word advance #$_wordAdvanceCount idx=$idx "${_words[idx]}"');
@@ -312,13 +356,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           appLog('ParallaxReadingScreen',
               'WARN: idx=$idx _words.length=${_words.length}');
         }
-      },
-    );
 
-    ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
-      if (prev?.currentIndex != next.currentIndex) {
         // Save global word index (sliceOffset + slice-local index).
-        final globalIndex = _sliceOffset + next.currentIndex;
+        final globalIndex = _sliceOffset + idx;
         ref
             .read(bookmarkProvider(widget.filePath).notifier)
             .updateIndex(globalIndex);

@@ -3,7 +3,9 @@ import 'dart:collection';
 import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/services/device_capability.dart';
+import 'package:speedy_boy/services/epub_extractor.dart';
 import 'package:speedy_boy/services/folder_scanner.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/notification_service.dart';
@@ -20,6 +22,9 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   }
 
   final Ref _ref;
+
+  /// Whether a file is EPUB based on extension.
+  static bool _isEpub(String path) => path.toLowerCase().endsWith('.epub');
 
   /// Phase 1 queue — preview extraction (pages 1–3).
   final _previewQueue = Queue<String>();
@@ -85,8 +90,10 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   }
 
   void _enqueueAll(List<PdfEntry> entries) {
+    appLog('preprocessing', 'enqueueAll — ${entries.length} files');
     for (final entry in entries) {
       if (!state.containsKey(entry.filePath)) {
+        appLog('preprocessing', 'enqueue file=${entry.fileName}');
         state = {
           ...state,
           entry.filePath: entry.copyWith(status: PdfStatus.queued),
@@ -229,7 +236,9 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     try {
       final cachedPreview = await PdfCache.loadPreview(filePath);
       if (cachedPreview != null) {
-        final totalPages = await pdfPageCountInIsolate(filePath);
+        final totalPages = _isEpub(filePath)
+            ? await epubChapterCountInIsolate(filePath)
+            : await pdfPageCountInIsolate(filePath);
         _update(
             filePath,
             entry.copyWith(
@@ -251,22 +260,23 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     _update(filePath, entry.copyWith(status: PdfStatus.processing));
 
     try {
-      final result = await extractPdfPagesInIsolate(
-        filePath,
-        0,
-        previewPageCount - 1,
-      );
+      final result = _isEpub(filePath)
+          ? await extractEpubPagesInIsolate(filePath, 0, previewPageCount - 1)
+          : await extractPdfPagesInIsolate(filePath, 0, previewPageCount - 1);
 
       final totalPages = result.totalPages;
       final previewDoc = result.document;
+      // Actual pages extracted (may exceed previewPageCount if front
+      // matter was blank and the extractor probed deeper).
+      final pagesExtracted = result.extractedEndPage + 1;
 
       // Save preview to cache (don't block).
       PdfCache.savePreview(filePath, previewDoc).catchError((Object e) {
         dev.log('Preview cache save failed: $e', name: 'preprocessing');
       });
 
-      if (totalPages <= previewPageCount) {
-        // Small PDF — preview covers everything.
+      if (pagesExtracted >= totalPages) {
+        // Small PDF or probe covered everything.
         PdfCache.save(filePath, previewDoc).catchError((Object e) {
           dev.log('Cache save failed: $e', name: 'preprocessing');
         });
@@ -290,13 +300,14 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
               document: previewDoc,
               retryCount: 0,
               progress: PdfProgress(
-                lastCompletedPage: previewPageCount.clamp(0, totalPages),
+                lastCompletedPage: pagesExtracted,
                 totalPages: totalPages,
                 phase: ExtractionPhase.preview,
               ),
             ));
       }
     } on UnsupportedPdfError catch (e) {
+      appLog('preprocessing', 'unsupported file=$filePath error=${e.message}');
       _update(
           filePath,
           entry.copyWith(
@@ -304,8 +315,11 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
             errorMessage: e.message,
           ));
     } on PdfTimeoutError catch (e) {
+      appLog('preprocessing', 'timeout file=$filePath');
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: true);
     } on Object catch (e, st) {
+      appLog(
+          'preprocessing', 'preview extraction FAILED file=$filePath error=$e');
       dev.log('Preview extraction failed: $e',
           name: 'preprocessing', error: e, stackTrace: st);
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: true);
@@ -346,11 +360,9 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
         ));
 
     try {
-      final result = await extractPdfPagesInIsolate(
-        filePath,
-        startPage,
-        totalPages - 1,
-      );
+      final result = _isEpub(filePath)
+          ? await extractEpubPagesInIsolate(filePath, startPage, totalPages - 1)
+          : await extractPdfPagesInIsolate(filePath, startPage, totalPages - 1);
 
       final fullDoc = entry.document!.merge(result.document);
 
@@ -372,8 +384,10 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
             ),
           ));
     } on PdfTimeoutError catch (e) {
+      appLog('preprocessing', 'timeout (completion) file=$filePath');
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: false);
     } on Object catch (e, st) {
+      appLog('preprocessing', 'completion FAILED file=$filePath error=$e');
       dev.log('Background completion failed: $e',
           name: 'preprocessing', error: e, stackTrace: st);
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: false);
@@ -401,6 +415,8 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
             ));
         dev.log('Permanently failed (preview): $filePath',
             name: 'preprocessing');
+        appLog('preprocessing',
+            'PERMANENTLY FAILED file=$filePath error=$errorMessage');
       } else {
         // Phase 2 failure — keep preview data, mark as preview (partial).
         _update(
@@ -413,6 +429,8 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
             ));
         dev.log('Background completion permanently failed: $filePath',
             name: 'preprocessing');
+        appLog('preprocessing',
+            'completion permanently failed file=$filePath error=$errorMessage');
       }
     } else {
       // Exponential backoff: 1s, 4s, 16s.

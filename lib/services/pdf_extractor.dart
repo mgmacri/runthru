@@ -1,15 +1,21 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
+import 'dart:math' as math;
 
+import 'package:pdfrx/pdfrx.dart';
+import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/services/models.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 /// Per-file extraction timeout.
 const Duration _extractionTimeout = Duration(seconds: 30);
 
 /// Number of pages extracted in the "preview" phase.
 const int previewPageCount = 3;
+
+/// Maximum extra pages to probe when the initial preview pages yield no text.
+/// Handles books whose front matter (cover, title, copyright, TOC) is
+/// image-only — the real text often starts a few pages later.
+const int _maxProbePages = 10;
 
 /// Message passed to the isolate for page-range extraction.
 class _PageRangeRequest {
@@ -51,29 +57,26 @@ class PageRangeResult {
   final List<PageBoundary> pageBoundaries;
 }
 
-/// Top-level function for Isolate.run() — extracts text from PDF.
-/// Must be top-level or static (Dart Isolate requirement).
-/// Extracts page-by-page and records [PageBoundary] markers.
-ExtractedDocument pdfExtract(String filePath) {
+/// Extracts text from a PDF file page-by-page.
+/// Records [PageBoundary] markers for reading range support.
+/// pdfrx uses FFI — must run on the main isolate.
+Future<ExtractedDocument> pdfExtract(String filePath) async {
   final file = File(filePath);
   if (!file.existsSync()) {
     throw FileSystemException('File not found', filePath);
   }
 
-  final bytes = file.readAsBytesSync();
-  final document = PdfDocument(inputBytes: bytes);
+  final document = await PdfDocument.openFile(filePath);
 
   try {
-    final totalPages = document.pages.count;
+    final totalPages = document.pages.length;
     final allSentences = <Sentence>[];
     final pageBoundaries = <PageBoundary>[];
     var globalWordIndex = 0;
 
     for (var i = 0; i < totalPages; i++) {
-      final extractor = PdfTextExtractor(document);
-      final text =
-          extractor.extractText(startPageIndex: i, endPageIndex: i);
-      final trimmed = text.trim();
+      final pageText = await document.pages[i].loadText();
+      final trimmed = pageText.fullText.trim();
 
       // Record page boundary before adding sentences.
       final startSentenceIndex = allSentences.length;
@@ -106,24 +109,23 @@ ExtractedDocument pdfExtract(String filePath) {
       totalPages: totalPages,
     );
   } finally {
-    document.dispose();
+    await document.dispose();
   }
 }
 
 /// Extracts text from a specific page range of a PDF.
 /// [startPage] and [endPage] are 0-based inclusive indices.
 /// Also records page boundaries for reading range support.
-PageRangeResult _pdfExtractPages(_PageRangeRequest request) {
+Future<PageRangeResult> _pdfExtractPages(_PageRangeRequest request) async {
   final file = File(request.filePath);
   if (!file.existsSync()) {
     throw FileSystemException('File not found', request.filePath);
   }
 
-  final bytes = file.readAsBytesSync();
-  final document = PdfDocument(inputBytes: bytes);
+  final document = await PdfDocument.openFile(request.filePath);
 
   try {
-    final totalPages = document.pages.count;
+    final totalPages = document.pages.length;
     final clampedEnd = request.endPage.clamp(0, totalPages - 1);
     final clampedStart = request.startPage.clamp(0, clampedEnd);
 
@@ -131,11 +133,12 @@ PageRangeResult _pdfExtractPages(_PageRangeRequest request) {
     final pageBoundaries = <PageBoundary>[];
     var globalWordIndex = 0;
 
-    for (var i = clampedStart; i <= clampedEnd; i++) {
-      final extractor = PdfTextExtractor(document);
-      final text =
-          extractor.extractText(startPageIndex: i, endPageIndex: i);
-      final trimmed = text.trim();
+    // Effective end page — may be extended if front matter is blank.
+    var effectiveEnd = clampedEnd;
+
+    for (var i = clampedStart; i <= effectiveEnd; i++) {
+      final pageText = await document.pages[i].loadText();
+      final trimmed = pageText.fullText.trim();
 
       // Record page boundary before adding sentences
       final startSentenceIndex = allSentences.length;
@@ -154,6 +157,27 @@ PageRangeResult _pdfExtractPages(_PageRangeRequest request) {
         }
         allSentences.addAll(pageSentences);
       }
+
+      // If we've exhausted the original range with no text and it was
+      // a preview starting at page 0, probe up to _maxProbePages extra
+      // pages before giving up. This handles books whose front matter
+      // (cover, title, copyright, dedication) is image-only.
+      if (i == clampedEnd &&
+          allSentences.isEmpty &&
+          clampedStart == 0 &&
+          effectiveEnd == clampedEnd) {
+        final probeLimit = math.min(
+          clampedEnd + _maxProbePages,
+          totalPages - 1,
+        );
+        if (probeLimit > clampedEnd) {
+          appLog(
+            'pdf_extractor',
+            'No text in pages 0–$clampedEnd, probing up to page $probeLimit',
+          );
+          effectiveEnd = probeLimit;
+        }
+      }
     }
 
     if (allSentences.isEmpty && clampedStart == 0) {
@@ -170,39 +194,40 @@ PageRangeResult _pdfExtractPages(_PageRangeRequest request) {
       ),
       totalPages: totalPages,
       extractedStartPage: clampedStart,
-      extractedEndPage: clampedEnd,
+      extractedEndPage: effectiveEnd,
       pageBoundaries: pageBoundaries,
     );
   } finally {
-    document.dispose();
+    await document.dispose();
   }
 }
 
 /// Returns the total page count of a PDF without extracting text.
-int _pdfPageCount(String filePath) {
+Future<int> _pdfPageCount(String filePath) async {
   final file = File(filePath);
   if (!file.existsSync()) {
     throw FileSystemException('File not found', filePath);
   }
 
-  final bytes = file.readAsBytesSync();
-  final document = PdfDocument(inputBytes: bytes);
+  final document = await PdfDocument.openFile(filePath);
   try {
-    return document.pages.count;
+    return document.pages.length;
   } finally {
-    document.dispose();
+    await document.dispose();
   }
 }
 
-/// Runs PDF extraction in a separate Dart Isolate with a timeout.
+/// Runs PDF extraction with a timeout.
+/// pdfrx uses FFI — must run on the main isolate.
 Future<ExtractedDocument> extractPdfInIsolate(String filePath) async {
-  return Isolate.run(() => pdfExtract(filePath)).timeout(
+  return pdfExtract(filePath).timeout(
     _extractionTimeout,
     onTimeout: () => throw PdfTimeoutError(filePath),
   );
 }
 
-/// Extracts a page range in a separate Isolate with a timeout.
+/// Extracts a page range with a timeout.
+/// pdfrx uses FFI — must run on the main isolate.
 Future<PageRangeResult> extractPdfPagesInIsolate(
   String filePath,
   int startPage,
@@ -213,15 +238,16 @@ Future<PageRangeResult> extractPdfPagesInIsolate(
     startPage: startPage,
     endPage: endPage,
   );
-  return Isolate.run(() => _pdfExtractPages(request)).timeout(
+  return _pdfExtractPages(request).timeout(
     _extractionTimeout,
     onTimeout: () => throw PdfTimeoutError(filePath),
   );
 }
 
-/// Returns total page count in a separate Isolate.
+/// Returns total page count with a timeout.
+/// pdfrx uses FFI — must run on the main isolate.
 Future<int> pdfPageCountInIsolate(String filePath) async {
-  return Isolate.run(() => _pdfPageCount(filePath)).timeout(
+  return _pdfPageCount(filePath).timeout(
     const Duration(seconds: 10),
     onTimeout: () => throw PdfTimeoutError(filePath),
   );

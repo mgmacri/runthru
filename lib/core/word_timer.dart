@@ -46,6 +46,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
 
   Timer? _timer;
   DateTime? _lastTick;
+  bool _isFirstTick = false;
 
   void loadDocument(int totalWords, {int startIndex = 0}) {
     _stopTimer();
@@ -84,21 +85,28 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   }
 
   void seekTo(int index) {
+    if (state.totalWords == 0) return;
     final clamped = index.clamp(0, state.totalWords - 1);
     state = state.copyWith(currentIndex: clamped);
   }
 
   void _startTimer() {
     _lastTick = DateTime.now();
+    _isFirstTick = true;
     _scheduleNext();
   }
 
   void _scheduleNext() {
     final interval = state.intervalMs;
-    // Drift correction: adjust next interval based on overshoot
-    final now = DateTime.now();
     var delay = interval;
-    if (_lastTick != null) {
+
+    // Skip drift correction on the first tick after play/resume —
+    // _lastTick was just set in _startTimer(), so elapsed ≈ 0 and
+    // the raw formula would produce delay ≈ 2×interval.
+    if (_isFirstTick) {
+      _isFirstTick = false;
+    } else if (_lastTick != null) {
+      final now = DateTime.now();
       final elapsed = now.difference(_lastTick!).inMilliseconds;
       final drift = elapsed - interval;
       delay = (interval - drift).clamp(1, interval * 2);
@@ -138,6 +146,6 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
 }
 
 final wordTimerProvider =
-    StateNotifierProvider<WordTimerNotifier, WordTimerState>(
+    StateNotifierProvider.autoDispose<WordTimerNotifier, WordTimerState>(
   (ref) => WordTimerNotifier(),
 );

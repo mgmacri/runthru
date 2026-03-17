@@ -19,12 +19,14 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
   final Ref _ref;
   final String _filePath;
   Timer? _autoSaveTimer;
+  int _lastPersistedIndex = 0;
 
   void updateIndex(int index) {
     state = index;
   }
 
   Future<void> _persist() async {
+    if (state == _lastPersistedIndex) return;
     try {
       final config = _ref.read(configProvider).valueOrNull ?? const AppConfig();
       final existing = config.bookmarks[_filePath];
@@ -36,6 +38,7 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
             _filePath,
             data,
           );
+      _lastPersistedIndex = state;
     } on Object catch (e, st) {
       dev.log(
         'Failed to persist bookmark: $e',

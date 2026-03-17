@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:speedy_boy/core/reading_range_resolver.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/services/models.dart';
@@ -11,7 +11,6 @@ import 'package:speedy_boy/services/preprocessing_queue.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/widgets/range_confirmation_modal.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 /// Selection phase for the two-phase range picking flow.
 enum _SelectionPhase { start, end }
@@ -91,7 +90,6 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
 
   @override
   void dispose() {
-    _pdfController.dispose();
     _buttonAnimController.dispose();
     _debounceTimer?.cancel();
     _phaseNotifier.dispose();
@@ -138,7 +136,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final totalPages = _totalPagesNotifier.value;
         if (range.startPage > 0 && range.startPage <= totalPages) {
-          _pdfController.jumpToPage(range.startPage);
+          _pdfController.goToPage(pageNumber: range.startPage);
         }
       });
     }
@@ -159,13 +157,14 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     }
   }
 
-  void _onTextSelectionChanged(PdfTextSelectionChangedDetails details) {
-    if (details.selectedText == null || details.selectedText!.isEmpty) return;
+  void _onTextSelectionChanged(List<PdfTextRanges> selections) {
+    final text = selections.isEmpty ? null : selections.first.text;
+    if (text == null || text.isEmpty) return;
 
     // Debounce: only process after 150ms of no new selection events.
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 150), () {
-      _processSelection(details.selectedText!);
+      _processSelection(text);
     });
   }
 
@@ -197,6 +196,11 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
   }
 
   /// Find the 0-indexed word position on the given page (O(1) boundary lookup).
+  ///
+  /// TODO(P-8): Returns the *first* occurrence of [targetWord] on the page.
+  /// If a common word like \"the\" appears multiple times, this may select
+  /// the wrong instance. A proper fix requires positional data from the
+  /// text selection callback to disambiguate which occurrence was tapped.
   int _findWordIndexOnPage(int page, String targetWord) {
     final boundary = _boundaryByPage[page];
     if (boundary == null) return 0;
@@ -405,19 +409,26 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
               // ── PDF Viewer (isolated from controls) ──
               Expanded(
                 child: RepaintBoundary(
-                  child: SfPdfViewer.file(
-                    File(widget.filePath),
+                  child: PdfViewer.file(
+                    widget.filePath,
                     controller: _pdfController,
-                    enableTextSelection: true,
-                    onTextSelectionChanged: _onTextSelectionChanged,
-                    onPageChanged: (details) {
-                      _currentPageNotifier.value = details.newPageNumber;
-                      _totalPagesNotifier.value = _pdfController.pageCount;
-                    },
-                    onDocumentLoaded: (details) {
-                      _totalPagesNotifier.value = details.document.pages.count;
-                      _currentPageNotifier.value = _pdfController.pageNumber;
-                    },
+                    params: PdfViewerParams(
+                      enableTextSelection: true,
+                      onTextSelectionChange: _onTextSelectionChanged,
+                      onPageChanged: (pageNumber) {
+                        if (pageNumber != null) {
+                          _currentPageNotifier.value = pageNumber;
+                          if (_pdfController.isReady) {
+                            _totalPagesNotifier.value =
+                                _pdfController.pageCount;
+                          }
+                        }
+                      },
+                      onViewerReady: (doc, controller) {
+                        _totalPagesNotifier.value = controller.pageCount;
+                        _currentPageNotifier.value = controller.pageNumber ?? 1;
+                      },
+                    ),
                   ),
                 ),
               ),

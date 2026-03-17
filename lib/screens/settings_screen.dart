@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speedy_boy/core/logger.dart';
 import 'package:speedy_boy/design/design.dart';
+import 'package:speedy_boy/services/purchase_service.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/widgets/font_size_slider.dart';
@@ -295,6 +296,7 @@ class SettingsScreen extends ConsumerWidget {
     final configAsync = ref.watch(configProvider);
     final config = configAsync.valueOrNull ?? const AppConfig();
     final notifier = ref.read(configProvider.notifier);
+    final hasPremium = config.hasPremium;
 
     return Scaffold(
       backgroundColor: SpeedyBoyTokens.shellBase,
@@ -331,24 +333,25 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
 
-          // ── Text Size ──
-          NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Text Size',
-                  style: SpeedyBoyTypography.title,
-                ),
-                const SizedBox(height: 12),
-                FontSizeSlider(
-                  value: config.fontScale,
-                  onChanged: notifier.setFontScale,
-                ),
-              ],
+          // ── Text Size (Premium only) ──
+          if (hasPremium)
+            NeumorphicCard(
+              surface: SpeedyBoySurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Text Size',
+                    style: SpeedyBoyTypography.title,
+                  ),
+                  const SizedBox(height: 12),
+                  FontSizeSlider(
+                    value: config.fontScale,
+                    onChanged: notifier.setFontScale,
+                  ),
+                ],
+              ),
             ),
-          ),
 
           // ── PDF Folder ──
           NeumorphicCard(
@@ -399,97 +402,137 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
 
-          // ── Anchor Color ──
-          NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Anchor Letter Color',
-                  style: SpeedyBoyTypography.title,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: List.generate(
-                    SpeedyBoyTokens.anchorColors.length,
-                    (i) {
-                      final color = SpeedyBoyTokens.anchorColors[i];
-                      final selected = config.anchorColorIndex == i;
-                      return GestureDetector(
-                        onTap: () => notifier.setAnchorColorIndex(i),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: selected
-                                ? Border.all(
+          // ── Anchor Color (Premium only) ──
+          if (hasPremium)
+            NeumorphicCard(
+              surface: SpeedyBoySurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Anchor Letter Color',
+                    style: SpeedyBoyTypography.title,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: List.generate(
+                      SpeedyBoyTokens.anchorColors.length,
+                      (i) {
+                        final color = SpeedyBoyTokens.anchorColors[i];
+                        final selected = config.anchorColorIndex == i;
+                        return GestureDetector(
+                          onTap: () => notifier.setAnchorColorIndex(i),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: selected
+                                  ? Border.all(
+                                      color: SpeedyBoyTokens.shellTextPrimary,
+                                      width: 3,
+                                    )
+                                  : null,
+                              boxShadow: selected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withAlpha(120),
+                                        blurRadius: 8,
+                                        spreadRadius: 2,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: selected
+                                ? const Icon(
+                                    Icons.check,
                                     color: SpeedyBoyTokens.shellTextPrimary,
-                                    width: 3,
+                                    size: 20,
                                   )
                                 : null,
-                            boxShadow: selected
-                                ? [
-                                    BoxShadow(
-                                      color: color.withAlpha(120),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
                           ),
-                          child: selected
-                              ? const Icon(
-                                  Icons.check,
-                                  color: SpeedyBoyTokens.shellTextPrimary,
-                                  size: 20,
-                                )
-                              : null,
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  SpeedyBoyTokens
-                      .anchorColorNames[config.anchorColorIndex.clamp(
-                    0,
-                    SpeedyBoyTokens.anchorColorNames.length - 1,
-                  )],
-                  style: SpeedyBoyTypography.caption,
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    SpeedyBoyTokens
+                        .anchorColorNames[config.anchorColorIndex.clamp(
+                      0,
+                      SpeedyBoyTokens.anchorColorNames.length - 1,
+                    )],
+                    style: SpeedyBoyTypography.caption,
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // ── Reading Font ──
-          NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Reading Font',
-                  style: SpeedyBoyTypography.title,
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Bundled fonts are guaranteed. System fonts depend on your device.',
-                  style: SpeedyBoyTypography.caption,
-                ),
-                const SizedBox(height: 12),
-                _FontPicker(
-                  selected: config.fontFamily,
-                  onChanged: notifier.setFontFamily,
-                ),
-              ],
+          // ── Reading Font (Premium only) ──
+          if (hasPremium)
+            NeumorphicCard(
+              surface: SpeedyBoySurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Reading Font',
+                    style: SpeedyBoyTypography.title,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Bundled fonts are guaranteed. System fonts depend on your device.',
+                    style: SpeedyBoyTypography.caption,
+                  ),
+                  const SizedBox(height: 12),
+                  _FontPicker(
+                    selected: config.fontFamily,
+                    onChanged: notifier.setFontFamily,
+                  ),
+                ],
+              ),
             ),
-          ),
+
+          // ── Upgrade to Premium (free users only) ──
+          if (!hasPremium)
+            NeumorphicCard(
+              surface: SpeedyBoySurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Unlock 3D Reading',
+                    style: SpeedyBoyTypography.title,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Get the immersive 3D cube viewport, head-tracking '
+                    'parallax, custom fonts, and reading range selection.',
+                    style: SpeedyBoyTypography.body.copyWith(
+                      color: SpeedyBoyTokens.shellTextSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SpeedyBoyTokens.shellAccent,
+                      foregroundColor: SpeedyBoyTokens.shellBase,
+                    ),
+                    onPressed: () =>
+                        ref.read(purchaseServiceProvider).purchasePremium(),
+                    child: Text(
+                      'Upgrade',
+                      style: SpeedyBoyTypography.body.copyWith(
+                        color: SpeedyBoyTokens.shellBase,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // ── App Info (inset) ──
           const NeumorphicCard(

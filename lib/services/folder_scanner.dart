@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:io';
 import 'dart:isolate';
 
@@ -20,7 +21,7 @@ class FolderScannerService {
   /// Maximum concurrent scan isolates when batching >4 directories.
   static const int _maxConcurrentScans = 4;
 
-  /// Scan a single directory for PDFs.
+  /// Scan a single directory for PDFs and EPUBs.
   ///
   /// On iOS the picked directory is a security-scoped URL whose access
   /// token is only valid on the main isolate, so we scan synchronously
@@ -32,10 +33,18 @@ class FolderScannerService {
       return [];
     }
     try {
+      List<PdfEntry> entries;
       if (_isIos) {
-        return _scanSync(folderPath);
+        entries = _scanSync(folderPath);
+      } else {
+        entries = await Isolate.run(() => _scanSync(folderPath));
       }
-      return await Isolate.run(() => _scanSync(folderPath));
+      appLog(
+        _tag,
+        'scanAsync result — ${entries.length} files found: '
+        '${entries.map((e) => e.fileName).join(', ')}',
+      );
+      return entries;
     } on Object catch (e, st) {
       appLog(_tag, 'scanAsync EXCEPTION: $e\n$st');
       return [];
@@ -100,14 +109,16 @@ class FolderScannerService {
   /// Synchronous scan — runs in an isolate on Android/desktop,
   /// or on the main isolate on iOS (security-scoped access).
   static List<PdfEntry> _scanSync(String folderPath) {
-    appLog(_tag, '_scanSync — path=$folderPath');
+    // NOTE: appLog() uses main-isolate state and cannot be called from
+    // Isolate.run(). Use dart:developer log() for cross-isolate safety.
+    dev.log('_scanSync — path=$folderPath', name: _tag);
 
     final dir = Directory(folderPath);
     final exists = dir.existsSync();
-    appLog(_tag, '_scanSync — existsSync=$exists');
+    dev.log('_scanSync — existsSync=$exists', name: _tag);
 
     if (!exists) {
-      appLog(_tag, '_scanSync — directory does not exist, returning []');
+      dev.log('_scanSync — directory does not exist, returning []', name: _tag);
       return [];
     }
 
@@ -118,24 +129,27 @@ class FolderScannerService {
           ? dir.listSync()
           : dir.listSync(recursive: true, followLinks: false);
 
-      appLog(_tag, '_scanSync — listSync returned ${entities.length} entities');
+      dev.log('_scanSync — listSync returned ${entities.length} entities',
+          name: _tag);
 
       for (final entity in entities) {
         if (entity is File) {
           final path = entity.path;
-          if (path.toLowerCase().endsWith('.pdf')) {
+          final lower = path.toLowerCase();
+          if (lower.endsWith('.pdf') || lower.endsWith('.epub')) {
             final name = path.split(Platform.pathSeparator).last;
             entries.add(PdfEntry(filePath: path, fileName: name));
           }
         }
       }
     } on FileSystemException catch (e) {
-      appLog(_tag, '_scanSync FileSystemException: ${e.message} (${e.path})');
+      dev.log('_scanSync FileSystemException: ${e.message} (${e.path})',
+          name: _tag);
     } on Object catch (e) {
-      appLog(_tag, '_scanSync unexpected error: $e');
+      dev.log('_scanSync unexpected error: $e', name: _tag);
     }
 
-    appLog(_tag, '_scanSync — found ${entries.length} PDFs');
+    dev.log('_scanSync — found ${entries.length} books (PDF/EPUB)', name: _tag);
     entries.sort((a, b) => a.fileName.compareTo(b.fileName));
     return entries;
   }

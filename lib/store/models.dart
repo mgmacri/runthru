@@ -61,6 +61,7 @@ class AppConfig {
     this.anchorColorIndex = 0,
     this.fontFamily = 'BricolageGrotesque',
     this.fontScale = 1.0,
+    this.hasPremium = false,
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
@@ -79,6 +80,7 @@ class AppConfig {
       anchorColorIndex: json['anchorColorIndex'] as int? ?? 0,
       fontFamily: json['fontFamily'] as String? ?? 'BricolageGrotesque',
       fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
+      hasPremium: json['hasPremium'] as bool? ?? false,
     );
   }
 
@@ -88,6 +90,7 @@ class AppConfig {
   final int anchorColorIndex;
   final String fontFamily;
   final double fontScale;
+  final bool hasPremium;
 
   AppConfig copyWith({
     int? defaultWpm,
@@ -97,6 +100,7 @@ class AppConfig {
     int? anchorColorIndex,
     String? fontFamily,
     double? fontScale,
+    bool? hasPremium,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
@@ -106,6 +110,7 @@ class AppConfig {
       anchorColorIndex: anchorColorIndex ?? this.anchorColorIndex,
       fontFamily: fontFamily ?? this.fontFamily,
       fontScale: fontScale ?? this.fontScale,
+      hasPremium: hasPremium ?? this.hasPremium,
     );
   }
 
@@ -118,5 +123,6 @@ class AppConfig {
         'anchorColorIndex': anchorColorIndex,
         'fontFamily': fontFamily,
         'fontScale': fontScale,
+        'hasPremium': hasPremium,
       };
 }
