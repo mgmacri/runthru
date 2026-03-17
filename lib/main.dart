@@ -3,6 +3,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:speedy_boy/app.dart';
 import 'package:speedy_boy/core/logger.dart';
 
@@ -15,6 +17,12 @@ void main() {
     () {
       WidgetsFlutterBinding.ensureInitialized();
 
+      // pdfrx requires a cache directory to be configured before opening PDFs.
+      Pdfrx.getCacheDirectory = () async {
+        final dir = await getApplicationCacheDirectory();
+        return dir.path;
+      };
+
       FlutterError.onError = (FlutterErrorDetails details) {
         appLog('FlutterError', details.exceptionAsString());
         FlutterError.presentError(details);
@@ -25,11 +33,7 @@ void main() {
         return true;
       };
 
-      runApp(
-        const ProviderScope(
-          child: SpeedyBoyApp(),
-        ),
-      );
+      runApp(const ProviderScope(child: SpeedyBoyApp()));
     },
     (Object error, StackTrace stackTrace) {
       appLog('UncaughtZoneError', '$error\n$stackTrace');
