@@ -101,16 +101,12 @@ class ParallaxRoomPainter extends CustomPainter {
     final lut = _lut(depth);
 
     // 2. Back wall with subtle gradient (light pooling at center)
-    _fillWallPts(
-        canvas,
-        size,
-        [
-          Point3D(-wp, hp, depth),
-          Point3D(wp, hp, depth),
-          Point3D(wp, -hp, depth),
-          Point3D(-wp, -hp, depth),
-        ],
-        _wallBack.withAlpha((255 * wallA).round()));
+    _fillWallPts(canvas, size, [
+      Point3D(-wp, hp, depth),
+      Point3D(wp, hp, depth),
+      Point3D(wp, -hp, depth),
+      Point3D(-wp, -hp, depth),
+    ], _wallBack.withAlpha((255 * wallA).round()));
 
     // Warm center glow on back wall
     final backLightCenter = _proj(Point3D(0, 0, depth), size);
@@ -139,23 +135,47 @@ class ParallaxRoomPainter extends CustomPainter {
 
     // Floor
     if (fBL != null && fBR != null && bBR != null && bBL != null) {
-      _fillQuadGradient(canvas, [fBL, fBR, bBR, bBL], _wallBottom, wallA,
-          Offset(0, size.height), Offset(0, size.height * 0.5));
+      _fillQuadGradient(
+        canvas,
+        [fBL, fBR, bBR, bBL],
+        _wallBottom,
+        wallA,
+        Offset(0, size.height),
+        Offset(0, size.height * 0.5),
+      );
     }
     // Ceiling
     if (fTL != null && fTR != null && bTR != null && bTL != null) {
-      _fillQuadGradient(canvas, [fTL, fTR, bTR, bTL], _wallTop, wallA,
-          Offset.zero, Offset(0, size.height * 0.5));
+      _fillQuadGradient(
+        canvas,
+        [fTL, fTR, bTR, bTL],
+        _wallTop,
+        wallA,
+        Offset.zero,
+        Offset(0, size.height * 0.5),
+      );
     }
     // Left wall
     if (fTL != null && bTL != null && bBL != null && fBL != null) {
-      _fillQuadGradient(canvas, [fTL, bTL, bBL, fBL], _wallLeft, wallA,
-          Offset.zero, Offset(size.width * 0.5, 0));
+      _fillQuadGradient(
+        canvas,
+        [fTL, bTL, bBL, fBL],
+        _wallLeft,
+        wallA,
+        Offset.zero,
+        Offset(size.width * 0.5, 0),
+      );
     }
     // Right wall
     if (fTR != null && bTR != null && bBR != null && fBR != null) {
-      _fillQuadGradient(canvas, [fTR, bTR, bBR, fBR], _wallRight, wallA,
-          Offset(size.width, 0), Offset(size.width * 0.5, 0));
+      _fillQuadGradient(
+        canvas,
+        [fTR, bTR, bBR, fBR],
+        _wallRight,
+        wallA,
+        Offset(size.width, 0),
+        Offset(size.width * 0.5, 0),
+      );
     }
 
     // 5. Subtle etched grid lines (very faint, like marble tile seams)
@@ -172,8 +192,14 @@ class ParallaxRoomPainter extends CustomPainter {
   }
 
   // ── Marble veins on back wall ─────────────────────────────────────────
-  void _drawMarbleVeins(Canvas canvas, Size size, double depth, double w,
-      double h, double wallA) {
+  void _drawMarbleVeins(
+    Canvas canvas,
+    Size size,
+    double depth,
+    double w,
+    double h,
+    double wallA,
+  ) {
     // Draw organic diagonal veining strokes on back wall
     final rng = math.Random(42); // deterministic for consistency
     final veinAlpha = (60 * wallA).round().clamp(0, 255);
@@ -190,7 +216,12 @@ class ParallaxRoomPainter extends CustomPainter {
 
       final color = i.isEven ? _veinColor : _veinSoft;
       _veinPaint
-        ..color = Color.fromARGB(veinAlpha, color.red, color.green, color.blue)
+        ..color = Color.fromARGB(
+          veinAlpha,
+          (color.r * 255.0).round().clamp(0, 255),
+          (color.g * 255.0).round().clamp(0, 255),
+          (color.b * 255.0).round().clamp(0, 255),
+        )
         ..strokeWidth = (i.isEven ? 1.5 : 2.5)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, i.isEven ? 1.0 : 2.0);
 
@@ -217,8 +248,12 @@ class ParallaxRoomPainter extends CustomPainter {
       if (p1 == null || p2 == null) continue;
 
       _veinPaint
-        ..color = Color.fromARGB((25 * wallA).round().clamp(0, 255),
-            _veinSoft.red, _veinSoft.green, _veinSoft.blue)
+        ..color = Color.fromARGB(
+          (25 * wallA).round().clamp(0, 255),
+          (_veinSoft.r * 255.0).round().clamp(0, 255),
+          (_veinSoft.g * 255.0).round().clamp(0, 255),
+          (_veinSoft.b * 255.0).round().clamp(0, 255),
+        )
         ..strokeWidth = 3.5
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
 
@@ -234,8 +269,16 @@ class ParallaxRoomPainter extends CustomPainter {
   }
 
   // ── Subtle etched grid (marble tile seams) ────────────────────────────
-  void _drawSubtleGrid(Canvas canvas, Size size, double w, double h,
-      double animD, double totalDepth, List<Color> lut, double wallA) {
+  void _drawSubtleGrid(
+    Canvas canvas,
+    Size size,
+    double w,
+    double h,
+    double animD,
+    double totalDepth,
+    List<Color> lut,
+    double wallA,
+  ) {
     // Transversal rings (far-to-near)
     final zValues = <double>[];
     var z = 0.0;
@@ -247,10 +290,17 @@ class ParallaxRoomPainter extends CustomPainter {
     for (var i = zValues.length - 1; i >= 0; i--) {
       final zv = zValues[i];
       final color = _gridColor(zv, totalDepth, lut);
-      final alpha = (color.alpha * 0.35 * wallA).round().clamp(0, 255);
+      final alpha = ((color.a * 255.0).round().clamp(0, 255) * 0.35 * wallA)
+          .round()
+          .clamp(0, 255);
 
       _gridPaint
-        ..color = Color.fromARGB(alpha, color.red, color.green, color.blue)
+        ..color = Color.fromARGB(
+          alpha,
+          (color.r * 255.0).round().clamp(0, 255),
+          (color.g * 255.0).round().clamp(0, 255),
+          (color.b * 255.0).round().clamp(0, 255),
+        )
         ..strokeWidth = 0.5;
 
       final tl = _proj(Point3D(-w, h, zv), size);
@@ -266,10 +316,17 @@ class ParallaxRoomPainter extends CustomPainter {
 
     // Longitudinal lines
     final nearColor = _gridColor(0, totalDepth, lut);
-    final nearAlpha = (nearColor.alpha * 0.3 * wallA).round().clamp(0, 255);
+    final nearAlpha =
+        ((nearColor.a * 255.0).round().clamp(0, 255) * 0.3 * wallA)
+            .round()
+            .clamp(0, 255);
     _gridPaint
       ..color = Color.fromARGB(
-          nearAlpha, nearColor.red, nearColor.green, nearColor.blue)
+        nearAlpha,
+        (nearColor.r * 255.0).round().clamp(0, 255),
+        (nearColor.g * 255.0).round().clamp(0, 255),
+        (nearColor.b * 255.0).round().clamp(0, 255),
+      )
       ..strokeWidth = 0.5;
 
     var x = -w;
@@ -300,16 +357,17 @@ class ParallaxRoomPainter extends CustomPainter {
 
   // ── Marble edge highlights ────────────────────────────────────────────
   void _drawMarbleEdges(
-      Canvas canvas,
-      Size size,
-      Offset? bTL,
-      Offset? bTR,
-      Offset? bBR,
-      Offset? bBL,
-      Offset? fTL,
-      Offset? fTR,
-      Offset? fBR,
-      Offset? fBL) {
+    Canvas canvas,
+    Size size,
+    Offset? bTL,
+    Offset? bTR,
+    Offset? bBR,
+    Offset? bBL,
+    Offset? fTL,
+    Offset? fTR,
+    Offset? fBR,
+    Offset? fBL,
+  ) {
     final edgePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
@@ -343,7 +401,11 @@ class ParallaxRoomPainter extends CustomPainter {
   // ── Wall helpers ──────────────────────────────────────────────────────
 
   void _fillWallPts(
-      Canvas canvas, Size size, List<Point3D> pts3d, Color color) {
+    Canvas canvas,
+    Size size,
+    List<Point3D> pts3d,
+    Color color,
+  ) {
     final a = _proj(pts3d[0], size);
     final b = _proj(pts3d[1], size);
     final c = _proj(pts3d[2], size);
@@ -364,8 +426,14 @@ class ParallaxRoomPainter extends CustomPainter {
     canvas.drawPath(_path, _wallPaint);
   }
 
-  void _fillQuadGradient(Canvas canvas, List<Offset> corners, Color baseColor,
-      double alpha, Offset gradStart, Offset gradEnd) {
+  void _fillQuadGradient(
+    Canvas canvas,
+    List<Offset> corners,
+    Color baseColor,
+    double alpha,
+    Offset gradStart,
+    Offset gradEnd,
+  ) {
     _path
       ..reset()
       ..moveTo(corners[0].dx, corners[0].dy)
@@ -381,11 +449,10 @@ class ParallaxRoomPainter extends CustomPainter {
     // Subtle gradient overlay for depth — stronger for dramatic lighting
     canvas.save();
     canvas.clipPath(_path);
-    _wallPaint.shader = ui.Gradient.linear(
-      gradStart,
-      gradEnd,
-      [const Color(0x00000000), const Color(0x10000000)],
-    );
+    _wallPaint.shader = ui.Gradient.linear(gradStart, gradEnd, [
+      const Color(0x00000000),
+      const Color(0x10000000),
+    ]);
     canvas.drawRect(Offset.zero & const Size(5000, 5000), _wallPaint);
     _wallPaint.shader = null;
     canvas.restore();
@@ -406,13 +473,13 @@ class ParallaxRoomPainter extends CustomPainter {
   // ── Projection helper ─────────────────────────────────────────────────
 
   Offset? _proj(Point3D pt, Size size) => projectOffAxis(
-        pt,
-        headX: headX,
-        headY: headY,
-        config: config,
-        screenWidth: size.width,
-        screenHeight: size.height,
-      );
+    pt,
+    headX: headX,
+    headY: headY,
+    config: config,
+    screenWidth: size.width,
+    screenHeight: size.height,
+  );
 
   @override
   bool shouldRepaint(ParallaxRoomPainter oldDelegate) =>

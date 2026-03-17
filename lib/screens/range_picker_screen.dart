@@ -49,8 +49,9 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
   late final AnimationController _buttonAnimController;
 
   // ── ValueNotifiers for fast-changing state (no setState rebuilds) ──
-  final ValueNotifier<_SelectionPhase> _phaseNotifier =
-      ValueNotifier(_SelectionPhase.start);
+  final ValueNotifier<_SelectionPhase> _phaseNotifier = ValueNotifier(
+    _SelectionPhase.start,
+  );
   final ValueNotifier<_WordSelection?> _startNotifier = ValueNotifier(null);
   final ValueNotifier<_WordSelection?> _endNotifier = ValueNotifier(null);
   final ValueNotifier<String?> _errorNotifier = ValueNotifier(null);
@@ -157,14 +158,16 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     }
   }
 
-  void _onTextSelectionChanged(List<PdfTextRanges> selections) {
-    final text = selections.isEmpty ? null : selections.first.text;
-    if (text == null || text.isEmpty) return;
+  void _onTextSelectionChanged(PdfTextSelection selection) {
+    if (!selection.hasSelectedText) return;
 
     // Debounce: only process after 150ms of no new selection events.
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
-      _processSelection(text);
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () async {
+      final text = await selection.getSelectedText();
+      if (text.isNotEmpty) {
+        _processSelection(text);
+      }
     });
   }
 
@@ -264,11 +267,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     );
 
     // Resolve global indices.
-    final resolved = resolveAndValidateRange(
-      range,
-      _pageBoundaries,
-      _allWords,
-    );
+    final resolved = resolveAndValidateRange(range, _pageBoundaries, _allWords);
     if (resolved == null) {
       _errorNotifier.value =
           'Could not resolve range — try re-extracting the PDF';
@@ -297,16 +296,17 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
       wordIndex: resolved.resolvedStartWordIndex,
       timestamp: DateTime.now(),
     );
-    await ref.read(configProvider.notifier).updateBookmark(
-          widget.filePath,
-          newBookmark,
-        );
+    await ref
+        .read(configProvider.notifier)
+        .updateBookmark(widget.filePath, newBookmark);
 
     if (mounted) {
-      context.go(Uri(
-        path: '/read',
-        queryParameters: {'path': widget.filePath},
-      ).toString());
+      context.go(
+        Uri(
+          path: '/read',
+          queryParameters: {'path': widget.filePath},
+        ).toString(),
+      );
     }
   }
 
@@ -321,10 +321,9 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     final bookmark = config.bookmarks[widget.filePath];
     if (bookmark != null) {
       final updated = bookmark.copyWith(clearReadingRange: true);
-      await ref.read(configProvider.notifier).updateBookmark(
-            widget.filePath,
-            updated,
-          );
+      await ref
+          .read(configProvider.notifier)
+          .updateBookmark(widget.filePath, updated);
     }
 
     if (mounted) context.pop();
@@ -413,8 +412,10 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
                     widget.filePath,
                     controller: _pdfController,
                     params: PdfViewerParams(
-                      enableTextSelection: true,
-                      onTextSelectionChange: _onTextSelectionChanged,
+                      textSelectionParams: PdfTextSelectionParams(
+                        enabled: true,
+                        onTextSelectionChange: _onTextSelectionChanged,
+                      ),
                       onPageChanged: (pageNumber) {
                         if (pageNumber != null) {
                           _currentPageNotifier.value = pageNumber;
@@ -488,8 +489,9 @@ class _BottomControls extends StatelessWidget {
       ]),
       builder: (context, _) {
         final isStartPhase = phaseNotifier.value == _SelectionPhase.start;
-        final currentSelection =
-            isStartPhase ? startNotifier.value : endNotifier.value;
+        final currentSelection = isStartPhase
+            ? startNotifier.value
+            : endNotifier.value;
         final hasSelection = currentSelection != null;
         final totalPages = totalPagesNotifier.value;
         final currentPage = currentPageNotifier.value;
@@ -621,10 +623,7 @@ class _SelectionLabel extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-          ),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
         const SizedBox(width: 8),
         Text(
@@ -653,10 +652,7 @@ class _DiscardDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Discard selection?',
-              style: SpeedyBoyTypography.title,
-            ),
+            const Text('Discard selection?', style: SpeedyBoyTypography.title),
             const SizedBox(height: 16),
             Text(
               'Your partial selection will be lost.',
@@ -678,8 +674,10 @@ class _DiscardDialog extends StatelessWidget {
                     decoration: SpeedyBoyDecorations.pillDecoration(
                       SpeedyBoySurface.shell,
                     ),
-                    child:
-                        const Text('Cancel', style: SpeedyBoyTypography.body),
+                    child: const Text(
+                      'Cancel',
+                      style: SpeedyBoyTypography.body,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -750,8 +748,10 @@ class _ClearRangeDialog extends StatelessWidget {
                     decoration: SpeedyBoyDecorations.pillDecoration(
                       SpeedyBoySurface.shell,
                     ),
-                    child:
-                        const Text('Cancel', style: SpeedyBoyTypography.body),
+                    child: const Text(
+                      'Cancel',
+                      style: SpeedyBoyTypography.body,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),

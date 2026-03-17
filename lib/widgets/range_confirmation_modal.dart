@@ -14,31 +14,24 @@ Future<bool> showRangeConfirmationModal({
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Dismiss range confirmation',
-    barrierColor: SpeedyBoyTokens.shellDarkShadow.withOpacity(0.5),
+    barrierColor: SpeedyBoyTokens.shellDarkShadow.withValues(alpha: 0.5),
     transitionDuration: SpeedyBoyAnimations.dialEmergeDuration,
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final reducedMotion = isReducedMotion(context);
       if (reducedMotion) return child;
 
-      final scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-        CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOut,
-        ),
-      );
-      final fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOut,
-        ),
-      );
+      final scaleAnimation = Tween<double>(
+        begin: 0.8,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
+      final fadeAnimation = Tween<double>(
+        begin: 0.0,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
 
       return FadeTransition(
         opacity: fadeAnimation,
-        child: ScaleTransition(
-          scale: scaleAnimation,
-          child: child,
-        ),
+        child: ScaleTransition(scale: scaleAnimation, child: child),
       );
     },
     pageBuilder: (context, animation, secondaryAnimation) {
@@ -105,8 +98,10 @@ class _RangeConfirmationCard extends StatelessWidget {
                     decoration: SpeedyBoyDecorations.pillDecoration(
                       SpeedyBoySurface.shell,
                     ),
-                    child:
-                        const Text('Cancel', style: SpeedyBoyTypography.body),
+                    child: const Text(
+                      'Cancel',
+                      style: SpeedyBoyTypography.body,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),

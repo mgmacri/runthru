@@ -76,17 +76,19 @@ Future<ExtractedDocument> pdfExtract(String filePath) async {
 
     for (var i = 0; i < totalPages; i++) {
       final pageText = await document.pages[i].loadText();
-      final trimmed = pageText.fullText.trim();
+      final trimmed = pageText?.fullText.trim() ?? '';
 
       // Record page boundary before adding sentences.
       final startSentenceIndex = allSentences.length;
       final firstWords = trimmed.split(RegExp(r'\s+')).take(5).join(' ');
-      pageBoundaries.add(PageBoundary(
-        pageNumber: i,
-        startSentenceIndex: startSentenceIndex,
-        startWordIndex: globalWordIndex,
-        firstWords: firstWords,
-      ));
+      pageBoundaries.add(
+        PageBoundary(
+          pageNumber: i,
+          startSentenceIndex: startSentenceIndex,
+          startWordIndex: globalWordIndex,
+          firstWords: firstWords,
+        ),
+      );
 
       if (trimmed.isNotEmpty) {
         final pageSentences = _textToSentences(trimmed);
@@ -98,9 +100,7 @@ Future<ExtractedDocument> pdfExtract(String filePath) async {
     }
 
     if (allSentences.isEmpty) {
-      throw const UnsupportedPdfError(
-        'Image-only PDF — no extractable text',
-      );
+      throw const UnsupportedPdfError('Image-only PDF — no extractable text');
     }
 
     return ExtractedDocument(
@@ -138,17 +138,19 @@ Future<PageRangeResult> _pdfExtractPages(_PageRangeRequest request) async {
 
     for (var i = clampedStart; i <= effectiveEnd; i++) {
       final pageText = await document.pages[i].loadText();
-      final trimmed = pageText.fullText.trim();
+      final trimmed = pageText?.fullText.trim() ?? '';
 
       // Record page boundary before adding sentences
       final startSentenceIndex = allSentences.length;
       final firstWords = trimmed.split(RegExp(r'\s+')).take(5).join(' ');
-      pageBoundaries.add(PageBoundary(
-        pageNumber: i,
-        startSentenceIndex: startSentenceIndex,
-        startWordIndex: globalWordIndex,
-        firstWords: firstWords,
-      ));
+      pageBoundaries.add(
+        PageBoundary(
+          pageNumber: i,
+          startSentenceIndex: startSentenceIndex,
+          startWordIndex: globalWordIndex,
+          firstWords: firstWords,
+        ),
+      );
 
       if (trimmed.isNotEmpty) {
         final pageSentences = _textToSentences(trimmed);
@@ -181,9 +183,7 @@ Future<PageRangeResult> _pdfExtractPages(_PageRangeRequest request) async {
     }
 
     if (allSentences.isEmpty && clampedStart == 0) {
-      throw const UnsupportedPdfError(
-        'Image-only PDF — no extractable text',
-      );
+      throw const UnsupportedPdfError('Image-only PDF — no extractable text');
     }
 
     return PageRangeResult(
@@ -255,9 +255,7 @@ Future<int> pdfPageCountInIsolate(String filePath) async {
 
 /// Splits raw text into a list of Sentence objects.
 List<Sentence> _textToSentences(String text) {
-  final sentencePattern = RegExp(
-    r'(?<=[.!?])\s+',
-  );
+  final sentencePattern = RegExp(r'(?<=[.!?])\s+');
   final rawSentences = text.split(sentencePattern);
   final sentences = <Sentence>[];
 
@@ -265,8 +263,10 @@ List<Sentence> _textToSentences(String text) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) continue;
 
-    final words =
-        trimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = trimmed
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (words.isNotEmpty) {
       sentences.add(Sentence(words: words));
     }

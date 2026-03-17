@@ -14,7 +14,7 @@ class SpeedyBoyAnimations3D {
     if (reducedMotion) return (_) => Matrix4.identity();
     return (double t) {
       final scale = 1.0 + 0.02 * math.sin(t * math.pi);
-      return Matrix4.identity()..scale(scale, scale, scale);
+      return Matrix4.identity()..scaleByDouble(scale, scale, scale, 1.0);
     };
   }
 
@@ -44,9 +44,7 @@ class SpeedyBoyAnimations3D {
   }
 
   /// A-011: Cube breathe idle oscillation.
-  static Matrix4 Function(double t) cubeBreathe({
-    bool reducedMotion = false,
-  }) {
+  static Matrix4 Function(double t) cubeBreathe({bool reducedMotion = false}) {
     if (reducedMotion) return (_) => Matrix4.identity();
     return (double t) {
       final angle = math.sin(t * 2 * math.pi) * 1.5 * math.pi / 180.0;

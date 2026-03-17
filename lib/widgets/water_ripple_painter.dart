@@ -69,8 +69,9 @@ class WaterRipplePainter extends CustomPainter {
       if (ringProgress < 0) ringProgress += 1.0;
 
       // Apply easeOut to the ring's own progress
-      final easedProgress =
-          SpeedyBoyAnimations.waterRippleCurve.transform(ringProgress);
+      final easedProgress = SpeedyBoyAnimations.waterRippleCurve.transform(
+        ringProgress,
+      );
 
       final radius = maxRadius * easedProgress;
       if (radius < 1.0) continue;
@@ -84,13 +85,13 @@ class WaterRipplePainter extends CustomPainter {
 
       // Light arc (upper-left emphasis)
       _lightPaints[i]
-        ..color = lightColor.withOpacity(opacity * 0.4)
+        ..color = lightColor.withValues(alpha: opacity * 0.4)
         ..strokeWidth = strokeWidth
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
 
       // Dark arc (lower-right emphasis)
       _darkPaints[i]
-        ..color = darkColor.withOpacity(opacity * 0.4)
+        ..color = darkColor.withValues(alpha: opacity * 0.4)
         ..strokeWidth = strokeWidth
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
 

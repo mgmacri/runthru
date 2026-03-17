@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:epubx/epubx.dart';
+import 'package:archive/archive.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/pdf_extractor.dart' show PageRangeResult;
+import 'package:xml/xml.dart';
 
 /// Per-file extraction timeout.
 const Duration _epubExtractionTimeout = Duration(seconds: 30);
@@ -55,8 +57,7 @@ Future<PageRangeResult> extractEpubPagesInIsolate(
 Future<int> epubChapterCountInIsolate(String filePath) async {
   return Isolate.run(() async {
     final bytes = File(filePath).readAsBytesSync();
-    final book = await EpubReader.readBook(bytes);
-    return _getChapters(book).length;
+    return _getChapters(bytes).length;
   }).timeout(
     const Duration(seconds: 10),
     onTimeout: () => throw PdfTimeoutError(filePath),
@@ -72,8 +73,7 @@ Future<ExtractedDocument> _extractInIsolate(String filePath) async {
   }
 
   final bytes = file.readAsBytesSync();
-  final book = await EpubReader.readBook(bytes);
-  final chapters = _getChapters(book);
+  final chapters = _getChapters(bytes);
 
   final allSentences = <Sentence>[];
   final pageBoundaries = <PageBoundary>[];
@@ -84,12 +84,14 @@ Future<ExtractedDocument> _extractInIsolate(String filePath) async {
 
     final startSentenceIndex = allSentences.length;
     final firstWords = chapterText.split(RegExp(r'\s+')).take(5).join(' ');
-    pageBoundaries.add(PageBoundary(
-      pageNumber: i,
-      startSentenceIndex: startSentenceIndex,
-      startWordIndex: globalWordIndex,
-      firstWords: firstWords,
-    ));
+    pageBoundaries.add(
+      PageBoundary(
+        pageNumber: i,
+        startSentenceIndex: startSentenceIndex,
+        startWordIndex: globalWordIndex,
+        firstWords: firstWords,
+      ),
+    );
 
     if (chapterText.isNotEmpty) {
       final sentences = _textToSentences(chapterText);
@@ -101,9 +103,7 @@ Future<ExtractedDocument> _extractInIsolate(String filePath) async {
   }
 
   if (allSentences.isEmpty) {
-    throw const UnsupportedPdfError(
-      'EPUB has no extractable text',
-    );
+    throw const UnsupportedPdfError('EPUB has no extractable text');
   }
 
   return ExtractedDocument(
@@ -124,8 +124,7 @@ Future<PageRangeResult> _extractRangeInIsolate(
   }
 
   final bytes = file.readAsBytesSync();
-  final book = await EpubReader.readBook(bytes);
-  final chapters = _getChapters(book);
+  final chapters = _getChapters(bytes);
   final totalChapters = chapters.length;
 
   final clampedEnd = endChapter.clamp(0, totalChapters - 1);
@@ -140,12 +139,14 @@ Future<PageRangeResult> _extractRangeInIsolate(
 
     final startSentenceIndex = allSentences.length;
     final firstWords = chapterText.split(RegExp(r'\s+')).take(5).join(' ');
-    pageBoundaries.add(PageBoundary(
-      pageNumber: i,
-      startSentenceIndex: startSentenceIndex,
-      startWordIndex: globalWordIndex,
-      firstWords: firstWords,
-    ));
+    pageBoundaries.add(
+      PageBoundary(
+        pageNumber: i,
+        startSentenceIndex: startSentenceIndex,
+        startWordIndex: globalWordIndex,
+        firstWords: firstWords,
+      ),
+    );
 
     if (chapterText.isNotEmpty) {
       final sentences = _textToSentences(chapterText);
@@ -157,9 +158,7 @@ Future<PageRangeResult> _extractRangeInIsolate(
   }
 
   if (allSentences.isEmpty && clampedStart == 0) {
-    throw const UnsupportedPdfError(
-      'EPUB has no extractable text',
-    );
+    throw const UnsupportedPdfError('EPUB has no extractable text');
   }
 
   return PageRangeResult(
@@ -176,19 +175,93 @@ Future<PageRangeResult> _extractRangeInIsolate(
 }
 
 /// Collects content strings from all readable EPUB content files.
-List<String> _getChapters(EpubBook book) {
+///
+/// Parses the EPUB (a ZIP archive) by:
+/// 1. Reading `META-INF/container.xml` to locate the OPF file.
+/// 2. Parsing the OPF manifest and spine to determine reading order.
+/// 3. Extracting XHTML content for each spine entry.
+List<String> _getChapters(List<int> bytes) {
+  final archive = ZipDecoder().decodeBytes(bytes);
+
+  // Helper to read a file from the archive by path.
+  String? readArchiveFile(String path) {
+    // Normalize path separators and try case-insensitive match.
+    final normalized = path.replaceAll('\\', '/');
+    for (final file in archive.files) {
+      if (file.name.replaceAll('\\', '/').toLowerCase() ==
+          normalized.toLowerCase()) {
+        return utf8.decode(file.content as List<int>, allowMalformed: true);
+      }
+    }
+    return null;
+  }
+
+  // 1. Parse container.xml to find the OPF root file.
+  final containerXml = readArchiveFile('META-INF/container.xml');
+  if (containerXml == null) return [];
+
+  final containerDoc = XmlDocument.parse(containerXml);
+  final rootFileElement = containerDoc.findAllElements('rootfile').firstOrNull;
+  if (rootFileElement == null) return [];
+
+  final opfPath = rootFileElement.getAttribute('full-path');
+  if (opfPath == null || opfPath.isEmpty) return [];
+
+  // 2. Parse the OPF file.
+  final opfXml = readArchiveFile(opfPath);
+  if (opfXml == null) return [];
+
+  final opfDoc = XmlDocument.parse(opfXml);
+  final opfDir = opfPath.contains('/')
+      ? '${opfPath.substring(0, opfPath.lastIndexOf('/'))}/'
+      : '';
+
+  // Build manifest: id → href.
+  final manifestItems = <String, String>{};
+  for (final item in opfDoc.findAllElements('item')) {
+    final id = item.getAttribute('id');
+    final href = item.getAttribute('href');
+    if (id != null && href != null) {
+      manifestItems[id] = href;
+    }
+  }
+
+  // Read spine to get reading order.
+  final spineRefs = <String>[];
+  for (final itemref in opfDoc.findAllElements('itemref')) {
+    final idref = itemref.getAttribute('idref');
+    if (idref != null) {
+      spineRefs.add(idref);
+    }
+  }
+
+  // 3. Extract XHTML content in spine order.
   final chapters = <String>[];
-  final content = book.Content;
-  if (content == null) return chapters;
+  for (final idref in spineRefs) {
+    final href = manifestItems[idref];
+    if (href == null) continue;
 
-  final htmlFiles = content.Html;
-  if (htmlFiles == null || htmlFiles.isEmpty) return chapters;
-
-  // Use reading order from spine if available, otherwise iterate content map.
-  for (final entry in htmlFiles.values) {
-    final html = entry.Content;
+    // Resolve href relative to the OPF directory.
+    final contentPath = Uri.decodeComponent('$opfDir$href');
+    final html = readArchiveFile(contentPath);
     if (html != null && html.isNotEmpty) {
       chapters.add(html);
+    }
+  }
+
+  // Fallback: if spine is empty, try all manifest items with XHTML media type.
+  if (chapters.isEmpty) {
+    for (final item in opfDoc.findAllElements('item')) {
+      final mediaType = item.getAttribute('media-type') ?? '';
+      if (mediaType.contains('xhtml') || mediaType.contains('html')) {
+        final href = item.getAttribute('href');
+        if (href == null) continue;
+        final contentPath = Uri.decodeComponent('$opfDir$href');
+        final html = readArchiveFile(contentPath);
+        if (html != null && html.isNotEmpty) {
+          chapters.add(html);
+        }
+      }
     }
   }
 
@@ -250,8 +323,10 @@ List<Sentence> _textToSentences(String text) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) continue;
 
-    final words =
-        trimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = trimmed
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (words.isNotEmpty) {
       sentences.add(Sentence(words: words));
     }

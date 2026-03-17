@@ -56,9 +56,7 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
     if (reducedMotion) {
       _emergeController.value = 1.0;
     } else {
-      _emergeController.animateWith(
-        SpeedyBoyAnimations.dialEmergeSimulation(),
-      );
+      _emergeController.animateWith(SpeedyBoyAnimations.dialEmergeSimulation());
     }
     _resetAutoDismiss();
   }
@@ -79,10 +77,7 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
 
   void _resetAutoDismiss() {
     _autoDismissTimer?.cancel();
-    _autoDismissTimer = Timer(
-      const Duration(seconds: 3),
-      widget.onDismissed,
-    );
+    _autoDismissTimer = Timer(const Duration(seconds: 3), widget.onDismissed);
   }
 
   @override
@@ -103,10 +98,7 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
         return Opacity(
           opacity: _emergeAnimation.value,
           child: Transform.translate(
-            offset: Offset(
-              0,
-              100 * (1 - _emergeAnimation.value),
-            ),
+            offset: Offset(0, 100 * (1 - _emergeAnimation.value)),
             child: child,
           ),
         );
@@ -134,10 +126,7 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
 }
 
 class _DialPainter extends CustomPainter {
-  _DialPainter({
-    required this.wpm,
-    required this.progress,
-  });
+  _DialPainter({required this.wpm, required this.progress});
 
   final int wpm;
   final double progress;
@@ -150,7 +139,7 @@ class _DialPainter extends CustomPainter {
 
     // ── Neumorphic shadow disc ──
     final shadowPaint = Paint()
-      ..color = SpeedyBoyTokens.stageDarkShadow.withOpacity(0.5)
+      ..color = SpeedyBoyTokens.stageDarkShadow.withValues(alpha: 0.5)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawCircle(
       center + const Offset(3, 3),
@@ -192,36 +181,24 @@ class _DialPainter extends CustomPainter {
 
     // ── Center badge ──
     final tp = TextPainter(
-      text: TextSpan(
-        text: '$wpm',
-        style: SpeedyBoyTypography.badge,
-      ),
+      text: TextSpan(text: '$wpm', style: SpeedyBoyTypography.badge),
       textDirection: TextDirection.ltr,
     )..layout();
 
     tp.paint(
       canvas,
-      Offset(
-        center.dx - tp.width / 2,
-        center.dy - tp.height / 2 - 6,
-      ),
+      Offset(center.dx - tp.width / 2, center.dy - tp.height / 2 - 6),
     );
     tp.dispose();
 
     final labelPainter = TextPainter(
-      text: const TextSpan(
-        text: 'WPM',
-        style: SpeedyBoyTypography.caption,
-      ),
+      text: const TextSpan(text: 'WPM', style: SpeedyBoyTypography.caption),
       textDirection: TextDirection.ltr,
     )..layout();
 
     labelPainter.paint(
       canvas,
-      Offset(
-        center.dx - labelPainter.width / 2,
-        center.dy + 8,
-      ),
+      Offset(center.dx - labelPainter.width / 2, center.dy + 8),
     );
     labelPainter.dispose();
   }

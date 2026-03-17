@@ -3,11 +3,7 @@ import 'package:speedy_boy/design/design.dart';
 
 /// Semi-transparent pause fog overlay on the cube interior.
 class PauseFog3D extends StatefulWidget {
-  const PauseFog3D({
-    super.key,
-    required this.isPaused,
-    required this.wpm,
-  });
+  const PauseFog3D({super.key, required this.isPaused, required this.wpm});
 
   final bool isPaused;
   final int wpm;
@@ -74,7 +70,9 @@ class _PauseFog3DState extends State<PauseFog3D>
       builder: (context, _) {
         if (_opacity.value == 0) return const SizedBox.shrink();
         return Container(
-          color: SpeedyBoyTokens.stagePauseOverlay.withOpacity(_opacity.value),
+          color: SpeedyBoyTokens.stagePauseOverlay.withValues(
+            alpha: _opacity.value,
+          ),
           child: widget.isPaused
               ? Center(
                   child: Text(
