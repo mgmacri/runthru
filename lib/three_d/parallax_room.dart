@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:speedy_boy/core/word_transition.dart';
 import 'package:speedy_boy/design/design.dart';
+import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/three_d/glyph_measurer.dart';
 import 'package:speedy_boy/three_d/off_axis_projection.dart';
 import 'package:speedy_boy/three_d/parallax_room_painter.dart';
@@ -21,6 +23,9 @@ class ParallaxRoom extends StatefulWidget {
     this.config,
     this.isPlaying = false,
     this.fontFamily = 'BricolageGrotesque',
+    this.wpm = 300,
+    this.intervalMs = 200,
+    this.parallaxIntensity = ParallaxIntensity.subtle,
     this.child,
   });
 
@@ -45,6 +50,16 @@ class ParallaxRoom extends StatefulWidget {
 
   /// Reading font family.
   final String fontFamily;
+
+  /// Current reading speed in words per minute.
+  final int wpm;
+
+  /// Current word display interval in milliseconds.
+  final int intervalMs;
+
+  /// Controls the parallax rendering mode.
+  // P7 Grade C — 4 rendering branches for room intensity
+  final ParallaxIntensity parallaxIntensity;
 
   /// Overlay child (fog, dial, progress bar, etc.).
   final Widget? child;
@@ -120,9 +135,33 @@ class _ParallaxRoomState extends State<ParallaxRoom>
     if (widget.currentWord != oldWidget.currentWord) {
       if (mounted) {
         final reducedMotion = isReducedMotion(context);
-        if (!reducedMotion) {
+        // P7 Grade C — off mode: snap animations, no motion
+        final skipAnimations =
+            widget.parallaxIntensity == ParallaxIntensity.off;
+        if (!reducedMotion && !skipAnimations) {
+          // P6 Grade A — select animation based on WPM and word length
+          final result = selectWordTransition(
+            wpm: widget.wpm,
+            charCount: widget.currentWord.length,
+            displayMs: widget.intervalMs,
+          );
+
           _wordController.forward(from: 0);
-          _depthBounceController.forward(from: 0);
+
+          switch (result.transition) {
+            case WordTransition.a001Breathe:
+              // P6 Grade A — above threshold, skip depth bounce entirely
+              break;
+            case WordTransition.a013BounceIn:
+              // P6 Grade A — at/below threshold, use capped depth bounce
+              final staggerTotal =
+                  SpeedyBoyAnimations.glyphStaggerMs *
+                  (widget.currentWord.length - 1).clamp(0, 999);
+              _depthBounceController.duration = Duration(
+                milliseconds: result.baseDurationMs + staggerTotal,
+              );
+              _depthBounceController.forward(from: 0);
+          }
         } else {
           _wordController.value = 1.0;
           _depthBounceController.value = 1.0;
@@ -158,14 +197,33 @@ class _ParallaxRoomState extends State<ParallaxRoom>
               // Focus dimming when playing
               final focusDim = widget.isPlaying ? 0.3 : 0.0;
 
+              // P7 Grade C — compute effective head position per intensity
+              final double effectiveHeadX;
+              final double effectiveHeadY;
+              switch (widget.parallaxIntensity) {
+                case ParallaxIntensity.none:
+                case ParallaxIntensity.off:
+                  // Static room — no parallax motion
+                  effectiveHeadX = 0;
+                  effectiveHeadY = 0;
+                case ParallaxIntensity.subtle:
+                  // P7 Grade C — clamp to ≤2.5% displacement
+                  effectiveHeadX = widget.headX.clamp(-0.025, 0.025);
+                  effectiveHeadY = widget.headY.clamp(-0.025, 0.025);
+                case ParallaxIntensity.full:
+                  // P7 Grade C — clamp to ≤5% displacement
+                  effectiveHeadX = widget.headX.clamp(-0.05, 0.05);
+                  effectiveHeadY = widget.headY.clamp(-0.05, 0.05);
+              }
+
               return Stack(
                 children: [
                   // ── Room background + walls + grid ──
                   Positioned.fill(
                     child: CustomPaint(
                       painter: ParallaxRoomPainter(
-                        headX: 0,
-                        headY: 0,
+                        headX: effectiveHeadX,
+                        headY: effectiveHeadY,
                         config: config,
                         buildProgress: _buildAnimation.value,
                         focusDim: focusDim,
@@ -180,8 +238,8 @@ class _ParallaxRoomState extends State<ParallaxRoom>
                         painter: ParallaxWordPainter(
                           word: widget.currentWord,
                           fontSize: widget.fontSize,
-                          headX: 0,
-                          headY: 0,
+                          headX: effectiveHeadX,
+                          headY: effectiveHeadY,
                           config: config,
                           painterPool: _painterPool,
                           animationValue: _wordAnimation.value,

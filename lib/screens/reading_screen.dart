@@ -105,8 +105,10 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
       if (resolved != null) {
         _readingRange = resolved;
         final rangeStart = resolved.resolvedStartWordIndex;
-        final rangeEnd =
-            resolved.resolvedEndWordIndex.clamp(0, _allDocWords.length - 1);
+        final rangeEnd = resolved.resolvedEndWordIndex.clamp(
+          0,
+          _allDocWords.length - 1,
+        );
         _sliceOffset = rangeStart;
         _words = _allDocWords.sublist(rangeStart, rangeEnd + 1);
 
@@ -254,9 +256,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
     final anchorColor =
         SpeedyBoyTokens.anchorColors[config.anchorColorIndex.clamp(
-      0,
-      SpeedyBoyTokens.anchorColors.length - 1,
-    )];
+          0,
+          SpeedyBoyTokens.anchorColors.length - 1,
+        )];
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
       if (prev?.currentIndex != next.currentIndex) {
@@ -274,8 +276,8 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
     final currentWord =
         _words.isNotEmpty && timerState.currentIndex < _words.length
-            ? _words[timerState.currentIndex]
-            : '';
+        ? _words[timerState.currentIndex]
+        : '';
 
     return Scaffold(
       body: SafeArea(
@@ -290,92 +292,14 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                     behavior: HitTestBehavior.opaque,
                     onTap: _togglePause,
                     onLongPress: _showDial,
-                    child: ListenableBuilder(
-                      listenable: _breatheController,
-                      builder: (context, child) {
-                        return CubeViewport(
-                          parallaxOffset: Offset.zero,
-                          breatheAngle: SpeedyBoyAnimations.cubeBreatheAngle(
-                            _breatheController.value,
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: 1,
-                            child: ProgressHairline3D(
-                              progress: timerState.progress,
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: WordDisplay3D(
-                              word: currentWord,
-                              fontSize: fontSize,
-                              anchorColor: anchorColor,
-                              fontFamily: config.fontFamily,
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: PauseFog3D(
-                              isPaused:
-                                  !timerState.isPlaying && _words.isNotEmpty,
-                              wpm: timerState.wpm,
-                            ),
-                          ),
-                          if (_isRangeComplete && _readingRange != null)
-                            Positioned.fill(
-                              child: FinishedRangeOverlay(
-                                visible: _isRangeComplete,
-                                startPage: _readingRange!.startPage,
-                                endPage: _readingRange!.endPage,
-                                wordCount: _words.length,
-                                averageWpm: timerState.wpm,
-                                onContinueReading: _continueReadingPastRange,
-                                onSetNewRange: () {
-                                  ref
-                                      .read(bookmarkProvider(widget.filePath)
-                                          .notifier)
-                                      .save();
-                                  context.push(Uri(
-                                    path: '/range-picker',
-                                    queryParameters: {'path': widget.filePath},
-                                  ).toString());
-                                },
-                                onGoToLibrary: () {
-                                  ref
-                                      .read(bookmarkProvider(widget.filePath)
-                                          .notifier)
-                                      .save();
-                                  ref.read(wordTimerProvider.notifier).pause();
-                                  context.go('/');
-                                },
-                              ),
-                            ),
-                          Positioned(
-                            bottom: 40,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: WpmDial3D(
-                                wpm: timerState.wpm,
-                                visible: _dialVisible,
-                                onWpmChanged: (wpm) {
-                                  ref
-                                      .read(wordTimerProvider.notifier)
-                                      .setWpm(wpm);
-                                },
-                                onDismissed: () {
-                                  setState(() => _dialVisible = false);
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                    child: _buildViewport(
+                      config,
+                      child: _buildContent(
+                        currentWord: currentWord,
+                        timerState: timerState,
+                        anchorColor: anchorColor,
+                        fontSize: fontSize,
+                        config: config,
                       ),
                     ),
                   ),
@@ -419,6 +343,109 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
           },
         ),
       ),
+    );
+  }
+
+  /// Wraps content in the 3D cube or a flat background depending on
+  /// [ParallaxIntensity]. "None" and "Off" get a flat stageBase fill.
+  Widget _buildViewport(AppConfig config, {required Widget child}) {
+    final flat =
+        config.parallaxIntensity == ParallaxIntensity.none ||
+        config.parallaxIntensity == ParallaxIntensity.off;
+
+    if (flat) {
+      return ColoredBox(color: SpeedyBoyTokens.stageBase, child: child);
+    }
+
+    return ListenableBuilder(
+      listenable: _breatheController,
+      builder: (context, inner) {
+        return CubeViewport(
+          parallaxOffset: Offset.zero,
+          breatheAngle: SpeedyBoyAnimations.cubeBreatheAngle(
+            _breatheController.value,
+          ),
+          child: inner,
+        );
+      },
+      child: child,
+    );
+  }
+
+  /// Builds the stacked content layer (word, progress, pause fog, dial, etc.).
+  Widget _buildContent({
+    required String currentWord,
+    required WordTimerState timerState,
+    required Color anchorColor,
+    required double fontSize,
+    required AppConfig config,
+  }) {
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          child: ProgressHairline3D(progress: timerState.progress),
+        ),
+        Positioned.fill(
+          child: WordDisplay3D(
+            word: currentWord,
+            fontSize: fontSize,
+            anchorColor: anchorColor,
+            fontFamily: config.fontFamily,
+          ),
+        ),
+        Positioned.fill(
+          child: PauseFog3D(
+            isPaused: !timerState.isPlaying && _words.isNotEmpty,
+            wpm: timerState.wpm,
+          ),
+        ),
+        if (_isRangeComplete && _readingRange != null)
+          Positioned.fill(
+            child: FinishedRangeOverlay(
+              visible: _isRangeComplete,
+              startPage: _readingRange!.startPage,
+              endPage: _readingRange!.endPage,
+              wordCount: _words.length,
+              averageWpm: timerState.wpm,
+              onContinueReading: _continueReadingPastRange,
+              onSetNewRange: () {
+                ref.read(bookmarkProvider(widget.filePath).notifier).save();
+                context.push(
+                  Uri(
+                    path: '/range-picker',
+                    queryParameters: {'path': widget.filePath},
+                  ).toString(),
+                );
+              },
+              onGoToLibrary: () {
+                ref.read(bookmarkProvider(widget.filePath).notifier).save();
+                ref.read(wordTimerProvider.notifier).pause();
+                context.go('/');
+              },
+            ),
+          ),
+        Positioned(
+          bottom: 40,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: WpmDial3D(
+              wpm: timerState.wpm,
+              visible: _dialVisible,
+              onWpmChanged: (wpm) {
+                ref.read(wordTimerProvider.notifier).setWpm(wpm);
+              },
+              onDismissed: () {
+                setState(() => _dialVisible = false);
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

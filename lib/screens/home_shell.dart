@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speedy_boy/design/design.dart';
@@ -154,7 +155,7 @@ class _AnalyticsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
-    if (config.hasPremium) return const AnalyticsScreen();
+    if (config.hasPremium || kDebugMode) return const AnalyticsScreen();
 
     return Scaffold(
       backgroundColor: SpeedyBoyTokens.shellBase,

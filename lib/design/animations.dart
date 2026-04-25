@@ -19,14 +19,20 @@ class SpeedyBoyAnimations {
   // ── A-003: Card release (spring back) ──
   static const Duration cardReleaseDuration = Duration(milliseconds: 150);
 
-  static const SpringDescription cardReleaseSpring =
-      SpringDescription(mass: 1.0, stiffness: 800, damping: 22);
+  static const SpringDescription cardReleaseSpring = SpringDescription(
+    mass: 1.0,
+    stiffness: 800,
+    damping: 22,
+  );
 
   // ── A-004: Dial emerge (spring, 8% overshoot) ──
   static const Duration dialEmergeDuration = Duration(milliseconds: 220);
 
-  static const SpringDescription dialEmergeSpring =
-      SpringDescription(mass: 1.0, stiffness: 500, damping: 18);
+  static const SpringDescription dialEmergeSpring = SpringDescription(
+    mass: 1.0,
+    stiffness: 500,
+    damping: 18,
+  );
 
   // ── A-005: Dial dismiss ──
   static const Duration dialDismissDuration = Duration(milliseconds: 180);
@@ -91,12 +97,7 @@ class SpeedyBoyAnimations {
     double to = 0.0,
     double velocity = 0.0,
   }) {
-    return SpringSimulation(
-      cardReleaseSpring,
-      from,
-      to,
-      velocity,
-    );
+    return SpringSimulation(cardReleaseSpring, from, to, velocity);
   }
 
   /// Create a spring simulation for A-004 dial emerge.
@@ -105,12 +106,25 @@ class SpeedyBoyAnimations {
     double to = 1.0,
     double velocity = 0.0,
   }) {
-    return SpringSimulation(
-      dialEmergeSpring,
-      from,
-      to,
-      velocity,
-    );
+    return SpringSimulation(dialEmergeSpring, from, to, velocity);
+  }
+
+  // ── A-014: Elastic Jiggle (ceiling feedback) ──
+  // P1 Grade C — underdamped spring for satisfying bounce-back
+  // damping = 2 × dampingRatio × √(mass × stiffness) = 2 × 0.5 × √600 ≈ 24.5
+  static const SpringDescription jiggleSpring = SpringDescription(
+    mass: 1.0,
+    stiffness: 600,
+    damping: 24.5,
+  );
+
+  /// Create a spring simulation for the elastic jiggle spring-back phase.
+  static SpringSimulation jiggleSimulation({
+    double from = 1.0,
+    double to = 0.0,
+    double velocity = 0.0,
+  }) {
+    return SpringSimulation(jiggleSpring, from, to, velocity);
   }
 
   /// Cube breathe sine wave value for a given controller value.

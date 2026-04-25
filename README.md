@@ -57,6 +57,51 @@ To list available devices:
 flutter devices
 ```
 
+#### Android Emulator (`flutter_emu`)
+
+Start the emulator in the background:
+
+```bash
+emulator -avd flutter_emu &
+```
+
+Wait for it to fully boot, then run the app:
+
+```bash
+adb wait-for-device && flutter run -d emulator-5554
+```
+
+**Cold boot** (required after AVD config changes):
+
+```bash
+emulator -avd flutter_emu -no-snapshot-load &
+```
+
+**Save a fresh snapshot** (after a clean boot you're happy with):
+
+```bash
+adb emu avd snapshot save default_boot
+```
+
+**Common ADB commands:**
+
+```bash
+adb devices                                         # list connected devices/emulators
+adb logcat -s flutter                               # stream Flutter logs only
+adb shell wm size                                   # check screen resolution
+adb shell wm density                                # check screen DPI
+adb shell am force-stop com.speedyboy.speedy_boy    # kill the app
+adb uninstall com.speedyboy.speedy_boy              # uninstall the app
+```
+
+**Wipe emulator data** (factory reset):
+
+```bash
+emulator -avd flutter_emu -wipe-data
+```
+
+AVD config: `%USERPROFILE%\.android\avd\flutter_emu.avd\config.ini`
+
 ### iOS
 
 Requires Xcode 15+ and a valid signing identity. Simulator works for debug.

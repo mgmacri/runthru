@@ -2,20 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:speedy_boy/core/clipboard_service.dart';
+import 'package:speedy_boy/core/hint_controller.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/services/folder_scanner.dart';
 import 'package:speedy_boy/services/models.dart';
 import 'package:speedy_boy/services/preprocessing_queue.dart';
 import 'package:speedy_boy/store/config.dart';
 import 'package:speedy_boy/store/models.dart';
+import 'package:speedy_boy/widgets/hint_overlay.dart';
 import 'package:speedy_boy/widgets/pdf_card_3d.dart';
 
 /// Library screen — lists PDFs as 3D neumorphic cards.
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  final ClipboardService _clipboardService = ClipboardService();
+  String? _clipboardError;
+  bool _showClipboardHint = false;
+
+  @override
+  Widget build(BuildContext context) {
     final pdfListAsync = ref.watch(pdfListProvider);
     final processed = ref.watch(preprocessingQueueProvider);
     final config = ref.watch(configProvider);
@@ -24,49 +36,173 @@ class LibraryScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: SpeedyBoyTokens.shellBase,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // ── Header ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Speedy Boy', style: SpeedyBoyTypography.display),
-                  if (queue.failedCount > 0)
-                    _ErrorBadge(count: queue.failedCount),
-                ],
-              ),
-            ),
+            Column(
+              children: [
+                // ── Header ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Speedy Boy',
+                        style: SpeedyBoyTypography.display,
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (queue.failedCount > 0)
+                            _ErrorBadge(count: queue.failedCount),
+                          const SizedBox(width: 8),
+                          _PasteButton(onPressed: () => _handlePaste(context)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // ── Clipboard error message ──
+                if (_clipboardError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      _clipboardError!,
+                      style: SpeedyBoyTypography.caption.copyWith(
+                        color: SpeedyBoyTokens.shellError,
+                      ),
+                    ),
+                  ),
 
-            // ── PDF List ──
-            Expanded(
-              child: pdfListAsync.when(
-                data: (pdfList) =>
-                    _buildList(context, ref, pdfList, processed, config),
-                loading: () => Center(
-                  child: Text(
-                    'Loading…',
-                    style: SpeedyBoyTypography.body.copyWith(
-                      color: SpeedyBoyTokens.shellTextSecondary,
+                // ── PDF List ──
+                Expanded(
+                  child: pdfListAsync.when(
+                    data: (pdfList) {
+                      // P27 — show clipboard hint on empty library (first time)
+                      _maybeShowClipboardHint(pdfList);
+                      return _buildList(
+                        context,
+                        ref,
+                        pdfList,
+                        processed,
+                        config,
+                      );
+                    },
+                    loading: () => Center(
+                      child: Text(
+                        'Loading…',
+                        style: SpeedyBoyTypography.body.copyWith(
+                          color: SpeedyBoyTokens.shellTextSecondary,
+                        ),
+                      ),
+                    ),
+                    error: (error, _) => Center(
+                      child: Text(
+                        'Failed to scan folder:\n$error',
+                        style: SpeedyBoyTypography.body.copyWith(
+                          color: SpeedyBoyTokens.shellError,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                 ),
-                error: (error, _) => Center(
-                  child: Text(
-                    'Failed to scan folder:\n$error',
-                    style: SpeedyBoyTypography.body.copyWith(
-                      color: SpeedyBoyTokens.shellError,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
+              ],
             ),
+            // ── Clipboard Hint Overlay (Rule 27) ──
+            if (_showClipboardHint)
+              HintOverlay(
+                text: 'Paste text from clipboard to read',
+                position: Alignment.topRight,
+                slideFrom: AxisDirection.right,
+                onDismiss: _dismissClipboardHint,
+              ),
           ],
         ),
       ),
     );
+  }
+
+  void _maybeShowClipboardHint(List<PdfEntry> pdfList) {
+    if (!_showClipboardHint &&
+        pdfList.isEmpty &&
+        !ref.read(configProvider.notifier).hasHintBeenShown(HintId.clipboard)) {
+      // Schedule hint after build completes.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _showClipboardHint = true);
+      });
+    }
+  }
+
+  void _dismissClipboardHint() {
+    ref.read(configProvider.notifier).markHintShown(HintId.clipboard);
+    setState(() => _showClipboardHint = false);
+  }
+
+  Future<void> _handlePaste(BuildContext ctx) async {
+    setState(() => _clipboardError = null);
+    final doc = await _clipboardService.readFromClipboard();
+    if (!ctx.mounted) return;
+
+    if (doc == null) {
+      setState(
+        () => _clipboardError = 'Nothing to read — copy some text first',
+      );
+      return;
+    }
+
+    // Show preview dialog before navigating.
+    final preview = doc.fullText.length > 100
+        ? '${doc.fullText.substring(0, 100)}\u2026'
+        : doc.fullText;
+
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: SpeedyBoyTokens.shellBase,
+        title: Text(
+          doc.title,
+          style: SpeedyBoyTypography.title.copyWith(
+            color: SpeedyBoyTokens.shellTextPrimary,
+          ),
+        ),
+        content: Text(
+          preview,
+          style: SpeedyBoyTypography.body.copyWith(
+            color: SpeedyBoyTokens.shellTextSecondary,
+          ),
+          maxLines: 5,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(
+              'Cancel',
+              style: SpeedyBoyTypography.body.copyWith(
+                color: SpeedyBoyTokens.shellTextSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: Text(
+              'Start Reading',
+              style: SpeedyBoyTypography.body.copyWith(
+                color: SpeedyBoyTokens.shellAccent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && ctx.mounted) {
+      ctx.push('/read-clipboard', extra: doc);
+    }
   }
 
   Widget _buildList(
@@ -80,13 +216,50 @@ class LibraryScreen extends ConsumerWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Text(
-            'No PDF files found.\n\n'
-            'Set a folder in Settings to get started.',
-            style: SpeedyBoyTypography.body.copyWith(
-              color: SpeedyBoyTokens.shellTextSecondary,
-            ),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'No PDF files found.\n\n'
+                'Set a folder in Settings to get started,\n'
+                'or paste text from your clipboard.',
+                style: SpeedyBoyTypography.body.copyWith(
+                  color: SpeedyBoyTokens.shellTextSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              // Prominent paste CTA in empty state
+              GestureDetector(
+                onTap: () => _handlePaste(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  decoration: SpeedyBoyDecorations.raisedDecoration(
+                    SpeedyBoySurface.shell,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.content_paste,
+                        color: SpeedyBoyTokens.shellAccent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Paste from Clipboard',
+                        style: SpeedyBoyTypography.body.copyWith(
+                          color: SpeedyBoyTokens.shellAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -112,7 +285,7 @@ class LibraryScreen extends ConsumerWidget {
         if (range != null) {
           final rangeStart = range.resolvedStartWordIndex;
           final rangeEnd = range.resolvedEndWordIndex;
-          final rangeSize = rangeEnd - rangeStart;
+          final rangeSize = rangeEnd - rangeStart + 1;
           if (rangeSize > 0 && bookmark != null) {
             readingProgress = ((bookmark.wordIndex - rangeStart) / rangeSize)
                 .clamp(0.0, 1.0);
@@ -152,6 +325,45 @@ class LibraryScreen extends ConsumerWidget {
               : null,
         );
       },
+    );
+  }
+}
+
+/// Compact paste button for the header row.
+class _PasteButton extends StatelessWidget {
+  const _PasteButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: SpeedyBoyDecorations.raisedDecoration(
+          SpeedyBoySurface.shell,
+          size: SpeedyBoyShadowSize.small,
+          borderRadius: 12,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.content_paste,
+              color: SpeedyBoyTokens.shellAccent,
+              size: 16,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Paste',
+              style: SpeedyBoyTypography.caption.copyWith(
+                color: SpeedyBoyTokens.shellAccent,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

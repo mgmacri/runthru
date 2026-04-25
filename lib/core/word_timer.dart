@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speedy_boy/design/design.dart';
 
 /// State for the word timer.
 class WordTimerState {
@@ -48,22 +49,41 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   DateTime? _lastTick;
   bool _isFirstTick = false;
 
+  // P18 Grade C — auto-rewind 3 words on resume from pause
+  bool _wasPaused = false;
+  bool _hasPlayedOnce = false;
+
   void loadDocument(int totalWords, {int startIndex = 0}) {
     _stopTimer();
-    state = WordTimerState(
-      totalWords: totalWords,
-      currentIndex: startIndex,
-    );
+    // P18 Grade C — reset auto-rewind flags on new document
+    _wasPaused = false;
+    _hasPlayedOnce = false;
+    state = WordTimerState(totalWords: totalWords, currentIndex: startIndex);
   }
 
   void play() {
     if (state.isFinished || state.totalWords == 0) return;
+
+    // P18 Grade C — silently rewind on resume from pause (not first play)
+    if (_wasPaused && _hasPlayedOnce) {
+      final rewindTarget =
+          (state.currentIndex - SpeedyBoyTiming.autoRewindWords).clamp(
+            0,
+            state.totalWords - 1,
+          );
+      state = state.copyWith(currentIndex: rewindTarget);
+      _wasPaused = false;
+    }
+
+    _hasPlayedOnce = true;
     state = state.copyWith(isPlaying: true);
     _startTimer();
   }
 
   void pause() {
     _stopTimer();
+    // P18 Grade C — mark as paused for auto-rewind on next resume
+    _wasPaused = true;
     state = state.copyWith(isPlaying: false);
   }
 
@@ -88,6 +108,26 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     if (state.totalWords == 0) return;
     final clamped = index.clamp(0, state.totalWords - 1);
     state = state.copyWith(currentIndex: clamped);
+  }
+
+  // P20 Grade C — resume from ContextReveal without auto-rewind
+  void resumeFromContextReveal(int wordIndex) {
+    seekTo(wordIndex);
+    // Skip auto-rewind by clearing the paused flag before play
+    _wasPaused = false;
+    play();
+  }
+
+  /// Seek to [sentenceStartIndex] and resume playing (if was playing).
+  ///
+  /// Skips auto-rewind — the user explicitly chose this position.
+  // P4 Grade C — double-tap restarts sentence without auto-rewind
+  void restartCurrentSentence(int sentenceStartIndex) {
+    final wasPlaying = state.isPlaying;
+    if (wasPlaying) _stopTimer();
+    seekTo(sentenceStartIndex);
+    _wasPaused = false;
+    if (wasPlaying) play();
   }
 
   void _startTimer() {
@@ -119,9 +159,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     _lastTick = DateTime.now();
 
     if (state.currentIndex < state.totalWords - 1) {
-      state = state.copyWith(
-        currentIndex: state.currentIndex + 1,
-      );
+      state = state.copyWith(currentIndex: state.currentIndex + 1);
       if (state.isPlaying && !state.isFinished) {
         _scheduleNext();
       } else {
@@ -147,5 +185,5 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
 
 final wordTimerProvider =
     StateNotifierProvider.autoDispose<WordTimerNotifier, WordTimerState>(
-  (ref) => WordTimerNotifier(),
-);
+      (ref) => WordTimerNotifier(),
+    );

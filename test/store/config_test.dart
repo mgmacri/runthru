@@ -15,10 +15,7 @@ void main() {
         defaultWpm: 500,
         pdfFolderPath: '/docs',
         bookmarks: {
-          '/test.pdf': BookmarkData(
-            wordIndex: 42,
-            timestamp: DateTime(2026),
-          ),
+          '/test.pdf': BookmarkData(wordIndex: 42, timestamp: DateTime(2026)),
         },
       );
 
@@ -34,6 +31,68 @@ void main() {
       final config = AppConfig.fromJson({});
       expect(config.defaultWpm, 300);
       expect(config.pdfFolderPath, isNull);
+    });
+
+    test('v3 fields default safely when JSON keys missing', () {
+      final config = AppConfig.fromJson({});
+      expect(config.parallaxIntensity, ParallaxIntensity.none);
+      expect(config.readingGoalPreset, isNull);
+      expect(config.orpCondition, OrpCondition.orpBoldColor);
+      expect(config.shownHints, isEmpty);
+    });
+
+    test('parallaxIntensity serializes and deserializes', () {
+      for (final intensity in ParallaxIntensity.values) {
+        final config = AppConfig(parallaxIntensity: intensity);
+        final json = config.toJson();
+        final restored = AppConfig.fromJson(json);
+        expect(restored.parallaxIntensity, intensity);
+      }
+    });
+
+    test('orpCondition serializes and deserializes', () {
+      for (final condition in OrpCondition.values) {
+        final config = AppConfig(orpCondition: condition);
+        final json = config.toJson();
+        final restored = AppConfig.fromJson(json);
+        expect(restored.orpCondition, condition);
+      }
+    });
+
+    test('readingGoalPreset null by default', () {
+      const config = AppConfig();
+      expect(config.readingGoalPreset, isNull);
+
+      // Round-trip with a non-null preset
+      final withPreset = config.copyWith(
+        readingGoalPreset: ReadingGoalPreset.deepRead,
+      );
+      final json = withPreset.toJson();
+      final restored = AppConfig.fromJson(json);
+      expect(restored.readingGoalPreset, ReadingGoalPreset.deepRead);
+
+      // Round-trip with null preset
+      final cleared = withPreset.copyWith(clearReadingGoalPreset: true);
+      final json2 = cleared.toJson();
+      final restored2 = AppConfig.fromJson(json2);
+      expect(restored2.readingGoalPreset, isNull);
+    });
+
+    test('shownHints defaults to empty set', () {
+      const config = AppConfig();
+      expect(config.shownHints, isEmpty);
+
+      final updated = config.copyWith(
+        shownHints: {'hint_tap', 'hint_swipe_up'},
+      );
+      final json = updated.toJson();
+      final restored = AppConfig.fromJson(json);
+      expect(restored.shownHints, {'hint_tap', 'hint_swipe_up'});
+    });
+
+    test('shownHints missing key in JSON returns empty set', () {
+      final config = AppConfig.fromJson({});
+      expect(config.shownHints, isEmpty);
     });
   });
 

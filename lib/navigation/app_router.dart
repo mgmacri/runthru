@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:speedy_boy/core/clipboard_document.dart';
 import 'package:speedy_boy/design/design.dart';
 import 'package:speedy_boy/navigation/cube_transition.dart';
 import 'package:speedy_boy/navigation/wall_fold_transition.dart';
@@ -59,11 +60,29 @@ final appRouter = GoRouter(
     GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=2'),
     GoRoute(path: '/discover', redirect: (_, __) => '/?tab=1'),
     GoRoute(path: '/settings', redirect: (_, __) => '/?tab=3'),
+    // Rule 28 — clipboard reading route; document passed via extra
+    GoRoute(
+      path: '/read-clipboard',
+      pageBuilder: (context, state) {
+        final clipboardDoc = state.extra as ClipboardDocument?;
+        return wallFoldTransitionPage(
+          key: state.pageKey,
+          child: ParallaxReadingScreen(
+            filePath: 'clipboard://${clipboardDoc?.title ?? 'clipboard'}',
+            clipboardDocument: clipboardDoc,
+          ),
+        );
+      },
+    ),
   ],
 );
 
-/// Routes free users to [ReadingScreen] and premium users to
-/// [ParallaxReadingScreen].
+/// Routes to the appropriate reading screen based on configuration.
+///
+/// All users now use [ParallaxReadingScreen] which handles every
+/// [ParallaxIntensity] mode — including `none` (flat 2D viewport).
+/// This ensures ContextReveal gestures are available regardless of
+/// premium status.
 class _PremiumReadGuard extends ConsumerWidget {
   const _PremiumReadGuard({required this.filePath});
 
@@ -71,13 +90,7 @@ class _PremiumReadGuard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasPremium = ref.watch(
-      configProvider.select((c) => c.valueOrNull?.hasPremium ?? false),
-    );
-    if (hasPremium) {
-      return ParallaxReadingScreen(filePath: filePath);
-    }
-    return ReadingScreen(filePath: filePath);
+    return ParallaxReadingScreen(filePath: filePath);
   }
 }
 

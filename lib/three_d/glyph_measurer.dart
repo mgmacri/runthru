@@ -33,9 +33,11 @@ class GlyphMeasurer {
   String _currentFamily = 'BricolageGrotesque';
   bool _initialized = false;
 
-  static const _chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+  static const _chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
       '0123456789'
-      '.,;:!?\'"-()[]{}/@#\$%^&*+=<>~`_|\\';
+      '.,;:!\'"-()[]{}/@#\$%^&*+=<>~`_|\\'
+      '\u2018\u2019\u201C\u201D\u2013\u2014\u2026';
 
   /// Set the active font family. Re-measures if changed.
   void setFontFamily(String family) {
@@ -117,8 +119,9 @@ class GlyphMeasurer {
 
   /// Get width of a character at the reference size.
   double _widthAt(String char, {bool bold = false}) {
-    final map =
-        bold ? _boldCache[_currentFamily]! : _regularCache[_currentFamily]!;
+    final map = bold
+        ? _boldCache[_currentFamily]!
+        : _regularCache[_currentFamily]!;
     return map[char] ?? map['M']!;
   }
 
@@ -138,9 +141,7 @@ class GlyphMeasurer {
       final char = word[i];
       final isBold = anchorIndex != null && i == anchorIndex - 1;
       final width = _widthAt(char, bold: isBold) * scale;
-      positions.add(
-        GlyphPosition(character: char, xOffset: x, width: width),
-      );
+      positions.add(GlyphPosition(character: char, xOffset: x, width: width));
       x += width;
     }
 
@@ -148,16 +149,8 @@ class GlyphMeasurer {
   }
 
   /// Total width of a measured word.
-  double wordWidth(
-    String word,
-    double fontSize, {
-    int? anchorIndex,
-  }) {
-    final positions = measureWord(
-      word,
-      fontSize,
-      anchorIndex: anchorIndex,
-    );
+  double wordWidth(String word, double fontSize, {int? anchorIndex}) {
+    final positions = measureWord(word, fontSize, anchorIndex: anchorIndex);
     if (positions.isEmpty) return 0;
     final last = positions.last;
     return last.xOffset + last.width;

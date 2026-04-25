@@ -2,8 +2,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:speedy_boy/core/orp.dart';
+import 'package:speedy_boy/core/wcag_contrast.dart';
 import 'package:speedy_boy/design/materials.dart';
+import 'package:speedy_boy/design/tokens.dart';
 import 'package:speedy_boy/design/typography.dart';
+import 'package:speedy_boy/store/models.dart';
 import 'package:speedy_boy/three_d/glyph_measurer.dart';
 import 'package:speedy_boy/three_d/off_axis_projection.dart';
 import 'package:speedy_boy/three_d/text_painter_pool.dart';
@@ -29,16 +32,17 @@ class ParallaxWordPainter extends CustomPainter {
     this.depthBounceValue = 1.0,
     this.reducedMotion = false,
     this.anchorColor,
+    this.orpCondition = OrpCondition.orpBoldColor,
     this.fontFamily = 'BricolageGrotesque',
     super.repaint,
-  })  : _anchorIndex = orpIndexInOriginal(word),
-        _glyphs = word.isNotEmpty
-            ? GlyphMeasurer.instance.measureWord(
-                word,
-                fontSize,
-                anchorIndex: orpIndexInOriginal(word),
-              )
-            : const [];
+  }) : _anchorIndex = orpIndexInOriginal(word),
+       _glyphs = word.isNotEmpty
+           ? GlyphMeasurer.instance.measureWord(
+               word,
+               fontSize,
+               anchorIndex: orpIndexInOriginal(word),
+             )
+           : const [];
 
   final String word;
   final double fontSize;
@@ -56,6 +60,7 @@ class ParallaxWordPainter extends CustomPainter {
   /// Whether reduced motion is requested.
   final bool reducedMotion;
   final Color? anchorColor;
+  final OrpCondition orpCondition;
   final String fontFamily;
 
   final int _anchorIndex;
@@ -93,26 +98,34 @@ class ParallaxWordPainter extends CustomPainter {
     final anchorGlyph = _glyphs[anchorIdx];
     final anchorCenterLocal = anchorGlyph.xOffset + anchorGlyph.width / 2;
     final entranceScale = 0.95 + 0.05 * animationValue;
-    final anchorOffsetRoomUnits =
-        ((anchorCenterLocal - totalGlyphWidth / 2) / config.unitScale) *
-            entranceScale;
+    // P18 Grade B — centerAligned uses word center, others use ORP anchor
+    final double anchorOffsetRoomUnits;
+    if (orpCondition == OrpCondition.centerAligned) {
+      anchorOffsetRoomUnits = 0.0; // word centered, no ORP pinning
+    } else {
+      anchorOffsetRoomUnits =
+          ((anchorCenterLocal - totalGlyphWidth / 2) / config.unitScale) *
+          entranceScale;
+    }
 
     // ── A-013: Depth bounce Z motion ────────────────────────────────
     // Text starts at textZ + deltaZ (behind resting) and settles forward.
     // bounceValue follows SubtleBounceIn — includes overshoot.
     final bounceValue = reducedMotion ? 1.0 : depthBounceValue;
 
-    final wordHalfW = (totalGlyphWidth / config.unitScale) / 2.0;
-    final cx = -anchorOffsetRoomUnits;
-    final halfH = ((textHeight / config.unitScale) / 2.0) * entranceScale;
-
     // ── Pass 1: Warm centered glow behind word ──────────────────
     _glowPaint.color = _glowColor;
 
     for (var i = 0; i < _glyphs.length; i++) {
       final glyphZ = _glyphZ(i, baseTextZ, bounceValue);
-      final box = _glyphBox(i, glyphZ, totalGlyphWidth, textHeight,
-          anchorOffsetRoomUnits, entranceScale);
+      final box = _glyphBox(
+        i,
+        glyphZ,
+        totalGlyphWidth,
+        textHeight,
+        anchorOffsetRoomUnits,
+        entranceScale,
+      );
       if (box == null) continue;
       final corners = _projectFront(box, size);
       if (corners == null) continue;
@@ -128,35 +141,96 @@ class ParallaxWordPainter extends CustomPainter {
     }
 
     // ── Pass 2: Single-layer text (no extrusion) ─────────────────────
+    // Position glyphs in screen-space using measured pixel widths.
+    // ORP anchor character is centered horizontally; Y is vertically
+    // centered on the projected text plane.
+    final screenCenterX = size.width / 2;
+    // Project the text plane center to get Y position.
+    final pCenter = _p(Point3D(0, 0, baseTextZ), size);
+    final screenCenterY = pCenter?.dy ?? size.height / 2;
+
+    // ORP anchor center in pixel space (relative to word start).
+    final anchorCenterPx = anchorGlyph.xOffset + anchorGlyph.width / 2;
+    // P18 Grade B — centerAligned uses word center for dx alignment
+    final double referenceCenterPx;
+    if (orpCondition == OrpCondition.centerAligned) {
+      referenceCenterPx = totalGlyphWidth / 2;
+    } else {
+      referenceCenterPx = anchorCenterPx;
+    }
+
+    // P14 Grade C — apply shadow behind anchor when contrast < 4.5:1
+    final effectiveAnchorColor = anchorColor ?? _textColor;
+    final needsAnchorShadow =
+        WcagContrast.contrastRatio(
+          effectiveAnchorColor,
+          SpeedyBoyTokens.stageBase,
+        ) <
+        4.5;
+
     for (var i = 0; i < _glyphs.length; i++) {
       final glyph = _glyphs[i];
       final isAnchor = i == anchorIdx;
-      final glyphZ = _glyphZ(i, baseTextZ, bounceValue);
 
-      final leftRoom = cx +
-          ((glyph.xOffset / config.unitScale) - wordHalfW) * entranceScale +
-          _glyphGap;
-      final rightRoom = cx +
-          (((glyph.xOffset + glyph.width) / config.unitScale) - wordHalfW) *
-              entranceScale -
-          _glyphGap;
-      final midX = (leftRoom + rightRoom) / 2;
+      // Glyph center X in pixel space, anchored so ORP char is at screen center.
+      final glyphCenterPx = glyph.xOffset + glyph.width / 2;
+      final dx =
+          screenCenterX + (glyphCenterPx - referenceCenterPx) * entranceScale;
 
-      final pMid = _p(Point3D(midX, 0, glyphZ), size);
-      final pLeft = _p(Point3D(leftRoom, halfH, glyphZ), size);
-      final pRight = _p(Point3D(rightRoom, halfH, glyphZ), size);
-      if (pMid == null || pLeft == null || pRight == null) continue;
+      final efs = fontSize;
 
-      final projW = (pRight.dx - pLeft.dx).abs();
-      final textScale = glyph.width > 0 ? projW / glyph.width : 1.0;
-      final efs = fontSize * textScale;
+      // Draw shadow pass for low-contrast anchor glyphs
+      if (isAnchor &&
+          needsAnchorShadow &&
+          orpCondition != OrpCondition.orpColorOnly) {
+        final shadowStyle = SpeedyBoyTypography.readingAnchor(
+          efs,
+          color: SpeedyBoyTokens.stageText.withAlpha(77),
+          fontFamily: fontFamily,
+        );
+        final shadowPoolIndex = i % TextPainterPool.maxSize;
+        painterPool.configure(shadowPoolIndex, glyph.character, shadowStyle);
+        final shadowTp = painterPool[shadowPoolIndex];
+        shadowTp.paint(
+          canvas,
+          Offset(
+            dx - shadowTp.width / 2 + 0.5,
+            screenCenterY - shadowTp.height / 2 + 0.5,
+          ),
+        );
+      }
 
+      // P18 Grade B — ORP condition determines anchor styling
       final color = isAnchor ? (anchorColor ?? _textColor) : _textColor;
-      final style = isAnchor
-          ? SpeedyBoyTypography.readingAnchor(efs,
-              color: color, fontFamily: fontFamily)
-          : SpeedyBoyTypography.readingWord(efs,
-              color: color, fontFamily: fontFamily);
+      final TextStyle style;
+      if (!isAnchor) {
+        style = SpeedyBoyTypography.readingWord(
+          efs,
+          color: color,
+          fontFamily: fontFamily,
+        );
+      } else {
+        switch (orpCondition) {
+          case OrpCondition.orpBoldColor:
+            style = SpeedyBoyTypography.readingAnchor(
+              efs,
+              color: color,
+              fontFamily: fontFamily,
+            );
+          case OrpCondition.orpColorOnly:
+            style = SpeedyBoyTypography.readingWord(
+              efs,
+              color: anchorColor ?? SpeedyBoyTokens.stageAnchor,
+              fontFamily: fontFamily,
+            );
+          case OrpCondition.centerAligned:
+            style = SpeedyBoyTypography.readingAnchor(
+              efs,
+              color: color,
+              fontFamily: fontFamily,
+            );
+        }
+      }
 
       final poolIndex = i % TextPainterPool.maxSize;
       painterPool.configure(poolIndex, glyph.character, style);
@@ -164,7 +238,7 @@ class ParallaxWordPainter extends CustomPainter {
 
       tp.paint(
         canvas,
-        Offset(pMid.dx - tp.width / 2, pMid.dy - tp.height / 2),
+        Offset(dx - tp.width / 2, screenCenterY - tp.height / 2),
       );
     }
 
@@ -191,10 +265,12 @@ class ParallaxWordPainter extends CustomPainter {
 
     // Apply stagger: earlier glyphs are further along in the animation
     // At 300+ WPM the 6ms stagger is sub-conscious
-    final staggerFraction =
-        _glyphs.length > 1 ? glyphIndex / (_glyphs.length - 1) : 0.0;
+    final staggerFraction = _glyphs.length > 1
+        ? glyphIndex / (_glyphs.length - 1)
+        : 0.0;
     // Small Z offset from stagger (leftmost arrives first → closer to resting)
-    final staggerZ = deltaZ *
+    final staggerZ =
+        deltaZ *
         0.05 *
         (1.0 - staggerFraction) *
         (1.0 - glyphBounce.clamp(0.0, 1.0));
@@ -218,7 +294,7 @@ class ParallaxWordPainter extends CustomPainter {
         ((glyph.xOffset / config.unitScale) - wordHalfW) * entranceScale;
     final rightRoom =
         (((glyph.xOffset + glyph.width) / config.unitScale) - wordHalfW) *
-            entranceScale;
+        entranceScale;
     final cx = -anchorOffsetRoomUnits;
     final left = cx + leftRoom + _glyphGap;
     final right = cx + rightRoom - _glyphGap;
@@ -243,13 +319,13 @@ class ParallaxWordPainter extends CustomPainter {
   }
 
   Offset? _p(Point3D pt, Size size) => projectOffAxis(
-        pt,
-        headX: headX,
-        headY: headY,
-        config: config,
-        screenWidth: size.width,
-        screenHeight: size.height,
-      );
+    pt,
+    headX: headX,
+    headY: headY,
+    config: config,
+    screenWidth: size.width,
+    screenHeight: size.height,
+  );
 
   @override
   bool shouldRepaint(ParallaxWordPainter oldDelegate) =>
@@ -258,6 +334,7 @@ class ParallaxWordPainter extends CustomPainter {
       headY != oldDelegate.headY ||
       animationValue != oldDelegate.animationValue ||
       depthBounceValue != oldDelegate.depthBounceValue ||
+      orpCondition != oldDelegate.orpCondition ||
       fontFamily != oldDelegate.fontFamily;
 }
 

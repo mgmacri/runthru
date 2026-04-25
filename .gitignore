@@ -59,4 +59,7 @@ Satoshi_Complete/
 # Apple API keys — NEVER commit
 *.p8
 
+# Dart skills cache (local tool)
+.dart_skills/
+
 .fake

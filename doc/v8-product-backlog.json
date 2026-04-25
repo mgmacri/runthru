@@ -1,0 +1,682 @@
+{
+  "$schema": "https://speedyboy.app/schemas/product-backlog/v1.json",
+  "project": "speedy-boy",
+  "version": "8.0.0",
+  "spec": "v8-design-spec.md",
+  "copilot_patch": "v8-copilot-patch.md",
+  "generated": "2026-04-25",
+  "feature_name": "Universal Share Receiver",
+  "summary": "Accept text and URL share intents from any Android/iOS app, route into the existing reading engine. Reuses v6 Instaparser/HtmlTextExtractor pipeline. Adds 'Recently Shared' library section.",
+  "platform_targets": ["android", "ios"],
+  "platform_degraded": ["web", "windows", "macos", "linux"],
+  "totals": {
+    "tasks": 23,
+    "sprints": 4,
+    "estimated_hours_min": 22,
+    "estimated_hours_max": 25,
+    "effort_breakdown": { "XS": 2, "S": 9, "M": 10, "L": 2 }
+  },
+  "design_principles": [
+    { "id": "DP1", "title": "One Tap from Anywhere", "summary": "Happy-path share is one tap. Confirmation only on ambiguity, untrusted domains, or errors." },
+    { "id": "DP2", "title": "Reuse the v6 Extraction Pipeline", "summary": "URL shares reuse InstaparserService and HtmlTextExtractor. No new fetch or parser." },
+    { "id": "DP3", "title": "Cold-Start Tolerant", "summary": "Share intent works in cold-start, suspended, and foreground states. All paths converge on ShareIntentRouter.handle()." },
+    { "id": "DP4", "title": "No Silent Network Calls", "summary": "URL fetch only after user confirmation or trusted-domain auto-confirm. Text never touches network." },
+    { "id": "DP5", "title": "Fail Visibly, Recover Gracefully", "summary": "Failed shares surface clear errors with retry/fallback options. Never silent drop." },
+    { "id": "DP6", "title": "Text Shares Are Ephemeral, Like Clipboard", "summary": "Text → ClipboardDocument (Rule 28). URLs → SharedUrlCache, capped FIFO library section." }
+  ],
+  "new_rules": [
+    { "id": 43, "summary": "Share intents drain BEFORE runApp(). Dispatch via addPostFrameCallback after navigator mounts." },
+    { "id": 44, "summary": "Cold-start and warm-start payloads must never both fire. Native bridge enforces dedup." },
+    { "id": 45, "summary": "Untrusted-domain URLs ALWAYS go through SharePreviewSheet. Auto-confirm only for AppConfig.trustedShareDomains." },
+    { "id": 46, "summary": "Share payload contents NEVER appear in logs. Metadata only." },
+    { "id": 47, "summary": "Shared text is ephemeral; shared URLs persist in capped FIFO SharedUrlCache." },
+    { "id": 48, "summary": "URL fetching reuses v6 InstaparserService and HtmlTextExtractor unchanged." },
+    { "id": 49, "summary": "Share intent during active reading shows snackbar, not a takeover." }
+  ],
+  "blockers": [
+    { "id": "B1", "summary": "iOS Share Extension requires Apple Developer Program membership and device testing for distribution validation.", "blocks": ["TASK-405", "TASK-406", "TASK-407"] },
+    { "id": "B2", "summary": "Decide between receive_sharing_intent package and hand-rolled platform channel before TASK-403 begins.", "blocks": ["TASK-400"] },
+    { "id": "B3", "summary": "Lock wildcard trusted-domain semantics: *.X matches X plus all subdomains.", "blocks": ["TASK-402"] },
+    { "id": "B4", "summary": "Cold-start payload provider initialization order in main() — Riverpod and bindings before drain, runApp after.", "blocks": ["TASK-409"] },
+    { "id": "B5", "summary": "iOS App Group ID consistency across host and extension — silent failure if mismatched.", "blocks": ["TASK-407"] },
+    { "id": "B6", "summary": "Snackbar vs v7 AssistantSheet visual stacking and dismiss interaction order.", "blocks": ["TASK-413"] },
+    { "id": "B7", "summary": "Confirm crypto package availability (transitive or explicit dependency).", "blocks": ["TASK-400"] },
+    { "id": "B8", "summary": "Web/desktop graceful degradation — all v8 UI must hide or no-op.", "blocks": ["TASK-420"] }
+  ],
+  "sprints": [
+    { "id": 1, "name": "Foundation — Models, Config, Native Bridge prep", "tasks": ["TASK-400", "TASK-401", "TASK-402", "TASK-403"], "estimated_hours": 2.5 },
+    { "id": 2, "name": "Native Bridge & Service Layer", "tasks": ["TASK-404", "TASK-405", "TASK-406", "TASK-407", "TASK-408", "TASK-409"], "estimated_hours": 7 },
+    { "id": 3, "name": "Router, UI, Reading Integration", "tasks": ["TASK-410", "TASK-411", "TASK-412", "TASK-413", "TASK-414", "TASK-415", "TASK-416", "TASK-417"], "estimated_hours": 9 },
+    { "id": 4, "name": "Settings, Polish, Verification", "tasks": ["TASK-418", "TASK-419", "TASK-420", "TASK-421", "TASK-422"], "estimated_hours": 5 }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-400",
+      "title": "Add v8 dependencies to pubspec.yaml",
+      "sprint": 1,
+      "priority": 0,
+      "effort": "XS",
+      "estimated_minutes": 15,
+      "status": "not_started",
+      "depends_on": [],
+      "files": {
+        "create": [],
+        "modify": ["pubspec.yaml"]
+      },
+      "principles": [],
+      "rules": [],
+      "action": "Decide between receive_sharing_intent package and hand-rolled platform channel. If package: add to dependencies. Confirm crypto availability. Run flutter pub get.",
+      "acceptance_criteria": [
+        "Decision documented in TASK comment: package vs hand-rolled",
+        "If package: pinned version in pubspec.yaml",
+        "crypto package usable from Dart (test with import + simple SHA-256 call)",
+        "flutter pub get succeeds",
+        "dart analyze lib/ reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-401",
+      "title": "Create SharedPayload model + SharedPayloadKind enum",
+      "sprint": 1,
+      "priority": 0,
+      "effort": "S",
+      "estimated_minutes": 25,
+      "status": "not_started",
+      "depends_on": [],
+      "files": {
+        "create": ["lib/models/shared_payload.dart"],
+        "modify": []
+      },
+      "principles": [],
+      "rules": [],
+      "action": "Implement SharedPayload (text, url, subject, sourceAppId, receivedAt, kind) and SharedPayloadKind enum (text, url, mixed, empty). Implement fromNative(Map), toJson(), hasText, hasUrl, kind getter, displayTitle getter.",
+      "acceptance_criteria": [
+        "All fields declared with correct nullability",
+        "fromNative handles missing keys gracefully",
+        "kind returns text/url/mixed/empty for all permutations",
+        "hasText requires text != null && text.trim().length >= 10",
+        "hasUrl requires Uri.tryParse(url) != null and url.startsWith('http')",
+        "displayTitle falls back: subject -> url -> text[:40] -> '(empty)'",
+        "dart analyze reports 0 issues",
+        "Unit tests cover all kind permutations"
+      ]
+    },
+    {
+      "id": "TASK-402",
+      "title": "Create SharedUrlEntry model + SharedUrlCache service",
+      "sprint": 1,
+      "priority": 0,
+      "effort": "M",
+      "estimated_minutes": 60,
+      "status": "not_started",
+      "depends_on": ["TASK-400", "TASK-401"],
+      "files": {
+        "create": ["lib/models/shared_url_entry.dart", "lib/services/shared_url_cache.dart"],
+        "modify": []
+      },
+      "principles": ["DP2", "DP6"],
+      "rules": [11],
+      "action": "Implement SharedUrlEntry (url, urlHash, title, domain, sharedAt, wordCount, progress) with fromJson/toJson. Implement SharedUrlCache: add, get, list (newest-first), updateProgress, remove, clearAll. Storage: <appSupport>/shared_url_cache/. URL hash: sha256 truncated to 16 hex. FIFO at cap. All file I/O in Isolate.run().",
+      "acceptance_criteria": [
+        "All entry fields with correct types",
+        "urlHash deterministic for same URL",
+        "add evicts oldest when over cap (insert 21 -> 20 with oldest removed)",
+        "list() returns newest-first",
+        "clearAll() deletes entire shared_url_cache/ directory",
+        "All file I/O wrapped in Isolate.run() (Rule 11)",
+        "Cache survives app restart (round-trip test)",
+        "matchesTrustedDomain('foo.substack.com', '*.substack.com') -> true",
+        "matchesTrustedDomain('substack.com', '*.substack.com') -> true",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-403",
+      "title": "AppConfig additions for v8",
+      "sprint": 1,
+      "priority": 0,
+      "effort": "S",
+      "estimated_minutes": 25,
+      "status": "not_started",
+      "depends_on": [],
+      "files": {
+        "create": [],
+        "modify": ["lib/store/models.dart", "lib/store/config.dart"]
+      },
+      "principles": [],
+      "rules": [],
+      "action": "Add universalShareEnabled (bool, default true), trustedShareDomains (List<String>, seed list), recentlySharedCap (int, default 20). Add copyWith. Add ConfigNotifier methods: setUniversalShareEnabled, addTrustedShareDomain, removeTrustedShareDomain, setRecentlySharedCap (clamp [5, 100]). All _synchronized. JSON backward-compatible.",
+      "acceptance_criteria": [
+        "Three new fields in AppConfig with correct defaults",
+        "Seed list of 10 trusted domains exactly per copilot patch",
+        "copyWith supports all three new fields",
+        "toJson/fromJson round-trips correctly",
+        "Missing keys in JSON -> defaults",
+        "setRecentlySharedCap(3) clamps to 5; setRecentlySharedCap(200) clamps to 100",
+        "addTrustedShareDomain deduplicates",
+        "removeTrustedShareDomain no-ops on missing entry",
+        "All four setters follow _synchronized pattern",
+        "dart analyze lib/ reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-404",
+      "title": "Implement Android MainActivity share intent handling",
+      "sprint": 2,
+      "priority": 1,
+      "effort": "M",
+      "estimated_minutes": 90,
+      "status": "not_started",
+      "depends_on": ["TASK-400"],
+      "files": {
+        "create": [],
+        "modify": ["android/app/src/main/AndroidManifest.xml", "android/app/src/main/kotlin/.../MainActivity.kt"]
+      },
+      "principles": ["DP3"],
+      "rules": [44],
+      "platform": "android",
+      "action": "Add intent-filter for ACTION_SEND with mime types text/plain and text/*. In MainActivity.kt: onCreate captures EXTRA_TEXT and EXTRA_SUBJECT; onNewIntent for warm-start. MethodChannel app.speedyboy/share_intent with drainInitial method. EventChannel app.speedyboy/share_intent/stream for warm-start.",
+      "acceptance_criteria": [
+        "Intent filter declared correctly",
+        "App appears in system share sheet for text shares",
+        "drainInitial returns Map then null on second call",
+        "Warm-start onNewIntent pushes to event channel",
+        "Cold-start payload NOT also fired via warm stream (Rule 44)",
+        "intent.package used for sourceAppId where available",
+        "No crash when share has no EXTRA_TEXT"
+      ]
+    },
+    {
+      "id": "TASK-405",
+      "title": "Implement iOS Share Extension target",
+      "sprint": 2,
+      "priority": 1,
+      "effort": "L",
+      "estimated_minutes": 180,
+      "status": "not_started",
+      "depends_on": ["TASK-400"],
+      "blockers": ["B1"],
+      "files": {
+        "create": [
+          "ios/SpeedyBoyShareExtension/ShareViewController.swift",
+          "ios/SpeedyBoyShareExtension/Info.plist",
+          "ios/SpeedyBoyShareExtension/SpeedyBoyShareExtension.entitlements"
+        ],
+        "modify": []
+      },
+      "principles": ["DP3"],
+      "rules": [],
+      "platform": "ios",
+      "action": "New Share Extension target. Bundle ID <base>.SpeedyBoyShareExtension. App Group group.app.speedyboy.shared on host and extension. ShareViewController reads inputItems[0].attachments via NSItemProvider, writes JSON to App Group container, opens host via speedyboy://share?id=<uuid>.",
+      "acceptance_criteria": [
+        "Share Extension target builds for simulator and device",
+        "App Group entitlement on both targets with same group ID",
+        "Extension appears in iOS share sheet for text and URL shares",
+        "Payload JSON written to App Group container",
+        "Custom URL scheme speedyboy opens host app",
+        "NSExtensionActivationRule accepts text + URL types",
+        "No crash when payload has no usable content"
+      ]
+    },
+    {
+      "id": "TASK-406",
+      "title": "Implement iOS host app URL scheme + payload reader",
+      "sprint": 2,
+      "priority": 1,
+      "effort": "M",
+      "estimated_minutes": 90,
+      "status": "not_started",
+      "depends_on": ["TASK-405"],
+      "files": {
+        "create": [],
+        "modify": ["ios/Runner/AppDelegate.swift", "ios/Runner/Info.plist"]
+      },
+      "principles": ["DP3"],
+      "rules": [44],
+      "platform": "ios",
+      "action": "Add CFBundleURLTypes for scheme speedyboy. AppDelegate handles application(_:open:options:), reads shared_payload.json from App Group, pushes to MethodChannel app.speedyboy/share_intent. Cold-start: didFinishLaunchingWithOptions checks launchOptions[.url] and stashes payload for drainInitial.",
+      "acceptance_criteria": [
+        "URL scheme registered correctly",
+        "Cold-start: kill app -> share text from Safari -> drainInitial returns payload",
+        "Warm-start: share from Safari -> payload arrives via event channel within 500ms",
+        "Payload file deleted after successful read (no replay on next launch)",
+        "Same MethodChannel name as Android",
+        "Cold-start payload NOT also fired via warm stream"
+      ]
+    },
+    {
+      "id": "TASK-407",
+      "title": "Verify App Group ID consistency + end-to-end iOS share",
+      "sprint": 2,
+      "priority": 1,
+      "effort": "S",
+      "estimated_minutes": 30,
+      "status": "not_started",
+      "depends_on": ["TASK-405", "TASK-406"],
+      "blockers": ["B5"],
+      "files": {
+        "create": [],
+        "modify": []
+      },
+      "principles": ["DP3"],
+      "rules": [],
+      "platform": "ios",
+      "action": "Audit all iOS files for App Group ID consistency. Add build-time assertion or README check. End-to-end: kill app -> share from Notes -> verify payload arrives in Dart with correct text and source app ID.",
+      "acceptance_criteria": [
+        "App Group ID identical across host entitlements, extension entitlements, ShareViewController, AppDelegate",
+        "End-to-end manual test passes (logged in TASK comment)",
+        "No App Group access errors in console"
+      ]
+    },
+    {
+      "id": "TASK-408",
+      "title": "Create ShareIntentService (Dart facade)",
+      "sprint": 2,
+      "priority": 2,
+      "effort": "S",
+      "estimated_minutes": 45,
+      "status": "not_started",
+      "depends_on": ["TASK-401", "TASK-404", "TASK-406"],
+      "files": {
+        "create": ["lib/services/share_intent_service.dart"],
+        "modify": []
+      },
+      "principles": ["DP1", "DP3"],
+      "rules": [46],
+      "action": "Wrap platform channel. drainInitialPayload() invokes drainInitial method. incomingPayloads wraps EventChannel. dispose() cancels subscription. Web/desktop: all methods no-op.",
+      "acceptance_criteria": [
+        "drainInitialPayload returns null on normal launch",
+        "drainInitialPayload returns SharedPayload on share-launched cold-start",
+        "incomingPayloads is broadcast stream (multiple subscribers)",
+        "No-op on web (kIsWeb check)",
+        "No-op on desktop platforms",
+        "No payload contents logged anywhere (Rule 46) - only metadata",
+        "dart analyze reports 0 issues",
+        "Unit tests with mocked MethodChannel"
+      ]
+    },
+    {
+      "id": "TASK-409",
+      "title": "Wire ShareIntentService into main()",
+      "sprint": 2,
+      "priority": 2,
+      "effort": "S",
+      "estimated_minutes": 30,
+      "status": "not_started",
+      "depends_on": ["TASK-408"],
+      "blockers": ["B4"],
+      "files": {
+        "create": [],
+        "modify": ["lib/main.dart"]
+      },
+      "principles": ["DP3"],
+      "rules": [43],
+      "action": "main(): WidgetsFlutterBinding.ensureInitialized -> create ProviderContainer -> await ShareIntentService.drainInitialPayload() -> store in initialSharedPayloadProvider -> runApp(). Subscribe to incomingPayloads from root widget after first frame.",
+      "acceptance_criteria": [
+        "drainInitialPayload awaited BEFORE runApp() (Rule 43)",
+        "Cold-start payload reaches initialSharedPayloadProvider",
+        "Warm-start subscription set up in addPostFrameCallback",
+        "Normal launch: provider is null, no errors",
+        "App launch time regression < 50ms",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-410",
+      "title": "Create ShareIntentRouter",
+      "sprint": 3,
+      "priority": 3,
+      "effort": "M",
+      "estimated_minutes": 90,
+      "status": "not_started",
+      "depends_on": ["TASK-402", "TASK-403", "TASK-408"],
+      "files": {
+        "create": ["lib/services/share_intent_router.dart"],
+        "modify": []
+      },
+      "principles": ["DP1", "DP2", "DP4", "DP5"],
+      "rules": [45, 46, 48, 49],
+      "action": "Implement decision table. handle(payload, context). Active-reading detection -> snackbar. Text -> /read-clipboard. Trusted URL -> /share-receive 1.5s banner -> fetch -> /read-shared-url. Untrusted URL -> /share-preview. Mixed -> /share-preview. Empty/short -> /share-preview with error. URL fetch via v6 InstaparserService.",
+      "acceptance_criteria": [
+        "Decision table fully covered: text, trusted URL, untrusted URL, mixed, empty, short text",
+        "Active reading detection: snackbar with 3 actions",
+        "Wildcard trusted domains match correctly",
+        "URL fetch via v6 InstaparserService (Rule 48)",
+        "Logs metadata only (Rule 46)",
+        "dart analyze reports 0 issues",
+        "Unit tests for every decision-table row"
+      ]
+    },
+    {
+      "id": "TASK-411",
+      "title": "Create ShareReceiveScreen",
+      "sprint": 3,
+      "priority": 3,
+      "effort": "S",
+      "estimated_minutes": 30,
+      "status": "not_started",
+      "depends_on": ["TASK-403"],
+      "files": {
+        "create": ["lib/screens/share_receive_screen.dart"],
+        "modify": []
+      },
+      "principles": ["DP3"],
+      "rules": [15],
+      "action": "Stateless screen with logo, 'Loading shared content...' caption, neumorphic progress ring. shellBase background. 5s timeout -> error sheet.",
+      "acceptance_criteria": [
+        "Renders logo + caption + progress ring",
+        "Uses correct design tokens (shellBase, shellTextSecondary, shellAccent)",
+        "5-second timeout -> error sheet (shareReceiveScreenTimeoutMs)",
+        "Accessible: progress ring has semantic label 'Loading shared content'",
+        "No raw Material widgets (Rule 15)",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-412",
+      "title": "Create SharePreviewSheet",
+      "sprint": 3,
+      "priority": 3,
+      "effort": "M",
+      "estimated_minutes": 90,
+      "status": "not_started",
+      "depends_on": ["TASK-401", "TASK-403"],
+      "files": {
+        "create": ["lib/widgets/share_preview_sheet.dart"],
+        "modify": []
+      },
+      "principles": ["DP1", "DP4", "DP5"],
+      "rules": [46],
+      "action": "Modal bottom sheet with three layouts: mixed (URL + text + 2 read buttons), untrusted URL (URL + Read + Always trust), error (icon + message + Try again / Read as plain text). Source app ID when known. Swipe-down dismiss at sharePreviewDismissVelocity. Always trust adds domain and continues fetch. Read as plain text packages URL as ClipboardDocument.",
+      "acceptance_criteria": [
+        "All three layouts render correctly",
+        "Source app ID shown when available, hidden when not",
+        "Swipe-down dismiss at correct velocity",
+        "Always trust adds domain and continues fetch",
+        "Read as plain text creates ClipboardDocument with URL string",
+        "Sheet uses correct enter/exit timings (shareSheetEnterMs/ExitMs)",
+        "No payload contents logged (Rule 46)",
+        "Accessible: each button has semantic label",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-413",
+      "title": "Implement active-reading snackbar handling",
+      "sprint": 3,
+      "priority": 3,
+      "effort": "M",
+      "estimated_minutes": 90,
+      "status": "not_started",
+      "depends_on": ["TASK-410"],
+      "blockers": ["B6"],
+      "files": {
+        "create": [],
+        "modify": ["lib/screens/parallax_reading_screen.dart", "lib/services/share_intent_router.dart"]
+      },
+      "principles": ["DP1"],
+      "rules": [15, 49],
+      "action": "Custom neumorphic snackbar (NOT Material SnackBar) with [Read now][Save for later][Dismiss]. Save for later adds URL to SharedUrlCache without fetching; text is no-op. Auto-dismiss at shareSnackbarDurationMs (6s). If AssistantSheet open, close it first.",
+      "acceptance_criteria": [
+        "Snackbar appears on top of reading screen, does not interrupt RSVP timer",
+        "All three actions work correctly",
+        "Auto-dismisses at 6s",
+        "Custom neumorphic snackbar (no Material widget) per Rule 15",
+        "If AssistantSheet open: close it before showing snackbar",
+        "No payload contents in visible UI text beyond preview (use displayTitle)",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-414",
+      "title": "Add /share-receive, /share-preview, /read-shared-url routes",
+      "sprint": 3,
+      "priority": 3,
+      "effort": "S",
+      "estimated_minutes": 20,
+      "status": "not_started",
+      "depends_on": ["TASK-411", "TASK-412"],
+      "files": {
+        "create": [],
+        "modify": ["lib/router.dart"]
+      },
+      "principles": [],
+      "rules": [14],
+      "action": "Add three GoRoute entries per copilot patch. /share-receive -> ShareReceiveScreen. /share-preview -> SharePreviewSheet as modal page. /read-shared-url?hash=<hash> -> ParallaxReadingScreen with sharedUrlHash and wallFoldTransitionPage.",
+      "acceptance_criteria": [
+        "All three routes registered",
+        "/read-shared-url reads hash from query parameters",
+        "/share-preview accepts SharedPayload via state.extra",
+        "wallFoldTransitionPage used for /read-shared-url",
+        "Existing routes unaffected",
+        "dart analyze lib/ reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-415",
+      "title": "Extend ParallaxReadingScreen for shared URL source",
+      "sprint": 3,
+      "priority": 4,
+      "effort": "M",
+      "estimated_minutes": 90,
+      "status": "not_started",
+      "depends_on": ["TASK-402", "TASK-414"],
+      "files": {
+        "create": [],
+        "modify": ["lib/screens/parallax_reading_screen.dart"]
+      },
+      "principles": ["DP2", "DP5"],
+      "rules": [48],
+      "action": "Add sharedUrlHash parameter. Add _isSharedUrl getter mirroring _isInstapaper/_isClipboard. Init: SharedUrlCache.get(hash) -> if cachedText, tokenize -> if not, fetch via v6 InstaparserService -> cache. Seek to entry.progress * wordCount. On pause: SharedUrlCache.updateProgress.",
+      "acceptance_criteria": [
+        "sharedUrlHash parameter added with null default",
+        "_isSharedUrl guard implemented",
+        "Cached entries open immediately without network",
+        "Uncached entries fetch via v6 InstaparserService (Rule 48)",
+        "Progress restored on open",
+        "Progress saved on pause (local only, no remote sync)",
+        "All v3-v7 features work identically",
+        "If fetch fails: navigate back to /share-preview with error",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-416",
+      "title": "Create RecentlySharedSection library widget",
+      "sprint": 3,
+      "priority": 4,
+      "effort": "M",
+      "estimated_minutes": 60,
+      "status": "not_started",
+      "depends_on": ["TASK-402", "TASK-415"],
+      "files": {
+        "create": ["lib/widgets/recently_shared_section.dart"],
+        "modify": ["lib/screens/library_screen.dart"]
+      },
+      "principles": ["DP4", "DP6"],
+      "rules": [],
+      "action": "Collapsible section using v6 LibrarySection shell. Watches recentlySharedProvider. Renders v6 ArticleCard per entry. Long-press -> [Open][Remove from history][Clear all shared]. Hidden when empty. Sits between Instapaper and Local Files sections.",
+      "acceptance_criteria": [
+        "Section hidden when cache empty",
+        "Section shows correct count of entries (<= cap)",
+        "ArticleCard reused unchanged",
+        "Tap -> /read-shared-url?hash=<hash>",
+        "Long-press -> context menu with 3 actions",
+        "Remove updates section immediately (Riverpod auto-refresh)",
+        "Clear all prompts confirmation",
+        "Sits between Instapaper and Local Files sections",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-417",
+      "title": "Create Riverpod providers",
+      "sprint": 3,
+      "priority": 4,
+      "effort": "S",
+      "estimated_minutes": 45,
+      "status": "not_started",
+      "depends_on": ["TASK-402", "TASK-408", "TASK-410"],
+      "files": {
+        "create": ["lib/providers/share_intent_provider.dart"],
+        "modify": []
+      },
+      "principles": [],
+      "rules": [13, 41],
+      "action": "Define: initialSharedPayloadProvider (Provider<SharedPayload?>), shareIntentServiceProvider (Provider<ShareIntentService>), shareIntentRouterProvider (Provider<ShareIntentRouter>), recentlySharedProvider (FutureProvider<List<SharedUrlEntry>>), recentlySharedNotifierProvider for mutations.",
+      "acceptance_criteria": [
+        "All providers declared with correct types",
+        "recentlySharedProvider refreshes after add/remove/clearAll",
+        "No global state - all access through providers",
+        "Auto-dispose where appropriate (Rule 41 spirit)",
+        "dart analyze reports 0 issues",
+        "Unit tests with ProviderContainer"
+      ]
+    },
+    {
+      "id": "TASK-418",
+      "title": "Settings Screen — Sharing Section",
+      "sprint": 4,
+      "priority": 5,
+      "effort": "M",
+      "estimated_minutes": 60,
+      "status": "not_started",
+      "depends_on": ["TASK-403", "TASK-417"],
+      "files": {
+        "create": [],
+        "modify": ["lib/screens/settings_screen.dart"]
+      },
+      "principles": [],
+      "rules": [15],
+      "action": "Add Sharing section: toggle for universalShareEnabled, editable trusted-domain list (add/remove), dropdown for recentlySharedCap ([5, 10, 20, 50, 100]), Clear shared history button.",
+      "acceptance_criteria": [
+        "Toggle binds to AppConfig.universalShareEnabled",
+        "Domain list shows current trusted domains; add/remove updates AppConfig",
+        "Add domain validates input is valid host (no protocol, no path)",
+        "Cap dropdown updates AppConfig.recentlySharedCap",
+        "Cap change shrinks cache if new cap < current count (FIFO eviction)",
+        "Clear shared history prompts confirmation",
+        "No raw Material widgets (Rule 15)",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-419",
+      "title": "Disable share intent when toggle is off",
+      "sprint": 4,
+      "priority": 5,
+      "effort": "XS",
+      "estimated_minutes": 15,
+      "status": "not_started",
+      "depends_on": ["TASK-410", "TASK-418"],
+      "files": {
+        "create": [],
+        "modify": ["lib/services/share_intent_router.dart"]
+      },
+      "principles": [],
+      "rules": [],
+      "action": "At top of handle(), check AppConfig.universalShareEnabled. If false: silently drop payload (metadata-only logs). Native intent filter remains; cold-start with toggle off -> navigate to library instead of share destination.",
+      "acceptance_criteria": [
+        "Disable toggle -> share intent triggers no UI navigation",
+        "Cold-start with toggle off -> app launches to library",
+        "No payload contents logged",
+        "Re-enabling toggle works without restart",
+        "dart analyze reports 0 issues"
+      ]
+    },
+    {
+      "id": "TASK-420",
+      "title": "Web/desktop graceful degradation audit",
+      "sprint": 4,
+      "priority": 5,
+      "effort": "S",
+      "estimated_minutes": 30,
+      "status": "not_started",
+      "depends_on": ["TASK-416", "TASK-418"],
+      "blockers": ["B8"],
+      "files": {
+        "create": [],
+        "modify": []
+      },
+      "principles": [],
+      "rules": [],
+      "action": "Verify on Linux desktop and Web: app launches without errors. Settings -> Sharing section HIDDEN entirely. RecentlySharedSection hidden. No share-related code paths execute. Run flutter analyze, flutter build web, flutter build <desktop>.",
+      "acceptance_criteria": [
+        "flutter build web succeeds",
+        "flutter build <desktop> succeeds",
+        "Web build has no Sharing section in Settings",
+        "Web build has no RecentlySharedSection in library",
+        "No console errors on web/desktop launch",
+        "No platform channel exceptions"
+      ]
+    },
+    {
+      "id": "TASK-421",
+      "title": "Integration test suite",
+      "sprint": 4,
+      "priority": 6,
+      "effort": "L",
+      "estimated_minutes": 150,
+      "status": "not_started",
+      "depends_on": ["TASK-415", "TASK-416", "TASK-419"],
+      "files": {
+        "create": ["test/integration/share_flow_test.dart"],
+        "modify": []
+      },
+      "principles": [],
+      "rules": [44, 45, 46, 49],
+      "action": "Implement integration tests for the 14 scenarios from spec's Integration Test Scenarios table. Mock ShareIntentService (override shareIntentServiceProvider). Mock InstaparserService for URL fetches. Verify routing decisions match decision table.",
+      "acceptance_criteria": [
+        "All 14 scenarios from spec implemented",
+        "All tests pass",
+        "Test for cold-start payload dedup (Rule 44)",
+        "Test for active-reading snackbar (Rule 49)",
+        "Test for trusted-domain auto-confirm vs untrusted preview (Rule 45)",
+        "Test for log scrubbing - no payload text in captured logs (Rule 46)",
+        "flutter test reports all green"
+      ]
+    },
+    {
+      "id": "TASK-422",
+      "title": "Final cross-cutting verification",
+      "sprint": 4,
+      "priority": 6,
+      "effort": "M",
+      "estimated_minutes": 60,
+      "status": "not_started",
+      "depends_on": ["TASK-421"],
+      "files": {
+        "create": [],
+        "modify": []
+      },
+      "principles": [],
+      "rules": [],
+      "verification_commands": [
+        "dart analyze lib/",
+        "flutter test",
+        "grep -ri \"print\\|debugPrint\" lib/services/share_intent_*.dart lib/services/shared_url_cache.dart",
+        "flutter build apk --debug",
+        "flutter build ios --no-codesign"
+      ],
+      "action": "Run verification command suite. Manual smoke test on Android emulator: cold-start text share, warm-start URL share, trusted vs untrusted, recently shared section, settings toggle. iOS smoke test on simulator (extension may need device).",
+      "acceptance_criteria": [
+        "dart analyze lib/ -> zero issues",
+        "flutter test -> all pass",
+        "No raw print() calls in v8 service files",
+        "Android APK builds clean",
+        "iOS build succeeds",
+        "Manual smoke test passes on Android emulator (logged in TASK comment)",
+        "iOS smoke test passes on simulator OR documented as device-required"
+      ]
+    }
+  ],
+  "out_of_scope": [
+    { "feature": "Image share intents (OCR)", "reason": "OCR engine selection is its own design exercise" },
+    { "feature": "File share intents (PDFs)", "reason": "Overlaps with v3 PDF import; defer to v9 design pass" },
+    { "feature": "Multi-URL shares", "reason": "Edge case; v8 takes first valid URL with notice" },
+    { "feature": "Share OUT of Speedy Boy", "reason": "Different feature category - 'share my reading'" },
+    { "feature": "iOS Action Extension", "reason": "Share Extension covers 95% of cases" },
+    { "feature": "Android quick-tile / shortcut for read clipboard", "reason": "Adjacent feature, separate spec" },
+    { "feature": "Cross-device share (Handoff)", "reason": "Apple-only, niche, large surface area" }
+  ]
+}

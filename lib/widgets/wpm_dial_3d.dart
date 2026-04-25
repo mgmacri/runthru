@@ -1,32 +1,49 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:speedy_boy/design/design.dart';
 
 /// 3D floating WPM dial with SweepGradient arc ring.
+///
+/// State (visibility, inactivity timer) is managed by [WpmDialNotifier].
+/// This widget only handles rendering and drag input.
 class WpmDial3D extends StatefulWidget {
   const WpmDial3D({
     super.key,
     required this.wpm,
-    required this.onWpmChanged,
     required this.visible,
+    required this.onWpmChanged,
     required this.onDismissed,
   });
 
+  /// Current WPM value to display (from notifier state).
   final int wpm;
-  final ValueChanged<int> onWpmChanged;
+
+  /// Whether the dial is visible (from notifier state).
   final bool visible;
+
+  /// Called on drag to update WPM via notifier.
+  final ValueChanged<int> onWpmChanged;
+
+  /// Called when user taps outside the dial to dismiss immediately.
   final VoidCallback onDismissed;
 
   @override
   State<WpmDial3D> createState() => _WpmDial3DState();
 }
 
-class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
+class _WpmDial3DState extends State<WpmDial3D>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _emergeController;
   late final Animation<double> _emergeAnimation;
-  Timer? _autoDismissTimer;
+
+  /// Tracks last WPM to detect 25-step boundary crossings for haptic.
+  int _lastHapticWpm = 0;
+
+  /// Unsnapped WPM accumulator — preserves fractional progress between
+  /// 25-step boundaries so small drag deltas are not lost.
+  double _rawWpmAccumulator = 0;
 
   @override
   void initState() {
@@ -39,6 +56,12 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
       parent: _emergeController,
       curve: Curves.easeOut,
     );
+    // Handle initial visible:true (State might be freshly created)
+    if (widget.visible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _show();
+      });
+    }
   }
 
   @override
@@ -52,37 +75,32 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
   }
 
   void _show() {
+    _lastHapticWpm = widget.wpm;
+    _rawWpmAccumulator = widget.wpm.toDouble();
     final reducedMotion = isReducedMotion(context);
     if (reducedMotion) {
       _emergeController.value = 1.0;
     } else {
       _emergeController.animateWith(SpeedyBoyAnimations.dialEmergeSimulation());
     }
-    _resetAutoDismiss();
   }
 
   void _hide() {
-    _autoDismissTimer?.cancel();
     final reducedMotion = isReducedMotion(context);
     if (reducedMotion) {
       _emergeController.value = 0.0;
     } else {
+      // P2 Grade C — fade out over 200ms on dismiss
       _emergeController.animateTo(
         0.0,
-        duration: SpeedyBoyAnimations.dialDismissDuration,
+        duration: const Duration(milliseconds: SpeedyBoyTiming.wpmDialFadeMs),
         curve: SpeedyBoyAnimations.dialDismissCurve,
       );
     }
   }
 
-  void _resetAutoDismiss() {
-    _autoDismissTimer?.cancel();
-    _autoDismissTimer = Timer(const Duration(seconds: 3), widget.onDismissed);
-  }
-
   @override
   void dispose() {
-    _autoDismissTimer?.cancel();
     _emergeController.dispose();
     super.dispose();
   }
@@ -95,27 +113,55 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
         if (_emergeAnimation.value == 0) {
           return const SizedBox.shrink();
         }
-        return Opacity(
-          opacity: _emergeAnimation.value,
-          child: Transform.translate(
-            offset: Offset(0, 100 * (1 - _emergeAnimation.value)),
-            child: child,
-          ),
+        // P2 Grade C — 40% dim overlay behind dial
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onDismissed,
+                child: ColoredBox(
+                  color: SpeedyBoyTokens.stageDarkShadow.withValues(
+                    alpha: 0.4 * _emergeAnimation.value,
+                  ),
+                ),
+              ),
+            ),
+            Center(
+              child: Opacity(
+                opacity: _emergeAnimation.value,
+                child: Transform.translate(
+                  offset: Offset(0, 100 * (1 - _emergeAnimation.value)),
+                  child: child,
+                ),
+              ),
+            ),
+          ],
         );
       },
       child: GestureDetector(
         onPanUpdate: (details) {
-          // Circular drag → WPM change
-          final delta = -details.delta.dy;
-          final newWpm = (widget.wpm + delta.round()).clamp(30, 1000);
-          widget.onWpmChanged(newWpm);
-          _resetAutoDismiss();
+          // Vertical drag → WPM change (up = increase, down = decrease)
+          // Accumulate raw delta to avoid losing fractional progress
+          // between 25-step snap boundaries.
+          _rawWpmAccumulator += -details.delta.dy;
+          final rawWpm = _rawWpmAccumulator.round();
+          widget.onWpmChanged(rawWpm);
+
+          // P2 Grade C — haptic feedback per 25 WPM increment
+          final snapped =
+              (rawWpm / SpeedyBoyTiming.wpmDialStep).round() *
+              SpeedyBoyTiming.wpmDialStep;
+          if (snapped != _lastHapticWpm) {
+            _lastHapticWpm = snapped;
+            HapticFeedback.selectionClick();
+          }
         },
         child: RepaintBoundary(
           child: CustomPaint(
             painter: _DialPainter(
               wpm: widget.wpm,
-              progress: (widget.wpm - 30) / (1000 - 30),
+              progress: (widget.wpm - 100) / (600 - 100),
             ),
             size: const Size(240, 240),
           ),
@@ -126,10 +172,24 @@ class _WpmDial3DState extends State<WpmDial3D> with TickerProviderStateMixin {
 }
 
 class _DialPainter extends CustomPainter {
-  _DialPainter({required this.wpm, required this.progress});
+  // P9 Grade A — TextPainters initialized at construct time, not in paint().
+  // shouldRepaint() only returns true when wpm/progress changes, so a fresh
+  // instance (with fresh painters) is created only when the dial value changes.
+  _DialPainter({required this.wpm, required this.progress})
+    : _wpmPainter = TextPainter(
+        text: TextSpan(text: '$wpm', style: SpeedyBoyTypography.badge),
+        textDirection: TextDirection.ltr,
+      )..layout(),
+      _labelPainter = TextPainter(
+        text: const TextSpan(text: 'WPM', style: SpeedyBoyTypography.caption),
+        textDirection: TextDirection.ltr,
+      )..layout();
 
   final int wpm;
   final double progress;
+
+  final TextPainter _wpmPainter;
+  final TextPainter _labelPainter;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -180,27 +240,18 @@ class _DialPainter extends CustomPainter {
     );
 
     // ── Center badge ──
-    final tp = TextPainter(
-      text: TextSpan(text: '$wpm', style: SpeedyBoyTypography.badge),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    tp.paint(
+    _wpmPainter.paint(
       canvas,
-      Offset(center.dx - tp.width / 2, center.dy - tp.height / 2 - 6),
+      Offset(
+        center.dx - _wpmPainter.width / 2,
+        center.dy - _wpmPainter.height / 2 - 6,
+      ),
     );
-    tp.dispose();
 
-    final labelPainter = TextPainter(
-      text: const TextSpan(text: 'WPM', style: SpeedyBoyTypography.caption),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    labelPainter.paint(
+    _labelPainter.paint(
       canvas,
-      Offset(center.dx - labelPainter.width / 2, center.dy + 8),
+      Offset(center.dx - _labelPainter.width / 2, center.dy + 8),
     );
-    labelPainter.dispose();
   }
 
   @override

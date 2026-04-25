@@ -3,6 +3,15 @@ library;
 
 import 'package:speedy_boy/services/models.dart';
 
+// P10 Grade B — parallax intensity controls room distortion level
+enum ParallaxIntensity { none, off, subtle, full }
+
+// P16 Grade C — reading goal presets for onboarding
+enum ReadingGoalPreset { deepRead, comfortable, quickScan }
+
+// P18 Grade B — ORP display condition for anchor character
+enum OrpCondition { orpBoldColor, orpColorOnly, centerAligned }
+
 class BookmarkData {
   const BookmarkData({
     required this.wordIndex,
@@ -39,18 +48,19 @@ class BookmarkData {
     return BookmarkData(
       wordIndex: wordIndex ?? this.wordIndex,
       timestamp: timestamp ?? this.timestamp,
-      readingRange:
-          clearReadingRange ? null : (readingRange ?? this.readingRange),
+      readingRange: clearReadingRange
+          ? null
+          : (readingRange ?? this.readingRange),
       readingProgress: readingProgress ?? this.readingProgress,
     );
   }
 
   Map<String, Object?> toJson() => {
-        'wordIndex': wordIndex,
-        'timestamp': timestamp?.toIso8601String(),
-        'readingRange': readingRange?.toJson(),
-        'readingProgress': readingProgress,
-      };
+    'wordIndex': wordIndex,
+    'timestamp': timestamp?.toIso8601String(),
+    'readingRange': readingRange?.toJson(),
+    'readingProgress': readingProgress,
+  };
 }
 
 class AppConfig {
@@ -62,16 +72,35 @@ class AppConfig {
     this.fontFamily = 'BricolageGrotesque',
     this.fontScale = 1.0,
     this.hasPremium = false,
+    this.parallaxIntensity = ParallaxIntensity.none,
+    this.readingGoalPreset,
+    this.orpCondition = OrpCondition.orpBoldColor,
+    this.shownHints = const {},
+    this.hasSeenReadingGoalOnboarding = false,
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
     final bookmarksRaw = json['bookmarks'] as Map<String, Object?>? ?? {};
     final bookmarks = bookmarksRaw.map(
-      (key, value) => MapEntry(
-        key,
-        BookmarkData.fromJson(value as Map<String, Object?>),
-      ),
+      (key, value) =>
+          MapEntry(key, BookmarkData.fromJson(value as Map<String, Object?>)),
     );
+
+    // Parse v3 enums with safe fallbacks for backward compatibility.
+    final parallaxIntensityStr = json['parallaxIntensity'] as String?;
+    final parallaxIntensity =
+        ParallaxIntensity.values.asNameMap()[parallaxIntensityStr] ??
+        ParallaxIntensity.none;
+
+    final readingGoalPresetStr = json['readingGoalPreset'] as String?;
+    final readingGoalPreset = readingGoalPresetStr != null
+        ? ReadingGoalPreset.values.asNameMap()[readingGoalPresetStr]
+        : null;
+
+    final orpConditionStr = json['orpCondition'] as String?;
+    final orpCondition =
+        OrpCondition.values.asNameMap()[orpConditionStr] ??
+        OrpCondition.orpBoldColor;
 
     return AppConfig(
       defaultWpm: json['defaultWpm'] as int? ?? 300,
@@ -81,6 +110,14 @@ class AppConfig {
       fontFamily: json['fontFamily'] as String? ?? 'BricolageGrotesque',
       fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
       hasPremium: json['hasPremium'] as bool? ?? false,
+      parallaxIntensity: parallaxIntensity,
+      readingGoalPreset: readingGoalPreset,
+      orpCondition: orpCondition,
+      shownHints:
+          (json['shownHints'] as List<dynamic>?)?.cast<String>().toSet() ??
+          const {},
+      hasSeenReadingGoalOnboarding:
+          json['hasSeenReadingGoalOnboarding'] as bool? ?? false,
     );
   }
 
@@ -91,6 +128,12 @@ class AppConfig {
   final String fontFamily;
   final double fontScale;
   final bool hasPremium;
+  final ParallaxIntensity parallaxIntensity;
+  final ReadingGoalPreset? readingGoalPreset;
+  final OrpCondition orpCondition;
+  // P27 — hint IDs tracked per installation (Rule 27)
+  final Set<String> shownHints;
+  final bool hasSeenReadingGoalOnboarding;
 
   AppConfig copyWith({
     int? defaultWpm,
@@ -101,28 +144,46 @@ class AppConfig {
     String? fontFamily,
     double? fontScale,
     bool? hasPremium,
+    ParallaxIntensity? parallaxIntensity,
+    ReadingGoalPreset? readingGoalPreset,
+    bool clearReadingGoalPreset = false,
+    OrpCondition? orpCondition,
+    Set<String>? shownHints,
+    bool? hasSeenReadingGoalOnboarding,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
-      pdfFolderPath:
-          clearPdfFolderPath ? null : (pdfFolderPath ?? this.pdfFolderPath),
+      pdfFolderPath: clearPdfFolderPath
+          ? null
+          : (pdfFolderPath ?? this.pdfFolderPath),
       bookmarks: bookmarks ?? this.bookmarks,
       anchorColorIndex: anchorColorIndex ?? this.anchorColorIndex,
       fontFamily: fontFamily ?? this.fontFamily,
       fontScale: fontScale ?? this.fontScale,
       hasPremium: hasPremium ?? this.hasPremium,
+      parallaxIntensity: parallaxIntensity ?? this.parallaxIntensity,
+      readingGoalPreset: clearReadingGoalPreset
+          ? null
+          : (readingGoalPreset ?? this.readingGoalPreset),
+      orpCondition: orpCondition ?? this.orpCondition,
+      shownHints: shownHints ?? this.shownHints,
+      hasSeenReadingGoalOnboarding:
+          hasSeenReadingGoalOnboarding ?? this.hasSeenReadingGoalOnboarding,
     );
   }
 
   Map<String, Object?> toJson() => {
-        'defaultWpm': defaultWpm,
-        'pdfFolderPath': pdfFolderPath,
-        'bookmarks': bookmarks.map(
-          (key, value) => MapEntry(key, value.toJson()),
-        ),
-        'anchorColorIndex': anchorColorIndex,
-        'fontFamily': fontFamily,
-        'fontScale': fontScale,
-        'hasPremium': hasPremium,
-      };
+    'defaultWpm': defaultWpm,
+    'pdfFolderPath': pdfFolderPath,
+    'bookmarks': bookmarks.map((key, value) => MapEntry(key, value.toJson())),
+    'anchorColorIndex': anchorColorIndex,
+    'fontFamily': fontFamily,
+    'fontScale': fontScale,
+    'hasPremium': hasPremium,
+    'parallaxIntensity': parallaxIntensity.name,
+    'readingGoalPreset': readingGoalPreset?.name,
+    'orpCondition': orpCondition.name,
+    'shownHints': shownHints.toList(),
+    'hasSeenReadingGoalOnboarding': hasSeenReadingGoalOnboarding,
+  };
 }
