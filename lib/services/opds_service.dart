@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:speedy_boy/core/logger.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:xml/xml.dart';
 
 const String _tag = 'opds_service';

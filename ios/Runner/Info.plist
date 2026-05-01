@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Speedy Boy</string>
+	<string>RunThru</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Speedy Boy</string>
+	<string>RunThru</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -46,11 +46,11 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Speedy Boy uses your camera to track head position for the 3D parallax reading experience. The camera feed is processed on-device and never recorded or transmitted.</string>
+	<string>RunThru uses your camera to track head position for the 3D parallax reading experience. The camera feed is processed on-device and never recorded or transmitted.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Speedy Boy may access your photo library to let you import images for use within the app.</string>
+	<string>RunThru may access your photo library to let you import images for use within the app.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
-	<string>Speedy Boy needs access to your documents to scan PDF files for speed reading.</string>
+	<string>RunThru needs access to your documents to scan PDF files for paced reading.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UISupportsDocumentBrowser</key>

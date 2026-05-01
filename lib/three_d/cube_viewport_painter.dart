@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/tokens.dart';
+import 'package:runthru/design/tokens.dart';
 
 /// CustomPainter rendering the interior of a 3D box you look into.
 /// Uses a "magic window" perspective — the back wall shifts with the
@@ -52,7 +52,7 @@ class CubeViewportPainter extends CustomPainter {
 
     // ── Back wall ──
     final backRect = Rect.fromLTRB(bLeft, bTop, bRight, bBottom);
-    canvas.drawRect(backRect, Paint()..color = SpeedyBoyTokens.cubeBackWall);
+    canvas.drawRect(backRect, Paint()..color = RunThruTokens.cubeBackWall);
     // Subtle centre glow
     canvas.drawRect(
       backRect,
@@ -61,7 +61,7 @@ class CubeViewportPainter extends CustomPainter {
           Offset((bLeft + bRight) / 2, (bTop + bBottom) / 2),
           (bRight - bLeft) * 0.6,
           [
-            SpeedyBoyTokens.cubeDirectional.withAlpha(24),
+            RunThruTokens.cubeDirectional.withAlpha(24),
             const Color(0x00000000),
           ],
         ),
@@ -76,7 +76,7 @@ class CubeViewportPainter extends CustomPainter {
         Offset(bLeft, bBottom),
         Offset(fLeft, fBottom),
       ],
-      SpeedyBoyTokens.cubeLeftWall,
+      RunThruTokens.cubeLeftWall,
       ui.Gradient.linear(
         const Offset(fLeft, 0),
         Offset(bLeft, 0),
@@ -93,7 +93,7 @@ class CubeViewportPainter extends CustomPainter {
         Offset(bRight, bBottom),
         Offset(fRight, fBottom),
       ],
-      SpeedyBoyTokens.cubeRightWall,
+      RunThruTokens.cubeRightWall,
       ui.Gradient.linear(
         Offset(fRight, 0),
         Offset(bRight, 0),
@@ -110,7 +110,7 @@ class CubeViewportPainter extends CustomPainter {
         Offset(bRight, bTop),
         Offset(fRight, fTop),
       ],
-      SpeedyBoyTokens.cubeTopWall,
+      RunThruTokens.cubeTopWall,
       ui.Gradient.linear(
         const Offset(0, fTop),
         Offset(0, bTop),
@@ -127,7 +127,7 @@ class CubeViewportPainter extends CustomPainter {
         Offset(bRight, bBottom),
         Offset(fRight, fBottom),
       ],
-      SpeedyBoyTokens.cubeBottomWall,
+      RunThruTokens.cubeBottomWall,
       ui.Gradient.linear(
         Offset(0, fBottom),
         Offset(0, bBottom),
@@ -137,7 +137,7 @@ class CubeViewportPainter extends CustomPainter {
 
     // ── Edge highlight lines (subtle neumorphic crease) ──
     final edgePaint = Paint()
-      ..color = SpeedyBoyTokens.cubeNeuDark.withAlpha(40)
+      ..color = RunThruTokens.cubeNeuDark.withAlpha(40)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     canvas.drawRect(backRect, edgePaint);
@@ -151,7 +151,7 @@ class CubeViewportPainter extends CustomPainter {
     final neuDarkRim = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 8.0
-      ..color = SpeedyBoyTokens.cubeNeuDark.withAlpha(35)
+      ..color = RunThruTokens.cubeNeuDark.withAlpha(35)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawLine(Offset(0, h), Offset(w, h), neuDarkRim);
     canvas.drawLine(Offset(w, 0), Offset(w, h), neuDarkRim);
@@ -159,7 +159,7 @@ class CubeViewportPainter extends CustomPainter {
     final neuLightRim = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 6.0
-      ..color = SpeedyBoyTokens.cubeNeuLight.withAlpha(50)
+      ..color = RunThruTokens.cubeNeuLight.withAlpha(50)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawLine(Offset.zero, Offset(w, 0), neuLightRim);
     canvas.drawLine(Offset.zero, Offset(0, h), neuLightRim);

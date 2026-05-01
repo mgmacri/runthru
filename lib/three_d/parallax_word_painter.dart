@@ -1,15 +1,15 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/core/orp.dart';
-import 'package:speedy_boy/core/wcag_contrast.dart';
-import 'package:speedy_boy/design/materials.dart';
-import 'package:speedy_boy/design/tokens.dart';
-import 'package:speedy_boy/design/typography.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/three_d/glyph_measurer.dart';
-import 'package:speedy_boy/three_d/off_axis_projection.dart';
-import 'package:speedy_boy/three_d/text_painter_pool.dart';
+import 'package:runthru/core/orp.dart';
+import 'package:runthru/core/wcag_contrast.dart';
+import 'package:runthru/design/materials.dart';
+import 'package:runthru/design/tokens.dart';
+import 'package:runthru/design/typography.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/glyph_measurer.dart';
+import 'package:runthru/three_d/off_axis_projection.dart';
+import 'package:runthru/three_d/text_painter_pool.dart';
 
 /// Renders the current word with shadow and glow on the marble box back wall.
 ///
@@ -164,7 +164,7 @@ class ParallaxWordPainter extends CustomPainter {
     final needsAnchorShadow =
         WcagContrast.contrastRatio(
           effectiveAnchorColor,
-          SpeedyBoyTokens.stageBase,
+          RunThruTokens.stageBase,
         ) <
         4.5;
 
@@ -183,9 +183,9 @@ class ParallaxWordPainter extends CustomPainter {
       if (isAnchor &&
           needsAnchorShadow &&
           orpCondition != OrpCondition.orpColorOnly) {
-        final shadowStyle = SpeedyBoyTypography.readingAnchor(
+        final shadowStyle = RunThruTypography.readingAnchor(
           efs,
-          color: SpeedyBoyTokens.stageText.withAlpha(77),
+          color: RunThruTokens.stageText.withAlpha(77),
           fontFamily: fontFamily,
         );
         final shadowPoolIndex = i % TextPainterPool.maxSize;
@@ -204,7 +204,7 @@ class ParallaxWordPainter extends CustomPainter {
       final color = isAnchor ? (anchorColor ?? _textColor) : _textColor;
       final TextStyle style;
       if (!isAnchor) {
-        style = SpeedyBoyTypography.readingWord(
+        style = RunThruTypography.readingWord(
           efs,
           color: color,
           fontFamily: fontFamily,
@@ -212,19 +212,19 @@ class ParallaxWordPainter extends CustomPainter {
       } else {
         switch (orpCondition) {
           case OrpCondition.orpBoldColor:
-            style = SpeedyBoyTypography.readingAnchor(
+            style = RunThruTypography.readingAnchor(
               efs,
               color: color,
               fontFamily: fontFamily,
             );
           case OrpCondition.orpColorOnly:
-            style = SpeedyBoyTypography.readingWord(
+            style = RunThruTypography.readingWord(
               efs,
-              color: anchorColor ?? SpeedyBoyTokens.stageAnchor,
+              color: anchorColor ?? RunThruTokens.stageAnchor,
               fontFamily: fontFamily,
             );
           case OrpCondition.centerAligned:
-            style = SpeedyBoyTypography.readingAnchor(
+            style = RunThruTypography.readingAnchor(
               efs,
               color: color,
               fontFamily: fontFamily,
@@ -258,7 +258,7 @@ class ParallaxWordPainter extends CustomPainter {
   double _glyphZ(int glyphIndex, double baseTextZ, double wordBounceValue) {
     if (reducedMotion) return baseTextZ;
 
-    const deltaZ = SpeedyBoyMaterials.wordBounceDepthDeltaZ;
+    const deltaZ = RunThruMaterials.wordBounceDepthDeltaZ;
     // depthBounceValue is already transformed by SubtleBounceIn
     // For per-glyph stagger, we interpolate the raw progress
     final glyphBounce = wordBounceValue; // Base value for the word

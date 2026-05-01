@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/context_reveal_notifier.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
-import 'package:speedy_boy/core/gesture_classifier.dart';
-import 'package:speedy_boy/core/word_timer.dart';
-import 'package:speedy_boy/core/wpm_dial_notifier.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/core/context_reveal_notifier.dart';
+import 'package:runthru/core/context_reveal_state.dart';
+import 'package:runthru/core/gesture_classifier.dart';
+import 'package:runthru/core/word_timer.dart';
+import 'package:runthru/core/wpm_dial_notifier.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 
 /// Fake [ConfigNotifier] for WPM dial persistence in tests.
 class FakeConfigNotifier extends AsyncNotifier<AppConfig>

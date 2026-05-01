@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// 3D floating WPM dial with SweepGradient arc ring.
 ///
@@ -50,7 +50,7 @@ class _WpmDial3DState extends State<WpmDial3D>
     super.initState();
     _emergeController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.dialEmergeDuration,
+      duration: RunThruAnimations.dialEmergeDuration,
     );
     _emergeAnimation = CurvedAnimation(
       parent: _emergeController,
@@ -81,7 +81,7 @@ class _WpmDial3DState extends State<WpmDial3D>
     if (reducedMotion) {
       _emergeController.value = 1.0;
     } else {
-      _emergeController.animateWith(SpeedyBoyAnimations.dialEmergeSimulation());
+      _emergeController.animateWith(RunThruAnimations.dialEmergeSimulation());
     }
   }
 
@@ -93,8 +93,8 @@ class _WpmDial3DState extends State<WpmDial3D>
       // P2 Grade C — fade out over 200ms on dismiss
       _emergeController.animateTo(
         0.0,
-        duration: const Duration(milliseconds: SpeedyBoyTiming.wpmDialFadeMs),
-        curve: SpeedyBoyAnimations.dialDismissCurve,
+        duration: const Duration(milliseconds: RunThruTiming.wpmDialFadeMs),
+        curve: RunThruAnimations.dialDismissCurve,
       );
     }
   }
@@ -121,7 +121,7 @@ class _WpmDial3DState extends State<WpmDial3D>
                 behavior: HitTestBehavior.opaque,
                 onTap: widget.onDismissed,
                 child: ColoredBox(
-                  color: SpeedyBoyTokens.stageDarkShadow.withValues(
+                  color: RunThruTokens.stageDarkShadow.withValues(
                     alpha: 0.4 * _emergeAnimation.value,
                   ),
                 ),
@@ -150,8 +150,8 @@ class _WpmDial3DState extends State<WpmDial3D>
 
           // P2 Grade C — haptic feedback per 25 WPM increment
           final snapped =
-              (rawWpm / SpeedyBoyTiming.wpmDialStep).round() *
-              SpeedyBoyTiming.wpmDialStep;
+              (rawWpm / RunThruTiming.wpmDialStep).round() *
+              RunThruTiming.wpmDialStep;
           if (snapped != _lastHapticWpm) {
             _lastHapticWpm = snapped;
             HapticFeedback.selectionClick();
@@ -177,11 +177,11 @@ class _DialPainter extends CustomPainter {
   // instance (with fresh painters) is created only when the dial value changes.
   _DialPainter({required this.wpm, required this.progress})
     : _wpmPainter = TextPainter(
-        text: TextSpan(text: '$wpm', style: SpeedyBoyTypography.badge),
+        text: TextSpan(text: '$wpm', style: RunThruTypography.badge),
         textDirection: TextDirection.ltr,
       )..layout(),
       _labelPainter = TextPainter(
-        text: const TextSpan(text: 'WPM', style: SpeedyBoyTypography.caption),
+        text: const TextSpan(text: 'WPM', style: RunThruTypography.caption),
         textDirection: TextDirection.ltr,
       )..layout();
 
@@ -199,7 +199,7 @@ class _DialPainter extends CustomPainter {
 
     // ── Neumorphic shadow disc ──
     final shadowPaint = Paint()
-      ..color = SpeedyBoyTokens.stageDarkShadow.withValues(alpha: 0.5)
+      ..color = RunThruTokens.stageDarkShadow.withValues(alpha: 0.5)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawCircle(
       center + const Offset(3, 3),
@@ -207,7 +207,7 @@ class _DialPainter extends CustomPainter {
       shadowPaint,
     );
 
-    final discPaint = Paint()..color = SpeedyBoyTokens.stageBase;
+    final discPaint = Paint()..color = RunThruTokens.stageBase;
     canvas.drawCircle(center, radius + ringWidth, discPaint);
 
     // ── SweepGradient arc ring ──
@@ -215,9 +215,9 @@ class _DialPainter extends CustomPainter {
       startAngle: -math.pi / 2,
       endAngle: -math.pi / 2 + 2 * math.pi,
       colors: [
-        SpeedyBoyTokens.dialRingLow,
-        SpeedyBoyTokens.dialRingMid,
-        SpeedyBoyTokens.dialRingHigh,
+        RunThruTokens.dialRingLow,
+        RunThruTokens.dialRingMid,
+        RunThruTokens.dialRingHigh,
       ],
       stops: [0.0, 0.5, 1.0],
     );

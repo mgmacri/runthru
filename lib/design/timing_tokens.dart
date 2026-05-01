@@ -1,7 +1,7 @@
 /// Timing tokens — all animation durations, thresholds, and window sizes.
 /// Consumed by ContextReveal, Room Intensity, A-013 adaptive timing,
 /// auto-rewind, elastic jiggle, WPM dial, and overlay hint systems.
-abstract final class SpeedyBoyTiming {
+abstract final class RunThruTiming {
   // ── Auto-Rewind (P18 Grade C) ──
 
   /// Number of words to rewind when resuming from pause.

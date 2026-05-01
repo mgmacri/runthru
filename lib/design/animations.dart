@@ -5,8 +5,8 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 /// Animation duration constants from the FR-022 catalogue.
-class SpeedyBoyAnimations {
-  SpeedyBoyAnimations._();
+class RunThruAnimations {
+  RunThruAnimations._();
 
   // ── A-001: Word advance breathe ──
   static const Duration wordAdvanceDuration = Duration(milliseconds: 80);

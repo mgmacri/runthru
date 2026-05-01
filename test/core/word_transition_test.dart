@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/word_transition.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/word_transition.dart';
+import 'package:runthru/design/design.dart';
 
 void main() {
   group('selectWordTransition', () {
@@ -14,7 +14,7 @@ void main() {
         expect(result.transition, WordTransition.a001Breathe);
         expect(
           result.baseDurationMs,
-          SpeedyBoyAnimations.wordAdvanceDuration.inMilliseconds,
+          RunThruAnimations.wordAdvanceDuration.inMilliseconds,
         );
       }
     });
@@ -29,7 +29,7 @@ void main() {
         expect(result.transition, WordTransition.a001Breathe);
         expect(
           result.baseDurationMs,
-          SpeedyBoyAnimations.wordAdvanceDuration.inMilliseconds,
+          RunThruAnimations.wordAdvanceDuration.inMilliseconds,
         );
       }
     });
@@ -45,12 +45,12 @@ void main() {
 
       // Budget: floor(240 * 0.6) - 6 * 2 = 144 - 12 = 132
       final expectedBudget =
-          (displayMs * SpeedyBoyTiming.a013MaxDisplayFraction).floor() -
-          SpeedyBoyAnimations.glyphStaggerMs * (3 - 1);
+          (displayMs * RunThruTiming.a013MaxDisplayFraction).floor() -
+          RunThruAnimations.glyphStaggerMs * (3 - 1);
       expect(result.baseDurationMs, expectedBudget);
       expect(
         result.baseDurationMs,
-        greaterThanOrEqualTo(SpeedyBoyTiming.a013MinBaseDuration),
+        greaterThanOrEqualTo(RunThruTiming.a013MinBaseDuration),
       );
     });
 
@@ -65,12 +65,12 @@ void main() {
 
       // Budget: floor(240 * 0.6) - 6 * 6 = 144 - 36 = 108
       final expectedBudget =
-          (displayMs * SpeedyBoyTiming.a013MaxDisplayFraction).floor() -
-          SpeedyBoyAnimations.glyphStaggerMs * (7 - 1);
+          (displayMs * RunThruTiming.a013MaxDisplayFraction).floor() -
+          RunThruAnimations.glyphStaggerMs * (7 - 1);
       expect(result.baseDurationMs, expectedBudget);
       expect(
         result.baseDurationMs,
-        greaterThanOrEqualTo(SpeedyBoyTiming.a013MinBaseDuration),
+        greaterThanOrEqualTo(RunThruTiming.a013MinBaseDuration),
       );
     });
 
@@ -82,7 +82,7 @@ void main() {
         displayMs: 200, // 200ms
       );
       expect(result.transition, WordTransition.a013BounceIn);
-      expect(result.baseDurationMs, SpeedyBoyTiming.a013MinBaseDuration);
+      expect(result.baseDurationMs, RunThruTiming.a013MinBaseDuration);
     });
 
     test('A-013 uncapped when animation fits within display budget', () {
@@ -97,8 +97,8 @@ void main() {
 
       // Budget: floor(600 * 0.6) - 6 * 2 = 360 - 12 = 348
       final expectedBudget =
-          (displayMs * SpeedyBoyTiming.a013MaxDisplayFraction).floor() -
-          SpeedyBoyAnimations.glyphStaggerMs * (3 - 1);
+          (displayMs * RunThruTiming.a013MaxDisplayFraction).floor() -
+          RunThruAnimations.glyphStaggerMs * (3 - 1);
       expect(result.baseDurationMs, expectedBudget);
     });
 

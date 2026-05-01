@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:ui' show Offset;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/core/wpm_dial_state.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/store/config.dart';
+import 'package:runthru/core/wpm_dial_state.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/store/config.dart';
 
 /// Callback to pause/resume the reading engine when the dial is shown/hidden.
 typedef ReadingPauseCallback = void Function(bool pause);
@@ -37,13 +37,13 @@ class WpmDialNotifier extends StateNotifier<WpmDialState> {
   }
 
   /// Update WPM from drag input. Clamps to [100, 600], snaps to 25-step
-  /// increments (SpeedyBoyTiming.wpmDialStep), and resets the inactivity timer.
+  /// increments (RunThruTiming.wpmDialStep), and resets the inactivity timer.
   void updateWpm(int wpm) {
     if (!state.isVisible) return;
     // P2 Grade C — snap to 25 WPM increments
     final snapped =
-        (wpm / SpeedyBoyTiming.wpmDialStep).round() *
-        SpeedyBoyTiming.wpmDialStep;
+        (wpm / RunThruTiming.wpmDialStep).round() *
+        RunThruTiming.wpmDialStep;
     final clamped = snapped.clamp(100, 600);
     state = state.copyWith(currentWpm: clamped);
     _startInactivityTimer();
@@ -67,7 +67,7 @@ class WpmDialNotifier extends StateNotifier<WpmDialState> {
     _inactivityTimer?.cancel();
     // P2 Grade C — auto-dismiss after 1.5s inactivity
     _inactivityTimer = _timerFactory(
-      const Duration(milliseconds: SpeedyBoyTiming.wpmDialInactivityMs),
+      const Duration(milliseconds: RunThruTiming.wpmDialInactivityMs),
       dismiss,
     );
   }

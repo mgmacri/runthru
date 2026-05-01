@@ -4,7 +4,7 @@ import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/services/models.dart';
 
 /// Number of sentences per section (configurable constant).
 const int kSectionSize = 200;

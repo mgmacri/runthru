@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/room_intensity_controller.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/room_intensity_controller.dart';
+import 'package:runthru/design/design.dart';
 
 void main() {
   group('RoomIntensityController', () {
@@ -26,14 +26,14 @@ void main() {
 
     test('window rolls after exceeding windowSize', () {
       // Fill window to capacity
-      for (var i = 0; i < SpeedyBoyTiming.roomDifficultyWindowSize; i++) {
+      for (var i = 0; i < RunThruTiming.roomDifficultyWindowSize; i++) {
         controller.onSentenceComplete(5.0);
       }
-      expect(controller.windowSize, SpeedyBoyTiming.roomDifficultyWindowSize);
+      expect(controller.windowSize, RunThruTiming.roomDifficultyWindowSize);
 
       // Add one more — oldest should be evicted
       controller.onSentenceComplete(10.0);
-      expect(controller.windowSize, SpeedyBoyTiming.roomDifficultyWindowSize);
+      expect(controller.windowSize, RunThruTiming.roomDifficultyWindowSize);
       // Average: (5+5+5+5+10)/5 = 6.0
       expect(controller.smoothedDifficulty, 6.0);
     });
@@ -91,7 +91,7 @@ void main() {
 
       // Advance time by less than hysteresis hold
       fakeNow = fakeNow.add(
-        const Duration(seconds: SpeedyBoyTiming.roomHysteresisHoldSeconds - 1),
+        const Duration(seconds: RunThruTiming.roomHysteresisHoldSeconds - 1),
       );
 
       // Try to transition to minimal — should be blocked
@@ -110,7 +110,7 @@ void main() {
 
       // Advance time past hysteresis hold
       fakeNow = fakeNow.add(
-        const Duration(seconds: SpeedyBoyTiming.roomHysteresisHoldSeconds),
+        const Duration(seconds: RunThruTiming.roomHysteresisHoldSeconds),
       );
 
       // Use value high enough that first addition pushes avg ≥ 9.0

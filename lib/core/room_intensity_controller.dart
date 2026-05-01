@@ -1,4 +1,4 @@
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Visual complexity level of the parallax room.
 enum RoomIntensityLevel { minimal, moderate, rich }
@@ -40,9 +40,9 @@ class RoomIntensityController {
   /// Records a completed sentence's difficulty score and evaluates
   /// whether the room intensity should change.
   void onSentenceComplete(double sentenceDifficulty) {
-    // P7 Grade C — rolling window of SpeedyBoyTiming.roomDifficultyWindowSize
+    // P7 Grade C — rolling window of RunThruTiming.roomDifficultyWindowSize
     _window.add(sentenceDifficulty);
-    if (_window.length > SpeedyBoyTiming.roomDifficultyWindowSize) {
+    if (_window.length > RunThruTiming.roomDifficultyWindowSize) {
       _window.removeAt(0);
     }
 
@@ -54,9 +54,9 @@ class RoomIntensityController {
     RoomIntensityLevel target;
 
     // P7 Grade D — tunable thresholds
-    if (avg >= SpeedyBoyTiming.roomDifficultyThresholdHigh) {
+    if (avg >= RunThruTiming.roomDifficultyThresholdHigh) {
       target = RoomIntensityLevel.minimal;
-    } else if (avg <= SpeedyBoyTiming.roomDifficultyThresholdLow) {
+    } else if (avg <= RunThruTiming.roomDifficultyThresholdLow) {
       target = RoomIntensityLevel.rich;
     } else {
       target = RoomIntensityLevel.moderate;
@@ -68,7 +68,7 @@ class RoomIntensityController {
     final now = _clock();
     if (_lastTransition != null) {
       final elapsed = now.difference(_lastTransition!).inSeconds;
-      if (elapsed < SpeedyBoyTiming.roomHysteresisHoldSeconds) return;
+      if (elapsed < RunThruTiming.roomHysteresisHoldSeconds) return;
     }
 
     _level = target;

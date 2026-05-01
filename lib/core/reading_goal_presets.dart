@@ -1,4 +1,4 @@
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/store/models.dart';
 
 /// Configuration for a reading goal preset.
 ///

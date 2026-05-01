@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:speedy_boy/core/reading_range_resolver.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/preprocessing_queue.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/widgets/range_confirmation_modal.dart';
+import 'package:runthru/core/reading_range_resolver.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/preprocessing_queue.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/range_confirmation_modal.dart';
 
 /// Selection phase for the two-phase range picking flow.
 enum _SelectionPhase { start, end }
@@ -79,9 +79,9 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
   @override
   void initState() {
     super.initState();
-    _buttonAnimController = SpeedyBoyAnimations.createController(
+    _buttonAnimController = RunThruAnimations.createController(
       vsync: this,
-      duration: SpeedyBoyAnimations.dialEmergeDuration,
+      duration: RunThruAnimations.dialEmergeDuration,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -350,7 +350,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
           IconButton(
             icon: const Icon(
               Icons.arrow_back,
-              color: SpeedyBoyTokens.shellTextPrimary,
+              color: RunThruTokens.shellTextPrimary,
             ),
             onPressed: () async {
               final canPop = await _onWillPop();
@@ -365,7 +365,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
                   phase == _SelectionPhase.start
                       ? 'Tap your starting word'
                       : 'Tap your ending word',
-                  style: SpeedyBoyTypography.title,
+                  style: RunThruTypography.title,
                   textAlign: TextAlign.center,
                 );
               },
@@ -376,8 +376,8 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
               onPressed: _clearRange,
               child: Text(
                 'Clear Range',
-                style: SpeedyBoyTypography.caption.copyWith(
-                  color: SpeedyBoyTokens.shellError,
+                style: RunThruTypography.caption.copyWith(
+                  color: RunThruTokens.shellError,
                 ),
               ),
             )
@@ -398,7 +398,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
         if (canPop && context.mounted) context.pop();
       },
       child: Scaffold(
-        backgroundColor: SpeedyBoyTokens.shellBase,
+        backgroundColor: RunThruTokens.shellBase,
         body: SafeArea(
           child: Column(
             children: [
@@ -512,12 +512,12 @@ class _BottomControls extends StatelessWidget {
                     horizontal: 16,
                     vertical: 6,
                   ),
-                  decoration: SpeedyBoyDecorations.pillDecoration(
-                    SpeedyBoySurface.shell,
+                  decoration: RunThruDecorations.pillDecoration(
+                    RunThruSurface.shell,
                   ),
                   child: Text(
                     'Page $currentPage of $totalPages',
-                    style: SpeedyBoyTypography.caption,
+                    style: RunThruTypography.caption,
                   ),
                 ),
 
@@ -527,7 +527,7 @@ class _BottomControls extends StatelessWidget {
                   label: 'Start',
                   page: startSel.page + 1,
                   word: startSel.wordText,
-                  color: SpeedyBoyTokens.shellAccent,
+                  color: RunThruTokens.shellAccent,
                 ),
               if (endSel != null && !isStartPhase) ...[
                 if (startSel != null)
@@ -537,14 +537,14 @@ class _BottomControls extends StatelessWidget {
                       label: 'Start',
                       page: startSel.page + 1,
                       word: startSel.wordText,
-                      color: SpeedyBoyTokens.shellAccent,
+                      color: RunThruTokens.shellAccent,
                     ),
                   ),
                 _SelectionLabel(
                   label: 'End',
                   page: endSel.page + 1,
                   word: endSel.wordText,
-                  color: SpeedyBoyTokens.shellReady,
+                  color: RunThruTokens.shellReady,
                 ),
               ],
 
@@ -554,8 +554,8 @@ class _BottomControls extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     errorMessage,
-                    style: SpeedyBoyTypography.caption.copyWith(
-                      color: SpeedyBoyTokens.shellError,
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellError,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -573,19 +573,19 @@ class _BottomControls extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: hasSelection
-                        ? SpeedyBoyDecorations.pillDecoration(
-                            SpeedyBoySurface.shell,
+                        ? RunThruDecorations.pillDecoration(
+                            RunThruSurface.shell,
                           )
-                        : SpeedyBoyDecorations.insetDecoration(
-                            SpeedyBoySurface.shell,
+                        : RunThruDecorations.insetDecoration(
+                            RunThruSurface.shell,
                             borderRadius: 999,
                           ),
                     child: Text(
                       isStartPhase ? 'Set Start' : 'Set End',
-                      style: SpeedyBoyTypography.title.copyWith(
+                      style: RunThruTypography.title.copyWith(
                         color: hasSelection
-                            ? SpeedyBoyTokens.shellAccent
-                            : SpeedyBoyTokens.shellTextSecondary,
+                            ? RunThruTokens.shellAccent
+                            : RunThruTokens.shellTextSecondary,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -628,8 +628,8 @@ class _SelectionLabel extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           "$label: page $page, '$word'",
-          style: SpeedyBoyTypography.caption.copyWith(
-            color: SpeedyBoyTokens.shellTextPrimary,
+          style: RunThruTypography.caption.copyWith(
+            color: RunThruTokens.shellTextPrimary,
           ),
         ),
       ],
@@ -646,18 +646,18 @@ class _DiscardDialog extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(32),
         padding: const EdgeInsets.all(24),
-        decoration: SpeedyBoyDecorations.raisedDecoration(
-          SpeedyBoySurface.shell,
+        decoration: RunThruDecorations.raisedDecoration(
+          RunThruSurface.shell,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Discard selection?', style: SpeedyBoyTypography.title),
+            const Text('Discard selection?', style: RunThruTypography.title),
             const SizedBox(height: 16),
             Text(
               'Your partial selection will be lost.',
-              style: SpeedyBoyTypography.body.copyWith(
-                color: SpeedyBoyTokens.shellTextSecondary,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextSecondary,
               ),
             ),
             const SizedBox(height: 24),
@@ -671,12 +671,12 @@ class _DiscardDialog extends StatelessWidget {
                       horizontal: 20,
                       vertical: 10,
                     ),
-                    decoration: SpeedyBoyDecorations.pillDecoration(
-                      SpeedyBoySurface.shell,
+                    decoration: RunThruDecorations.pillDecoration(
+                      RunThruSurface.shell,
                     ),
                     child: const Text(
                       'Cancel',
-                      style: SpeedyBoyTypography.body,
+                      style: RunThruTypography.body,
                     ),
                   ),
                 ),
@@ -688,13 +688,13 @@ class _DiscardDialog extends StatelessWidget {
                       horizontal: 20,
                       vertical: 10,
                     ),
-                    decoration: SpeedyBoyDecorations.pillDecoration(
-                      SpeedyBoySurface.shell,
+                    decoration: RunThruDecorations.pillDecoration(
+                      RunThruSurface.shell,
                     ),
                     child: Text(
                       'Discard',
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellError,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellError,
                       ),
                     ),
                   ),
@@ -717,21 +717,21 @@ class _ClearRangeDialog extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(32),
         padding: const EdgeInsets.all(24),
-        decoration: SpeedyBoyDecorations.raisedDecoration(
-          SpeedyBoySurface.shell,
+        decoration: RunThruDecorations.raisedDecoration(
+          RunThruSurface.shell,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
               'Clear reading range?',
-              style: SpeedyBoyTypography.title,
+              style: RunThruTypography.title,
             ),
             const SizedBox(height: 16),
             Text(
               'This will restore full-document reading.',
-              style: SpeedyBoyTypography.body.copyWith(
-                color: SpeedyBoyTokens.shellTextSecondary,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextSecondary,
               ),
             ),
             const SizedBox(height: 24),
@@ -745,12 +745,12 @@ class _ClearRangeDialog extends StatelessWidget {
                       horizontal: 20,
                       vertical: 10,
                     ),
-                    decoration: SpeedyBoyDecorations.pillDecoration(
-                      SpeedyBoySurface.shell,
+                    decoration: RunThruDecorations.pillDecoration(
+                      RunThruSurface.shell,
                     ),
                     child: const Text(
                       'Cancel',
-                      style: SpeedyBoyTypography.body,
+                      style: RunThruTypography.body,
                     ),
                   ),
                 ),
@@ -762,13 +762,13 @@ class _ClearRangeDialog extends StatelessWidget {
                       horizontal: 20,
                       vertical: 10,
                     ),
-                    decoration: SpeedyBoyDecorations.pillDecoration(
-                      SpeedyBoySurface.shell,
+                    decoration: RunThruDecorations.pillDecoration(
+                      RunThruSurface.shell,
                     ),
                     child: Text(
                       'Clear',
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellError,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellError,
                       ),
                     ),
                   ),

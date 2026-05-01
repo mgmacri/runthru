@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/wcag_contrast.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/wcag_contrast.dart';
+import 'package:runthru/design/design.dart';
 
 void main() {
   group('Anchor contrast safety (P14 Grade C)', () {
     test('all anchor colors have contrast ratio ≥ 1.0 against stageBase', () {
-      for (var i = 0; i < SpeedyBoyTokens.anchorColors.length; i++) {
-        final color = SpeedyBoyTokens.anchorColors[i];
-        final name = SpeedyBoyTokens.anchorColorNames[i];
+      for (var i = 0; i < RunThruTokens.anchorColors.length; i++) {
+        final color = RunThruTokens.anchorColors[i];
+        final name = RunThruTokens.anchorColorNames[i];
         final ratio = WcagContrast.contrastRatio(
           color,
-          SpeedyBoyTokens.stageBase,
+          RunThruTokens.stageBase,
         );
         expect(ratio, greaterThanOrEqualTo(1.0), reason: '$name contrast');
       }
@@ -20,11 +20,11 @@ void main() {
       // Turkish Sea and Brilliant Blue are among the darkest anchor colors
       const darkIndices = [8, 7]; // Turkish Sea, Brilliant Blue
       for (final i in darkIndices) {
-        final color = SpeedyBoyTokens.anchorColors[i];
-        final name = SpeedyBoyTokens.anchorColorNames[i];
+        final color = RunThruTokens.anchorColors[i];
+        final name = RunThruTokens.anchorColorNames[i];
         final ratio = WcagContrast.contrastRatio(
           color,
-          SpeedyBoyTokens.stageBase,
+          RunThruTokens.stageBase,
         );
         expect(
           ratio,
@@ -37,12 +37,12 @@ void main() {
     test('light anchors have lower contrast than dark anchors', () {
       // Buttercup (light yellow) should have less contrast than Turkish Sea
       final buttercupRatio = WcagContrast.contrastRatio(
-        SpeedyBoyTokens.anchorColors[3], // Buttercup
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.anchorColors[3], // Buttercup
+        RunThruTokens.stageBase,
       );
       final turkishSeaRatio = WcagContrast.contrastRatio(
-        SpeedyBoyTokens.anchorColors[8], // Turkish Sea
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.anchorColors[8], // Turkish Sea
+        RunThruTokens.stageBase,
       );
       expect(
         turkishSeaRatio,
@@ -52,12 +52,12 @@ void main() {
     });
 
     test('warning tier thresholds match implementation', () {
-      for (var i = 0; i < SpeedyBoyTokens.anchorColors.length; i++) {
-        final color = SpeedyBoyTokens.anchorColors[i];
-        final name = SpeedyBoyTokens.anchorColorNames[i];
+      for (var i = 0; i < RunThruTokens.anchorColors.length; i++) {
+        final color = RunThruTokens.anchorColors[i];
+        final name = RunThruTokens.anchorColorNames[i];
         final ratio = WcagContrast.contrastRatio(
           color,
-          SpeedyBoyTokens.stageBase,
+          RunThruTokens.stageBase,
         );
         // Verify tier classification is deterministic
         if (ratio >= 4.5) {
@@ -74,8 +74,8 @@ void main() {
 
     test('stageAnchor default exceeds 3:1 (AA Large Text)', () {
       final ratio = WcagContrast.contrastRatio(
-        SpeedyBoyTokens.stageAnchor,
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.stageAnchor,
+        RunThruTokens.stageBase,
       );
       expect(ratio, greaterThanOrEqualTo(3.0));
     });

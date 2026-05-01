@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/three_d/cube_viewport_painter.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/three_d/cube_viewport_painter.dart';
 
 /// The 3D cube viewport widget — a neumorphic inset box with visible
 /// perspective depth. The outer shell surface frames the dark inner cube.
@@ -21,16 +21,16 @@ class CubeViewport extends StatelessWidget {
     return Container(
       // Outer shell surface with neumorphic inset shadow
       decoration: const BoxDecoration(
-        color: SpeedyBoyTokens.shellBase,
+        color: RunThruTokens.shellBase,
         boxShadow: [
           // Outer neumorphic raised effect
           BoxShadow(
-            color: SpeedyBoyTokens.shellLightShadow,
+            color: RunThruTokens.shellLightShadow,
             offset: Offset(-6, -6),
             blurRadius: 12,
           ),
           BoxShadow(
-            color: SpeedyBoyTokens.shellDarkShadow,
+            color: RunThruTokens.shellDarkShadow,
             offset: Offset(6, 6),
             blurRadius: 12,
           ),
@@ -40,17 +40,17 @@ class CubeViewport extends StatelessWidget {
       child: Container(
         // Inner inset well — the "hole" you look into
         decoration: BoxDecoration(
-          color: SpeedyBoyTokens.stageBase,
+          color: RunThruTokens.stageBase,
           borderRadius: BorderRadius.circular(8),
           boxShadow: const [
             // Inset shadow: dark on top-left, light on bottom-right
             BoxShadow(
-              color: SpeedyBoyTokens.shellDarkShadow,
+              color: RunThruTokens.shellDarkShadow,
               offset: Offset(-4, -4),
               blurRadius: 8,
             ),
             BoxShadow(
-              color: SpeedyBoyTokens.shellLightShadow,
+              color: RunThruTokens.shellLightShadow,
               offset: Offset(4, 4),
               blurRadius: 8,
             ),

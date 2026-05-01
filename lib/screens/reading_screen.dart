@@ -5,24 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/core/dynamic_font_size.dart';
-import 'package:speedy_boy/core/reading_range_resolver.dart';
-import 'package:speedy_boy/core/sentence_resolver.dart';
-import 'package:speedy_boy/core/word_timer.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/hooks/bookmark_notifier.dart';
-import 'package:speedy_boy/services/analytics_service.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/preprocessing_queue.dart';
-import 'package:speedy_boy/store/analytics_models.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/three_d/cube_viewport.dart';
-import 'package:speedy_boy/widgets/finished_range_overlay.dart';
-import 'package:speedy_boy/widgets/pause_fog_3d.dart';
-import 'package:speedy_boy/widgets/progress_hairline_3d.dart';
-import 'package:speedy_boy/widgets/word_display_3d.dart';
-import 'package:speedy_boy/widgets/wpm_dial_3d.dart';
+import 'package:runthru/core/dynamic_font_size.dart';
+import 'package:runthru/core/reading_range_resolver.dart';
+import 'package:runthru/core/sentence_resolver.dart';
+import 'package:runthru/core/word_timer.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/hooks/bookmark_notifier.dart';
+import 'package:runthru/services/analytics_service.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/preprocessing_queue.dart';
+import 'package:runthru/store/analytics_models.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/cube_viewport.dart';
+import 'package:runthru/widgets/finished_range_overlay.dart';
+import 'package:runthru/widgets/pause_fog_3d.dart';
+import 'package:runthru/widgets/progress_hairline_3d.dart';
+import 'package:runthru/widgets/word_display_3d.dart';
+import 'package:runthru/widgets/wpm_dial_3d.dart';
 
 /// Full-screen 3D reading experience with static marble cube viewport.
 class ReadingScreen extends ConsumerStatefulWidget {
@@ -67,7 +67,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
     _breatheController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.cubeBreatheDuration,
+      duration: RunThruAnimations.cubeBreatheDuration,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -255,9 +255,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
 
     final anchorColor =
-        SpeedyBoyTokens.anchorColors[config.anchorColorIndex.clamp(
+        RunThruTokens.anchorColors[config.anchorColorIndex.clamp(
           0,
-          SpeedyBoyTokens.anchorColors.length - 1,
+          RunThruTokens.anchorColors.length - 1,
         )];
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
@@ -310,7 +310,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                   child: IconButton(
                     icon: const Icon(
                       Icons.arrow_back,
-                      color: SpeedyBoyTokens.stageText,
+                      color: RunThruTokens.stageText,
                       size: 20,
                     ),
                     onPressed: () {
@@ -332,7 +332,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                         _isFullScreen
                             ? Icons.fullscreen_exit
                             : Icons.fullscreen,
-                        color: SpeedyBoyTokens.stageText,
+                        color: RunThruTokens.stageText,
                         size: 20,
                       ),
                       onPressed: _toggleFullScreen,
@@ -354,7 +354,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
         config.parallaxIntensity == ParallaxIntensity.off;
 
     if (flat) {
-      return ColoredBox(color: SpeedyBoyTokens.stageBase, child: child);
+      return ColoredBox(color: RunThruTokens.stageBase, child: child);
     }
 
     return ListenableBuilder(
@@ -362,7 +362,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
       builder: (context, inner) {
         return CubeViewport(
           parallaxOffset: Offset.zero,
-          breatheAngle: SpeedyBoyAnimations.cubeBreatheAngle(
+          breatheAngle: RunThruAnimations.cubeBreatheAngle(
             _breatheController.value,
           ),
           child: inner,

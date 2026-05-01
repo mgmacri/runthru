@@ -1,8 +1,8 @@
 import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/section_store.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/section_store.dart';
 
 /// In-memory LRU section cache with prefetch support.
 ///

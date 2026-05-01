@@ -1,0 +1,23 @@
+default_platform(:android)
+
+platform :android do
+  desc "Push a new beta build to Google Play internal testing"
+  lane :beta do
+    build_android_app(
+      task: "bundle",
+      build_type: "Release",
+    )
+    upload_to_play_store(
+      track: "internal",
+      aab: "../build/app/outputs/bundle/release/app-release.aab",
+    )
+  end
+
+  desc "Promote to production on Google Play"
+  lane :release do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+    )
+  end
+end

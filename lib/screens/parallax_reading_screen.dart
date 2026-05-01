@@ -7,38 +7,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/core/clipboard_document.dart';
-import 'package:speedy_boy/core/context_reveal_notifier.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
-import 'package:speedy_boy/core/dynamic_font_size.dart';
-import 'package:speedy_boy/core/gesture_classifier.dart';
-import 'package:speedy_boy/core/gradient_sweep_engine.dart';
-import 'package:speedy_boy/core/hint_controller.dart';
-import 'package:speedy_boy/core/logger.dart';
-import 'package:speedy_boy/core/reading_goal_presets.dart';
-import 'package:speedy_boy/core/reading_range_resolver.dart';
-import 'package:speedy_boy/core/sentence_resolver.dart';
-import 'package:speedy_boy/core/word_timer.dart';
-import 'package:speedy_boy/core/wpm_dial_notifier.dart';
-import 'package:speedy_boy/core/wpm_dial_state.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/hooks/bookmark_notifier.dart';
-import 'package:speedy_boy/services/analytics_service.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/preprocessing_queue.dart';
-import 'package:speedy_boy/store/analytics_models.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/three_d/parallax_room.dart';
-import 'package:speedy_boy/three_d/text_painter_pool.dart';
-import 'package:speedy_boy/three_d/word_painter.dart';
-import 'package:speedy_boy/widgets/context_reveal_overlay.dart';
-import 'package:speedy_boy/widgets/finished_range_overlay.dart';
-import 'package:speedy_boy/widgets/hint_overlay.dart';
-import 'package:speedy_boy/widgets/pause_fog_3d.dart';
-import 'package:speedy_boy/widgets/progress_hairline_3d.dart';
-import 'package:speedy_boy/widgets/reading_goal_presets.dart';
-import 'package:speedy_boy/widgets/wpm_dial_3d.dart';
+import 'package:runthru/core/clipboard_document.dart';
+import 'package:runthru/core/context_reveal_notifier.dart';
+import 'package:runthru/core/context_reveal_state.dart';
+import 'package:runthru/core/dynamic_font_size.dart';
+import 'package:runthru/core/gesture_classifier.dart';
+import 'package:runthru/core/gradient_sweep_engine.dart';
+import 'package:runthru/core/hint_controller.dart';
+import 'package:runthru/core/logger.dart';
+import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/core/reading_range_resolver.dart';
+import 'package:runthru/core/sentence_resolver.dart';
+import 'package:runthru/core/word_timer.dart';
+import 'package:runthru/core/wpm_dial_notifier.dart';
+import 'package:runthru/core/wpm_dial_state.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/hooks/bookmark_notifier.dart';
+import 'package:runthru/services/analytics_service.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/preprocessing_queue.dart';
+import 'package:runthru/store/analytics_models.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/parallax_room.dart';
+import 'package:runthru/three_d/text_painter_pool.dart';
+import 'package:runthru/three_d/word_painter.dart';
+import 'package:runthru/widgets/context_reveal_overlay.dart';
+import 'package:runthru/widgets/finished_range_overlay.dart';
+import 'package:runthru/widgets/hint_overlay.dart';
+import 'package:runthru/widgets/pause_fog_3d.dart';
+import 'package:runthru/widgets/progress_hairline_3d.dart';
+import 'package:runthru/widgets/reading_goal_presets.dart';
+import 'package:runthru/widgets/wpm_dial_3d.dart';
 import 'package:window_manager/window_manager.dart';
 
 class ParallaxReadingScreen extends ConsumerStatefulWidget {
@@ -463,12 +463,12 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   }
 
   /// Brief anchor highlight flash to confirm sentence restart.
-  // P4 Grade C — 200ms flash using SpeedyBoyTiming.restartHighlightMs
+  // P4 Grade C — 200ms flash using RunThruTiming.restartHighlightMs
   void _flashRestartHighlight() {
     _restartFlashTimer?.cancel();
     setState(() => _showRestartFlash = true);
     _restartFlashTimer = Timer(
-      const Duration(milliseconds: SpeedyBoyTiming.restartHighlightMs),
+      const Duration(milliseconds: RunThruTiming.restartHighlightMs),
       () {
         if (mounted) setState(() => _showRestartFlash = false);
       },
@@ -807,12 +807,12 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   }
 
   /// Auto-advance to next sentence after the inter-sentence gap delay.
-  // Grade D — tunable via SpeedyBoyTiming.sentenceGapMs
+  // Grade D — tunable via RunThruTiming.sentenceGapMs
   void _autoAdvanceToNextSentence(ContextRevealState crState) {
     _sentenceGapTimer?.cancel();
     _sweepEngine.pause();
     _sentenceGapTimer = Timer(
-      const Duration(milliseconds: SpeedyBoyTiming.sentenceGapMs),
+      const Duration(milliseconds: RunThruTiming.sentenceGapMs),
       () {
         if (!mounted) return;
         final current = ref.read(contextRevealProvider);
@@ -1030,14 +1030,14 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     });
 
     final anchorColor =
-        SpeedyBoyTokens.anchorColors[config.anchorColorIndex.clamp(
+        RunThruTokens.anchorColors[config.anchorColorIndex.clamp(
           0,
-          SpeedyBoyTokens.anchorColors.length - 1,
+          RunThruTokens.anchorColors.length - 1,
         )];
 
     // P4 Grade C — flash anchor color on double-tap sentence restart
     final effectiveAnchorColor = _showRestartFlash
-        ? SpeedyBoyTokens.stageText
+        ? RunThruTokens.stageText
         : anchorColor;
 
     // P20 — watch ContextReveal state for overlay rendering
@@ -1050,7 +1050,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       child: Listener(
         onPointerSignal: _handlePointerSignal,
         child: ColoredBox(
-          color: SpeedyBoyTokens.roomBackground,
+          color: RunThruTokens.roomBackground,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final fontSize = dynamicFontSize(constraints);
@@ -1168,8 +1168,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           backgroundColor:
                                               config.parallaxIntensity ==
                                                   ParallaxIntensity.none
-                                              ? SpeedyBoyTokens.stageBase
-                                              : SpeedyBoyTokens.cubeBackWall,
+                                              ? RunThruTokens.stageBase
+                                              : RunThruTokens.cubeBackWall,
                                           backgroundOpacity:
                                               config.parallaxIntensity ==
                                                   ParallaxIntensity.none
@@ -1207,7 +1207,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                     child: IgnorePointer(
                                       child: ColoredBox(
                                         color:
-                                            SpeedyBoyTokens.stagePauseOverlay,
+                                            RunThruTokens.stagePauseOverlay,
                                       ),
                                     ),
                                   ),
@@ -1243,7 +1243,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                     child: GestureDetector(
                                       onTap: _dismissCROnboarding,
                                       child: ColoredBox(
-                                        color: SpeedyBoyTokens.stagePauseOverlay
+                                        color: RunThruTokens.stagePauseOverlay
                                             .withAlpha(230),
                                         child: Center(
                                           child: Semantics(
@@ -1258,9 +1258,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                 'Swipe again for more context.\n'
                                                 'Swipe down to resume.',
                                                 textAlign: TextAlign.center,
-                                                style: SpeedyBoyTypography.body
+                                                style: RunThruTypography.body
                                                     .copyWith(
-                                                      color: SpeedyBoyTokens
+                                                      color: RunThruTokens
                                                           .stageText,
                                                     ),
                                               ),
@@ -1282,7 +1282,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                 if (_showReadingGoalOnboarding)
                                   Positioned.fill(
                                     child: ColoredBox(
-                                      color: SpeedyBoyTokens.shellBase
+                                      color: RunThruTokens.shellBase
                                           .withAlpha(230),
                                       child: Center(
                                         child: SingleChildScrollView(
@@ -1294,9 +1294,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                             children: [
                                               Text(
                                                 'Choose Your Reading Pace',
-                                                style: SpeedyBoyTypography.title
+                                                style: RunThruTypography.title
                                                     .copyWith(
-                                                      color: SpeedyBoyTokens
+                                                      color: RunThruTokens
                                                           .shellTextPrimary,
                                                     ),
                                               ),
@@ -1369,10 +1369,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                 },
                                                 child: Text(
                                                   'Customize later in Settings',
-                                                  style: SpeedyBoyTypography
+                                                  style: RunThruTypography
                                                       .caption
                                                       .copyWith(
-                                                        color: SpeedyBoyTokens
+                                                        color: RunThruTokens
                                                             .shellAccent,
                                                         decoration:
                                                             TextDecoration
@@ -1398,8 +1398,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                   Positioned.fill(
                                     child: Container(
                                       decoration:
-                                          SpeedyBoyDecorations.insetDecoration(
-                                            SpeedyBoySurface.stage,
+                                          RunThruDecorations.insetDecoration(
+                                            RunThruSurface.stage,
                                             borderRadius: 0,
                                           ),
                                     ),
@@ -1427,7 +1427,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                     const Positioned.fill(
                                       child: ColoredBox(
                                         color:
-                                            SpeedyBoyTokens.stagePauseOverlay,
+                                            RunThruTokens.stagePauseOverlay,
                                       ),
                                     ),
                                   // Shared overlays
@@ -1467,7 +1467,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                           padding: EdgeInsets.all(8),
                           child: Icon(
                             Icons.arrow_back,
-                            color: SpeedyBoyTokens.stageText,
+                            color: RunThruTokens.stageText,
                             size: 20,
                           ),
                         ),
@@ -1486,7 +1486,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                               _isFullScreen
                                   ? Icons.fullscreen_exit
                                   : Icons.fullscreen,
-                              color: SpeedyBoyTokens.stageText,
+                              color: RunThruTokens.stageText,
                               size: 20,
                             ),
                           ),

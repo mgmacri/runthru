@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/core/word_transition.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/three_d/glyph_measurer.dart';
-import 'package:speedy_boy/three_d/off_axis_projection.dart';
-import 'package:speedy_boy/three_d/parallax_room_painter.dart';
-import 'package:speedy_boy/three_d/parallax_word_painter.dart';
-import 'package:speedy_boy/three_d/text_painter_pool.dart';
+import 'package:runthru/core/word_transition.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/glyph_measurer.dart';
+import 'package:runthru/three_d/off_axis_projection.dart';
+import 'package:runthru/three_d/parallax_room_painter.dart';
+import 'package:runthru/three_d/parallax_word_painter.dart';
+import 'package:runthru/three_d/text_painter_pool.dart';
 
 /// The full 3D room widget — composites the room painter,
 /// word painter, and any overlay children (fog, dial, progress).
@@ -97,21 +97,21 @@ class _ParallaxRoomState extends State<ParallaxRoom>
     // Word entrance animation (A-001: scale breathe)
     _wordController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.wordAdvanceDuration,
+      duration: RunThruAnimations.wordAdvanceDuration,
     );
     _wordAnimation = CurvedAnimation(
       parent: _wordController,
-      curve: SpeedyBoyAnimations.wordAdvanceCurve,
+      curve: RunThruAnimations.wordAdvanceCurve,
     );
 
     // Depth bounce animation (A-013: subtle forward Z motion)
     _depthBounceController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.wordDepthBounceDuration,
+      duration: RunThruAnimations.wordDepthBounceDuration,
     );
     _depthBounceAnimation = CurvedAnimation(
       parent: _depthBounceController,
-      curve: SpeedyBoyAnimations.wordDepthBounceCurve,
+      curve: RunThruAnimations.wordDepthBounceCurve,
     );
 
     // Start build animation
@@ -155,7 +155,7 @@ class _ParallaxRoomState extends State<ParallaxRoom>
             case WordTransition.a013BounceIn:
               // P6 Grade A — at/below threshold, use capped depth bounce
               final staggerTotal =
-                  SpeedyBoyAnimations.glyphStaggerMs *
+                  RunThruAnimations.glyphStaggerMs *
                   (widget.currentWord.length - 1).clamp(0, 999);
               _depthBounceController.duration = Duration(
                 milliseconds: result.baseDurationMs + staggerTotal,

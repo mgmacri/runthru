@@ -1,14 +1,14 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/screens/analytics_screen.dart';
-import 'package:speedy_boy/screens/discover_screen.dart';
-import 'package:speedy_boy/screens/library_screen.dart';
-import 'package:speedy_boy/screens/settings_screen.dart';
-import 'package:speedy_boy/services/purchase_service.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/screens/analytics_screen.dart';
+import 'package:runthru/screens/discover_screen.dart';
+import 'package:runthru/screens/library_screen.dart';
+import 'package:runthru/screens/settings_screen.dart';
+import 'package:runthru/services/purchase_service.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 
 /// Shell that wraps the four main tabs in a [PageView] with a bottom
 /// navigation bar. Swipe left/right to move between pages.
@@ -57,7 +57,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       body: PageView(
         controller: _pageController,
         onPageChanged: _onPageChanged,
@@ -71,25 +71,25 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       bottomNavigationBar: Theme(
         data: Theme.of(context).copyWith(
           navigationBarTheme: NavigationBarThemeData(
-            backgroundColor: SpeedyBoyTokens.shellBase,
+            backgroundColor: RunThruTokens.shellBase,
             surfaceTintColor: Colors.transparent,
-            indicatorColor: SpeedyBoyTokens.shellAccent.withValues(alpha: 0.15),
+            indicatorColor: RunThruTokens.shellAccent.withValues(alpha: 0.15),
             iconTheme: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.selected)) {
-                return const IconThemeData(color: SpeedyBoyTokens.shellAccent);
+                return const IconThemeData(color: RunThruTokens.shellAccent);
               }
               return const IconThemeData(
-                color: SpeedyBoyTokens.shellTextSecondary,
+                color: RunThruTokens.shellTextSecondary,
               );
             }),
             labelTextStyle: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.selected)) {
-                return SpeedyBoyTypography.caption.copyWith(
-                  color: SpeedyBoyTokens.shellAccent,
+                return RunThruTypography.caption.copyWith(
+                  color: RunThruTokens.shellAccent,
                 );
               }
-              return SpeedyBoyTypography.caption.copyWith(
-                color: SpeedyBoyTokens.shellTextSecondary,
+              return RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellTextSecondary,
               );
             }),
           ),
@@ -158,13 +158,13 @@ class _AnalyticsTab extends ConsumerWidget {
     if (config.hasPremium || kDebugMode) return const AnalyticsScreen();
 
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       appBar: AppBar(
-        backgroundColor: SpeedyBoyTokens.shellBase,
+        backgroundColor: RunThruTokens.shellBase,
         elevation: 0,
-        title: const Text('Premium Feature', style: SpeedyBoyTypography.title),
+        title: const Text('Premium Feature', style: RunThruTypography.title),
         automaticallyImplyLeading: false,
-        iconTheme: const IconThemeData(color: SpeedyBoyTokens.shellTextPrimary),
+        iconTheme: const IconThemeData(color: RunThruTokens.shellTextPrimary),
       ),
       body: Center(
         child: Padding(
@@ -175,31 +175,31 @@ class _AnalyticsTab extends ConsumerWidget {
               const Icon(
                 Icons.lock_outline,
                 size: 48,
-                color: SpeedyBoyTokens.shellTextSecondary,
+                color: RunThruTokens.shellTextSecondary,
               ),
               const SizedBox(height: 16),
               const Text(
                 'Reading Analytics is a premium feature',
-                style: SpeedyBoyTypography.title,
+                style: RunThruTypography.title,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               const Text(
                 'Upgrade to track your reading speed, streaks, and progress over time.',
-                style: SpeedyBoyTypography.body,
+                style: RunThruTypography.body,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: SpeedyBoyTokens.shellAccent,
-                  foregroundColor: SpeedyBoyTokens.shellBase,
+                  backgroundColor: RunThruTokens.shellAccent,
+                  foregroundColor: RunThruTokens.shellBase,
                 ),
                 icon: const Icon(Icons.lock_open, size: 18),
                 label: Text(
                   'Unlock Premium',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellBase,
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellBase,
                   ),
                 ),
                 onPressed: () =>

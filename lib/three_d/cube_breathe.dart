@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Cube breathe animation controller mixin (A-011).
 /// ±1.5° Y-axis oscillation, 8000ms period, active only when idle.
@@ -15,7 +15,7 @@ mixin CubeBreatheMixin<T extends StatefulWidget>
       vsync: this,
       duration: reducedMotion
           ? Duration.zero
-          : SpeedyBoyAnimations.cubeBreatheDuration,
+          : RunThruAnimations.cubeBreatheDuration,
     );
   }
 

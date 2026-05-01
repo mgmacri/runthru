@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:speedy_boy/app.dart';
-import 'package:speedy_boy/core/logger.dart';
+import 'package:runthru/app.dart';
+import 'package:runthru/core/logger.dart';
 
 void main() {
   // Must init before runZonedGuarded so errors are captured too.
@@ -33,7 +33,7 @@ void main() {
         return true;
       };
 
-      runApp(const ProviderScope(child: SpeedyBoyApp()));
+      runApp(const ProviderScope(child: RunThruApp()));
     },
     (Object error, StackTrace stackTrace) {
       appLog('UncaughtZoneError', '$error\n$stackTrace');

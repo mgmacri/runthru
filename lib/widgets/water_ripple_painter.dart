@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// CustomPainter that draws 3D neumorphic water-ripple rings.
 ///
@@ -14,32 +14,32 @@ import 'package:speedy_boy/design/design.dart';
 /// CustomPaint(
 ///   painter: WaterRipplePainter(
 ///     animationValue: controller.value,
-///     surface: SpeedyBoySurface.shell,
+///     surface: RunThruSurface.shell,
 ///   ),
 /// )
 /// ```
 class WaterRipplePainter extends CustomPainter {
   WaterRipplePainter({
     required this.animationValue,
-    this.surface = SpeedyBoySurface.shell,
+    this.surface = RunThruSurface.shell,
     this.epicenter,
     super.repaint,
   });
 
   /// 0.0–1.0, repeating cycle.
   final double animationValue;
-  final SpeedyBoySurface surface;
+  final RunThruSurface surface;
   final Offset? epicenter;
 
   // Pre-allocated paints for each ring (light + dark arc).
   static final List<Paint> _lightPaints = List.generate(
-    SpeedyBoyAnimations.waterRippleRingCount,
+    RunThruAnimations.waterRippleRingCount,
     (_) => Paint()
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true,
   );
   static final List<Paint> _darkPaints = List.generate(
-    SpeedyBoyAnimations.waterRippleRingCount,
+    RunThruAnimations.waterRippleRingCount,
     (_) => Paint()
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true,
@@ -49,27 +49,27 @@ class WaterRipplePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = epicenter ?? Offset(size.width / 2, size.height / 2);
     final maxRadius = math.min(size.width, size.height) * 0.45;
-    const squash = SpeedyBoyAnimations.waterRippleSquash;
+    const squash = RunThruAnimations.waterRippleSquash;
 
     final Color lightColor;
     final Color darkColor;
     switch (surface) {
-      case SpeedyBoySurface.shell:
-        lightColor = SpeedyBoyTokens.shellLightShadow;
-        darkColor = SpeedyBoyTokens.shellDarkShadow;
-      case SpeedyBoySurface.stage:
-        lightColor = SpeedyBoyTokens.stageLightShadow;
-        darkColor = SpeedyBoyTokens.stageDarkShadow;
+      case RunThruSurface.shell:
+        lightColor = RunThruTokens.shellLightShadow;
+        darkColor = RunThruTokens.shellDarkShadow;
+      case RunThruSurface.stage:
+        lightColor = RunThruTokens.stageLightShadow;
+        darkColor = RunThruTokens.stageDarkShadow;
     }
 
-    for (var i = 0; i < SpeedyBoyAnimations.waterRippleRingCount; i++) {
+    for (var i = 0; i < RunThruAnimations.waterRippleRingCount; i++) {
       // Phase offset: ring i is delayed by i * (800ms / 2400ms)
-      final phaseOffset = i / SpeedyBoyAnimations.waterRippleRingCount;
+      final phaseOffset = i / RunThruAnimations.waterRippleRingCount;
       var ringProgress = (animationValue - phaseOffset) % 1.0;
       if (ringProgress < 0) ringProgress += 1.0;
 
       // Apply easeOut to the ring's own progress
-      final easedProgress = SpeedyBoyAnimations.waterRippleCurve.transform(
+      final easedProgress = RunThruAnimations.waterRippleCurve.transform(
         ringProgress,
       );
 

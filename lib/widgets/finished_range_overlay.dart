@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Callback types for the three actions on the finished range overlay.
 typedef OnContinueReading = void Function();
@@ -45,7 +45,7 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.dialEmergeDuration,
+      duration: RunThruAnimations.dialEmergeDuration,
     );
     _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
@@ -107,8 +107,8 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
                 margin: const EdgeInsets.all(32),
                 padding: const EdgeInsets.all(24),
                 constraints: const BoxConstraints(maxWidth: 360),
-                decoration: SpeedyBoyDecorations.raisedDecoration(
-                  SpeedyBoySurface.shell,
+                decoration: RunThruDecorations.raisedDecoration(
+                  RunThruSurface.shell,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -116,13 +116,13 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
                     // Checkmark + title.
                     const Icon(
                       Icons.check_circle_outline,
-                      color: SpeedyBoyTokens.shellReady,
+                      color: RunThruTokens.shellReady,
                       size: 40,
                     ),
                     const SizedBox(height: 12),
                     const Text(
                       'Range Complete',
-                      style: SpeedyBoyTypography.title,
+                      style: RunThruTypography.title,
                     ),
                     const SizedBox(height: 16),
 
@@ -131,8 +131,8 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
                       'Pages ${widget.startPage + 1}\u2013${widget.endPage + 1}'
                       '  \u00B7  '
                       '${_formatWordCount(widget.wordCount)} words',
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellTextSecondary,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellTextSecondary,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -141,7 +141,7 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           'Average: ${widget.averageWpm} WPM',
-                          style: SpeedyBoyTypography.caption,
+                          style: RunThruTypography.caption,
                         ),
                       ),
                     const SizedBox(height: 24),
@@ -208,15 +208,15 @@ class _ActionButton extends StatelessWidget {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: SpeedyBoyDecorations.pillDecoration(
-          SpeedyBoySurface.shell,
+        decoration: RunThruDecorations.pillDecoration(
+          RunThruSurface.shell,
         ),
         child: Text(
           label,
-          style: SpeedyBoyTypography.body.copyWith(
+          style: RunThruTypography.body.copyWith(
             color: isPrimary
-                ? SpeedyBoyTokens.shellAccent
-                : SpeedyBoyTokens.shellTextPrimary,
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellTextPrimary,
             fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w400,
           ),
           textAlign: TextAlign.center,

@@ -11,7 +11,7 @@ import UIKit
 
     let controller = window?.rootViewController as! FlutterViewController
     let channel = FlutterMethodChannel(
-      name: "com.speedyboy/ios_file_access",
+      name: "com.runthru/ios_file_access",
       binaryMessenger: controller.binaryMessenger
     )
 
@@ -108,7 +108,7 @@ import UIKit
           copied += 1
         } catch {
           // Log but continue with other files.
-          NSLog("SpeedyBoy: failed to copy \(file.lastPathComponent): \(error)")
+          NSLog("RunThru: failed to copy \(file.lastPathComponent): \(error)")
         }
       }
 

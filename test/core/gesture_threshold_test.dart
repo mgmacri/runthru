@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/gesture_classifier.dart';
+import 'package:runthru/core/gesture_classifier.dart';
 
 void main() {
   // Reference screen dimensions for threshold calculations.

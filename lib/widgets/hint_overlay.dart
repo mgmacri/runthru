@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Reusable hint overlay pill for onboarding gesture hints (Rule 27).
 ///
 /// Displays a semi-transparent pill with white text that slides in from
-/// [slideFrom], auto-dismisses after [SpeedyBoyTiming.hintAutoDismissMs],
+/// [slideFrom], auto-dismisses after [RunThruTiming.hintAutoDismissMs],
 /// and can be dismissed immediately by any touch.
 ///
 /// When `isReducedMotion(context)` is true, the slide-in animation is
@@ -48,7 +48,7 @@ class _HintOverlayState extends State<HintOverlay>
 
     _slideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: SpeedyBoyTiming.hintSlideInMs),
+      duration: const Duration(milliseconds: RunThruTiming.hintSlideInMs),
     );
 
     _slideAnimation = Tween<Offset>(
@@ -59,7 +59,7 @@ class _HintOverlayState extends State<HintOverlay>
     // Start auto-dismiss timer.
     // P6 Grade D — auto-dismiss after 4 seconds
     _autoDismissTimer = Timer(
-      const Duration(milliseconds: SpeedyBoyTiming.hintAutoDismissMs),
+      const Duration(milliseconds: RunThruTiming.hintAutoDismissMs),
       _dismiss,
     );
   }
@@ -115,7 +115,7 @@ class _HintOverlayState extends State<HintOverlay>
                 child: DecoratedBox(
                   // P6 Grade D — 60% black background pill
                   decoration: BoxDecoration(
-                    color: SpeedyBoyTokens.shellTextPrimary.withAlpha(153),
+                    color: RunThruTokens.shellTextPrimary.withAlpha(153),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Padding(
@@ -125,8 +125,8 @@ class _HintOverlayState extends State<HintOverlay>
                     ),
                     child: Text(
                       widget.text,
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellBase,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellBase,
                       ),
                       textAlign: TextAlign.center,
                     ),

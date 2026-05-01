@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/context_reveal_notifier.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
+import 'package:runthru/core/context_reveal_notifier.dart';
+import 'package:runthru/core/context_reveal_state.dart';
 
 void main() {
   group('ContextRevealTier', () {

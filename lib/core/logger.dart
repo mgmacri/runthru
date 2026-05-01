@@ -4,12 +4,12 @@ import 'dart:io';
 
 /// Simple file + DevTools logger with an in-memory ring buffer.
 ///
-/// On Windows, writes to %TEMP%\speedy_boy_debug.log.
+/// On Windows, writes to %TEMP%\runthru_debug.log.
 /// On all platforms, keeps the last [_maxEntries] lines in memory
 /// so they can be shown in an in-app log viewer.
 ///
 /// Read while running on desktop (PowerShell):
-///   gc $env:TEMP\speedy_boy_debug.log -Wait
+///   gc $env:TEMP\runthru_debug.log -Wait
 class AppLogger {
   AppLogger._();
 
@@ -31,7 +31,7 @@ class AppLogger {
         log('AppLogger', 'init — platform=${Platform.operatingSystem}');
         return;
       }
-      final path = '$temp/speedy_boy_debug.log';
+      final path = '$temp/runthru_debug.log';
       _path = path;
       _sink = File(path).openWrite(); // overwrites on every launch
     } on Object {

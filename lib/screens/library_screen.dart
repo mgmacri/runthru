@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/core/clipboard_service.dart';
-import 'package:speedy_boy/core/hint_controller.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/folder_scanner.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/preprocessing_queue.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/widgets/hint_overlay.dart';
-import 'package:speedy_boy/widgets/pdf_card_3d.dart';
+import 'package:runthru/core/clipboard_service.dart';
+import 'package:runthru/core/hint_controller.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/providers/file_picker_provider.dart';
+import 'package:runthru/services/folder_scanner.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/preprocessing_queue.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/hint_overlay.dart';
+import 'package:runthru/widgets/pdf_card_3d.dart';
 
 /// Library screen — lists PDFs as 3D neumorphic cards.
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -32,24 +33,93 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final processed = ref.watch(preprocessingQueueProvider);
     final config = ref.watch(configProvider);
     final queue = ref.read(preprocessingQueueProvider.notifier);
+    final filePickerState = ref.watch(filePickerNotifierProvider);
 
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
+      // ── File Picker FAB ──
+      floatingActionButton: Semantics(
+        button: true,
+        label: 'Import file',
+        child: SizedBox(
+          width: 56,
+          height: 56,
+          child: FloatingActionButton(
+            onPressed:
+                filePickerState is FilePickerPicking ||
+                    filePickerState is FilePickerExtracting
+                ? null
+                : () => ref
+                      .read(filePickerNotifierProvider.notifier)
+                      .pickAndExtract(),
+            backgroundColor: RunThruTokens.shellAccent,
+            child: filePickerState is FilePickerExtracting
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Text(
+                      '…',
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellOnError,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : const Icon(
+                    Icons.add_rounded,
+                    color: RunThruTokens.shellOnError,
+                    semanticLabel: 'Import file',
+                  ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Stack(
           children: [
             Column(
               children: [
+                // ── File Picker Progress Banner ──
+                if (filePickerState is FilePickerExtracting)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    color: RunThruTokens.shellProcessing.withValues(
+                      alpha: 0.15,
+                    ),
+                    child: Text(
+                      'Extracting ${filePickerState.fileName}\u2026',
+                      style: RunThruTypography.caption.copyWith(
+                        color: RunThruTokens.shellTextPrimary,
+                      ),
+                    ),
+                  ),
+                if (filePickerState is FilePickerError)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    color: RunThruTokens.shellError.withValues(alpha: 0.15),
+                    child: Text(
+                      filePickerState.message,
+                      style: RunThruTypography.caption.copyWith(
+                        color: RunThruTokens.shellError,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 // ── Header ──
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Speedy Boy',
-                        style: SpeedyBoyTypography.display,
-                      ),
+                      const Text('RunThru', style: RunThruTypography.display),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -71,8 +141,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     ),
                     child: Text(
                       _clipboardError!,
-                      style: SpeedyBoyTypography.caption.copyWith(
-                        color: SpeedyBoyTokens.shellError,
+                      style: RunThruTypography.caption.copyWith(
+                        color: RunThruTokens.shellError,
                       ),
                     ),
                   ),
@@ -94,16 +164,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     loading: () => Center(
                       child: Text(
                         'Loading…',
-                        style: SpeedyBoyTypography.body.copyWith(
-                          color: SpeedyBoyTokens.shellTextSecondary,
+                        style: RunThruTypography.body.copyWith(
+                          color: RunThruTokens.shellTextSecondary,
                         ),
                       ),
                     ),
                     error: (error, _) => Center(
                       child: Text(
                         'Failed to scan folder:\n$error',
-                        style: SpeedyBoyTypography.body.copyWith(
-                          color: SpeedyBoyTokens.shellError,
+                        style: RunThruTypography.body.copyWith(
+                          color: RunThruTokens.shellError,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -162,17 +232,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final confirmed = await showDialog<bool>(
       context: ctx,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: SpeedyBoyTokens.shellBase,
+        backgroundColor: RunThruTokens.shellBase,
         title: Text(
           doc.title,
-          style: SpeedyBoyTypography.title.copyWith(
-            color: SpeedyBoyTokens.shellTextPrimary,
+          style: RunThruTypography.title.copyWith(
+            color: RunThruTokens.shellTextPrimary,
           ),
         ),
         content: Text(
           preview,
-          style: SpeedyBoyTypography.body.copyWith(
-            color: SpeedyBoyTokens.shellTextSecondary,
+          style: RunThruTypography.body.copyWith(
+            color: RunThruTokens.shellTextSecondary,
           ),
           maxLines: 5,
           overflow: TextOverflow.ellipsis,
@@ -182,8 +252,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             onPressed: () => Navigator.of(dialogCtx).pop(false),
             child: Text(
               'Cancel',
-              style: SpeedyBoyTypography.body.copyWith(
-                color: SpeedyBoyTokens.shellTextSecondary,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextSecondary,
               ),
             ),
           ),
@@ -191,8 +261,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             onPressed: () => Navigator.of(dialogCtx).pop(true),
             child: Text(
               'Start Reading',
-              style: SpeedyBoyTypography.body.copyWith(
-                color: SpeedyBoyTokens.shellAccent,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellAccent,
               ),
             ),
           ),
@@ -223,8 +293,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 'No PDF files found.\n\n'
                 'Set a folder in Settings to get started,\n'
                 'or paste text from your clipboard.',
-                style: SpeedyBoyTypography.body.copyWith(
-                  color: SpeedyBoyTokens.shellTextSecondary,
+                style: RunThruTypography.body.copyWith(
+                  color: RunThruTokens.shellTextSecondary,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -237,22 +307,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     horizontal: 24,
                     vertical: 14,
                   ),
-                  decoration: SpeedyBoyDecorations.raisedDecoration(
-                    SpeedyBoySurface.shell,
+                  decoration: RunThruDecorations.raisedDecoration(
+                    RunThruSurface.shell,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
                         Icons.content_paste,
-                        color: SpeedyBoyTokens.shellAccent,
+                        color: RunThruTokens.shellAccent,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
                       Text(
                         'Paste from Clipboard',
-                        style: SpeedyBoyTypography.body.copyWith(
-                          color: SpeedyBoyTokens.shellAccent,
+                        style: RunThruTypography.body.copyWith(
+                          color: RunThruTokens.shellAccent,
                         ),
                       ),
                     ],
@@ -341,9 +411,9 @@ class _PasteButton extends StatelessWidget {
       onTap: onPressed,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: SpeedyBoyDecorations.raisedDecoration(
-          SpeedyBoySurface.shell,
-          size: SpeedyBoyShadowSize.small,
+        decoration: RunThruDecorations.raisedDecoration(
+          RunThruSurface.shell,
+          size: RunThruShadowSize.small,
           borderRadius: 12,
         ),
         child: Row(
@@ -351,14 +421,14 @@ class _PasteButton extends StatelessWidget {
           children: [
             const Icon(
               Icons.content_paste,
-              color: SpeedyBoyTokens.shellAccent,
+              color: RunThruTokens.shellAccent,
               size: 16,
             ),
             const SizedBox(width: 4),
             Text(
               'Paste',
-              style: SpeedyBoyTypography.caption.copyWith(
-                color: SpeedyBoyTokens.shellAccent,
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellAccent,
               ),
             ),
           ],
@@ -379,13 +449,13 @@ class _ErrorBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: SpeedyBoyTokens.shellError,
+        color: RunThruTokens.shellError,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         '$count failed',
-        style: SpeedyBoyTypography.caption.copyWith(
-          color: SpeedyBoyTokens.shellOnError,
+        style: RunThruTypography.caption.copyWith(
+          color: RunThruTokens.shellOnError,
         ),
       ),
     );

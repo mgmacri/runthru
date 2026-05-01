@@ -1,6 +1,6 @@
 # Audit dependencies quarterly. Remove any package with zero imports in lib/.
-name: speedy_boy
-description: "Speedy Boy — Cross-platform speed reading app with 3D neumorphic cube viewport."
+name: runthru
+description: "RunThru — Paced reading for focus. Your attention isn't broken, it just needs a better direction."
 publish_to: 'none'
 version: 2.0.0+15
 

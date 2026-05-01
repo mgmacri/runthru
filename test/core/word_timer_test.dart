@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/word_timer.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/word_timer.dart';
+import 'package:runthru/design/design.dart';
 
 void main() {
   late WordTimerNotifier notifier;
@@ -129,7 +129,7 @@ void main() {
       notifier.seekTo(20);
       notifier.pause();
       notifier.play(); // resume from pause — should rewind
-      expect(notifier.state.currentIndex, 20 - SpeedyBoyTiming.autoRewindWords);
+      expect(notifier.state.currentIndex, 20 - RunThruTiming.autoRewindWords);
     });
 
     test('auto-rewind clamps to word 0 at document start', () {
@@ -156,14 +156,14 @@ void main() {
 
       // First resume
       notifier.play();
-      expect(notifier.state.currentIndex, 30 - SpeedyBoyTiming.autoRewindWords);
+      expect(notifier.state.currentIndex, 30 - RunThruTiming.autoRewindWords);
 
       notifier.seekTo(50);
       notifier.pause();
 
       // Second resume
       notifier.play();
-      expect(notifier.state.currentIndex, 50 - SpeedyBoyTiming.autoRewindWords);
+      expect(notifier.state.currentIndex, 50 - RunThruTiming.autoRewindWords);
     });
 
     test('auto-rewind resets on loadDocument', () {
@@ -191,7 +191,7 @@ void main() {
       notifier.play();
 
       expect(notifier.state.isPlaying, true);
-      expect(notifier.state.currentIndex, 20 - SpeedyBoyTiming.autoRewindWords);
+      expect(notifier.state.currentIndex, 20 - RunThruTiming.autoRewindWords);
     });
   });
 
@@ -218,7 +218,7 @@ void main() {
       // Regular resume should auto-rewind
       notifier.play();
 
-      expect(notifier.state.currentIndex, 50 - SpeedyBoyTiming.autoRewindWords);
+      expect(notifier.state.currentIndex, 50 - RunThruTiming.autoRewindWords);
       expect(notifier.state.isPlaying, true);
     });
   });

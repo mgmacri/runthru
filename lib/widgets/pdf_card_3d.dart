@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/widgets/neumorphic_ripple_loading.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/widgets/neumorphic_ripple_loading.dart';
 
 /// 3D neumorphic PDF card with press/release animations.
 class PdfCard3D extends StatefulWidget {
@@ -34,7 +34,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
     super.initState();
     _pressController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.cardPressDuration,
+      duration: RunThruAnimations.cardPressDuration,
     );
   }
 
@@ -47,17 +47,17 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
   Color _statusColor() {
     switch (widget.entry.status) {
       case PdfStatus.ready:
-        return SpeedyBoyTokens.shellReady;
+        return RunThruTokens.shellReady;
       case PdfStatus.processing:
       case PdfStatus.preview:
-        return SpeedyBoyTokens.shellProcessing;
+        return RunThruTokens.shellProcessing;
       case PdfStatus.error:
       case PdfStatus.unsupported:
       case PdfStatus.permanentlyFailed:
-        return SpeedyBoyTokens.shellError;
+        return RunThruTokens.shellError;
       case PdfStatus.pending:
       case PdfStatus.queued:
-        return SpeedyBoyTokens.shellTextSecondary;
+        return RunThruTokens.shellTextSecondary;
     }
   }
 
@@ -74,7 +74,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
       onTapUp: (_) {
         if (!reducedMotion) {
           _pressController.animateWith(
-            SpeedyBoyAnimations.cardReleaseSimulation(),
+            RunThruAnimations.cardReleaseSimulation(),
           );
         }
         widget.onTap?.call();
@@ -82,7 +82,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
       onTapCancel: () {
         if (!reducedMotion) {
           _pressController.animateWith(
-            SpeedyBoyAnimations.cardReleaseSimulation(),
+            RunThruAnimations.cardReleaseSimulation(),
           );
         }
       },
@@ -104,15 +104,15 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
         child: NeumorphicRippleLoading(
           isLoading: widget.entry.status == PdfStatus.processing ||
               widget.entry.status == PdfStatus.preview,
-          surface: SpeedyBoySurface.shell,
+          surface: RunThruSurface.shell,
           child: Container(
             margin: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 8,
             ),
             padding: const EdgeInsets.all(16),
-            decoration: SpeedyBoyDecorations.raisedDecoration(
-              SpeedyBoySurface.shell,
+            decoration: RunThruDecorations.raisedDecoration(
+              RunThruSurface.shell,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +120,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
                 // ── PDF name ──
                 Text(
                   widget.entry.fileName,
-                  style: SpeedyBoyTypography.title,
+                  style: RunThruTypography.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -129,9 +129,9 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
                 // ── Progress bar (inset) ──
                 Container(
                   height: 6,
-                  decoration: SpeedyBoyDecorations.insetDecoration(
-                    SpeedyBoySurface.shell,
-                    size: SpeedyBoyShadowSize.small,
+                  decoration: RunThruDecorations.insetDecoration(
+                    RunThruSurface.shell,
+                    size: RunThruShadowSize.small,
                     borderRadius: 3,
                   ),
                   child: FractionallySizedBox(
@@ -139,7 +139,7 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
                     widthFactor: widget.readingProgress.clamp(0.0, 1.0),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: SpeedyBoyTokens.shellAccent,
+                        color: RunThruTokens.shellAccent,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -161,14 +161,14 @@ class _PdfCard3DState extends State<PdfCard3D> with TickerProviderStateMixin {
                     const SizedBox(width: 8),
                     Text(
                       _statusLabel(),
-                      style: SpeedyBoyTypography.caption,
+                      style: RunThruTypography.caption,
                     ),
                     if (widget.rangeLabel != null) ...[
                       const SizedBox(width: 12),
                       Text(
                         widget.rangeLabel!,
-                        style: SpeedyBoyTypography.caption.copyWith(
-                          color: SpeedyBoyTokens.shellAccent,
+                        style: RunThruTypography.caption.copyWith(
+                          color: RunThruTokens.shellAccent,
                         ),
                       ),
                     ],

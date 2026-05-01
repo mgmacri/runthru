@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/tokens.dart';
+import 'package:runthru/design/tokens.dart';
 
 /// 1dp progress hairline on the cube's top interior edge.
 class ProgressHairline3D extends StatelessWidget {
@@ -28,7 +28,7 @@ class _ProgressHairlinePainter extends CustomPainter {
   final double progress;
 
   final Paint _paint = Paint()
-    ..color = SpeedyBoyTokens.stageProgress
+    ..color = RunThruTokens.stageProgress
     ..style = PaintingStyle.fill;
 
   @override

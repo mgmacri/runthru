@@ -1,7 +1,7 @@
 /// Data models for persistent configuration.
 library;
 
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/services/models.dart';
 
 // P10 Grade B — parallax intensity controls room distortion level
 enum ParallaxIntensity { none, off, subtle, full }

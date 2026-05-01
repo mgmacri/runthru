@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/navigation/app_router.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/navigation/app_router.dart';
 
-/// Speedy Boy MaterialApp with ThemeExtension and go_router.
-class SpeedyBoyApp extends ConsumerWidget {
-  const SpeedyBoyApp({super.key});
+/// RunThru MaterialApp with ThemeExtension and go_router.
+class RunThruApp extends ConsumerWidget {
+  const RunThruApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      title: 'Speedy Boy',
+      title: 'RunThru',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: SpeedyBoyTokens.shellBase,
-        extensions: const [SpeedyBoyTokens.instance],
+        scaffoldBackgroundColor: RunThruTokens.shellBase,
+        extensions: const [RunThruTokens.instance],
       ),
       routerConfig: appRouter,
     );

@@ -1,7 +1,7 @@
 /// V4 gesture tokens — swipe distance and velocity thresholds for the
 /// reading viewport gesture system. Consumed by [classifySwipe] in
 /// `lib/core/gesture_classifier.dart`.
-abstract final class SpeedyBoyGestures {
+abstract final class RunThruGestures {
   // ── Horizontal Swipe (P3 Grade C) ──
 
   /// Minimum horizontal drag distance as a ratio of screen width.

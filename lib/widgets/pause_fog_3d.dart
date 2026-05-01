@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Stylized "Breathing Room" pause overlay — warm radial fog that
 /// subtly pulses in sync with the cube breathe rhythm, with minimal
@@ -32,19 +32,19 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
     // Fade in/out (A-006 / A-007 timing)
     _fadeController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.pauseFogDuration,
-      reverseDuration: SpeedyBoyAnimations.resumeClearDuration,
+      duration: RunThruAnimations.pauseFogDuration,
+      reverseDuration: RunThruAnimations.resumeClearDuration,
     );
     _fade = CurvedAnimation(
       parent: _fadeController,
-      curve: SpeedyBoyAnimations.pauseFogCurve,
-      reverseCurve: SpeedyBoyAnimations.resumeClearCurve,
+      curve: RunThruAnimations.pauseFogCurve,
+      reverseCurve: RunThruAnimations.resumeClearCurve,
     );
 
     // Breathing pulse (A-011 cube breathe rhythm)
     _breatheController = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.cubeBreatheDuration,
+      duration: RunThruAnimations.cubeBreatheDuration,
     );
 
     if (widget.isPaused) {
@@ -106,10 +106,10 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
 
             return CustomPaint(
               painter: _BreathingFogPainter(
-                fogColor: SpeedyBoyTokens.roomFog,
+                fogColor: RunThruTokens.roomFog,
                 fogOpacity: fogOpacity,
-                barColor: SpeedyBoyTokens.marbleVeinPrimary,
-                glowColor: SpeedyBoyTokens.marbleVeinSecondary,
+                barColor: RunThruTokens.marbleVeinPrimary,
+                glowColor: RunThruTokens.marbleVeinSecondary,
                 barOpacity: _fade.value * 0.6,
               ),
               size: Size.infinite,

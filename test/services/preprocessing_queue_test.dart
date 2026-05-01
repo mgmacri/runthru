@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/services/models.dart';
 
 void main() {
   group('PdfEntry', () {

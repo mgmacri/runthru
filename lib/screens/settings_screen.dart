@@ -8,15 +8,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:speedy_boy/core/logger.dart';
-import 'package:speedy_boy/core/reading_goal_presets.dart';
-import 'package:speedy_boy/core/wcag_contrast.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/purchase_service.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/widgets/neumorphic_card.dart';
-import 'package:speedy_boy/widgets/wpm_slider.dart';
+import 'package:runthru/core/logger.dart';
+import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/core/wcag_contrast.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/services/purchase_service.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/wpm_slider.dart';
 
 /// Settings screen with neumorphic cards.
 class SettingsScreen extends ConsumerWidget {
@@ -97,7 +97,7 @@ class SettingsScreen extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not open file picker: $e'),
-            backgroundColor: SpeedyBoyTokens.shellError,
+            backgroundColor: RunThruTokens.shellError,
           ),
         );
       }
@@ -117,7 +117,7 @@ class SettingsScreen extends ConsumerWidget {
     final pdfDirPath = '${docsDir.path}/pdfs';
 
     try {
-      const channel = MethodChannel('com.speedyboy/android_file_access');
+      const channel = MethodChannel('com.runthru/android_file_access');
       final result = await channel.invokeMapMethod<String, dynamic>(
         'pickAndCopyPdfs',
         {'destPath': pdfDirPath},
@@ -244,7 +244,7 @@ class SettingsScreen extends ConsumerWidget {
     final pdfDirPath = '${docsDir.path}/pdfs';
 
     try {
-      const channel = MethodChannel('com.speedyboy/ios_file_access');
+      const channel = MethodChannel('com.runthru/ios_file_access');
       final result = await channel.invokeMapMethod<String, dynamic>(
         'copyPdfsToLocal',
         {'sourcePath': selectedPath, 'destPath': pdfDirPath},
@@ -350,12 +350,12 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text(
           'Permission Required',
-          style: SpeedyBoyTypography.title,
+          style: RunThruTypography.title,
         ),
         content: const Text(
-          'Speedy Boy needs file access permission to scan '
+          'RunThru needs file access permission to scan '
           'your PDF folders. Please enable it in Settings.',
-          style: SpeedyBoyTypography.body,
+          style: RunThruTypography.body,
         ),
         actions: [
           TextButton(
@@ -378,7 +378,7 @@ class SettingsScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       builder: (context) {
         final logs = AppLogger.entries;
         final text = logs.isEmpty ? '(no logs yet)' : logs.join('\n');
@@ -397,7 +397,7 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       const Text(
                         'Debug Logs',
-                        style: SpeedyBoyTypography.title,
+                        style: RunThruTypography.title,
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -432,7 +432,7 @@ class SettingsScreen extends ConsumerWidget {
                     padding: const EdgeInsets.all(12),
                     child: SelectableText(
                       text,
-                      style: SpeedyBoyTypography.caption.copyWith(
+                      style: RunThruTypography.caption.copyWith(
                         fontFamily: 'monospace',
                         fontSize: 10,
                       ),
@@ -455,28 +455,28 @@ class SettingsScreen extends ConsumerWidget {
     final hasPremium = config.hasPremium;
 
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       appBar: AppBar(
-        backgroundColor: SpeedyBoyTokens.shellBase,
+        backgroundColor: RunThruTokens.shellBase,
         elevation: 0,
-        title: const Text('Settings', style: SpeedyBoyTypography.title),
-        iconTheme: const IconThemeData(color: SpeedyBoyTokens.shellTextPrimary),
+        title: const Text('Settings', style: RunThruTypography.title),
+        iconTheme: const IconThemeData(color: RunThruTokens.shellTextPrimary),
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           // ── Reading Goal ──
           NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
+            surface: RunThruSurface.shell,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Reading Goal', style: SpeedyBoyTypography.title),
+                const Text('Reading Goal', style: RunThruTypography.title),
                 const SizedBox(height: 4),
                 Text(
                   'Choose a preset to adjust speed and room settings.',
-                  style: SpeedyBoyTypography.caption.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.caption.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -493,11 +493,11 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Reading Speed ──
           NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
+            surface: RunThruSurface.shell,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Reading Speed', style: SpeedyBoyTypography.title),
+                const Text('Reading Speed', style: RunThruTypography.title),
                 const SizedBox(height: 12),
                 WpmSlider(
                   value: config.defaultWpm,
@@ -511,7 +511,7 @@ class SettingsScreen extends ConsumerWidget {
                       padding: EdgeInsets.only(top: 4),
                       child: Text(
                         'Best for scanning familiar text',
-                        style: SpeedyBoyTypography.caption,
+                        style: RunThruTypography.caption,
                       ),
                     ),
                   ),
@@ -521,13 +521,13 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── PDF Folder ──
           NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
+            surface: RunThruSurface.shell,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _isIos ? 'PDF Library' : 'PDF Folder',
-                  style: SpeedyBoyTypography.title,
+                  style: RunThruTypography.title,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -539,10 +539,10 @@ class SettingsScreen extends ConsumerWidget {
                                   ? 'PDFs stored locally'
                                   : 'No PDFs added yet')
                             : (config.pdfFolderPath ?? 'No folder selected'),
-                        style: SpeedyBoyTypography.body.copyWith(
+                        style: RunThruTypography.body.copyWith(
                           color: config.pdfFolderPath != null
-                              ? SpeedyBoyTokens.shellTextPrimary
-                              : SpeedyBoyTokens.shellTextSecondary,
+                              ? RunThruTokens.shellTextPrimary
+                              : RunThruTokens.shellTextSecondary,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -551,14 +551,14 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: SpeedyBoyTokens.shellAccent,
-                        foregroundColor: SpeedyBoyTokens.shellBase,
+                        backgroundColor: RunThruTokens.shellAccent,
+                        foregroundColor: RunThruTokens.shellBase,
                       ),
                       onPressed: () => _pickFolder(context, notifier),
                       child: Text(
                         _isIos ? 'Import Folder' : 'Browse',
-                        style: SpeedyBoyTypography.body.copyWith(
-                          color: SpeedyBoyTokens.shellBase,
+                        style: RunThruTypography.body.copyWith(
+                          color: RunThruTokens.shellBase,
                         ),
                       ),
                     ),
@@ -571,16 +571,16 @@ class SettingsScreen extends ConsumerWidget {
           // ── 3D Mode (Premium only — ALL platforms) ──
           if (hasPremium)
             NeumorphicCard(
-              surface: SpeedyBoySurface.shell,
+              surface: RunThruSurface.shell,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('3D Room Mode', style: SpeedyBoyTypography.title),
+                  const Text('3D Room Mode', style: RunThruTypography.title),
                   const SizedBox(height: 4),
                   Text(
                     'Controls the 3D room depth and parallax effect.',
-                    style: SpeedyBoyTypography.caption.copyWith(
-                      color: SpeedyBoyTokens.shellTextSecondary,
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -595,22 +595,22 @@ class SettingsScreen extends ConsumerWidget {
           // ── Anchor Color (Premium only) ──
           if (hasPremium)
             NeumorphicCard(
-              surface: SpeedyBoySurface.shell,
+              surface: RunThruSurface.shell,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Anchor Letter Color',
-                    style: SpeedyBoyTypography.title,
+                    style: RunThruTypography.title,
                   ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
                     children: List.generate(
-                      SpeedyBoyTokens.anchorColors.length,
+                      RunThruTokens.anchorColors.length,
                       (i) {
-                        final color = SpeedyBoyTokens.anchorColors[i];
+                        final color = RunThruTokens.anchorColors[i];
                         final selected = config.anchorColorIndex == i;
                         return GestureDetector(
                           onTap: () => notifier.setAnchorColorIndex(i),
@@ -622,7 +622,7 @@ class SettingsScreen extends ConsumerWidget {
                               shape: BoxShape.circle,
                               border: selected
                                   ? Border.all(
-                                      color: SpeedyBoyTokens.shellTextPrimary,
+                                      color: RunThruTokens.shellTextPrimary,
                                       width: 3,
                                     )
                                   : null,
@@ -639,7 +639,7 @@ class SettingsScreen extends ConsumerWidget {
                             child: selected
                                 ? const Icon(
                                     Icons.check,
-                                    color: SpeedyBoyTokens.shellTextPrimary,
+                                    color: RunThruTokens.shellTextPrimary,
                                     size: 20,
                                   )
                                 : null,
@@ -650,9 +650,9 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    SpeedyBoyTokens.anchorColorNames[config.anchorColorIndex
-                        .clamp(0, SpeedyBoyTokens.anchorColorNames.length - 1)],
-                    style: SpeedyBoyTypography.caption,
+                    RunThruTokens.anchorColorNames[config.anchorColorIndex
+                        .clamp(0, RunThruTokens.anchorColorNames.length - 1)],
+                    style: RunThruTypography.caption,
                   ),
                   // P14 Grade C — live preview of anchor color on stage surface
                   const SizedBox(height: 12),
@@ -660,7 +660,7 @@ class SettingsScreen extends ConsumerWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: const BoxDecoration(
-                      color: SpeedyBoyTokens.stageBase,
+                      color: RunThruTokens.stageBase,
                       borderRadius: BorderRadius.all(Radius.circular(8)),
                     ),
                     child: Center(
@@ -669,25 +669,25 @@ class SettingsScreen extends ConsumerWidget {
                           children: [
                             TextSpan(
                               text: 'rea',
-                              style: SpeedyBoyTypography.readingWord(24),
+                              style: RunThruTypography.readingWord(24),
                             ),
                             TextSpan(
                               text: 'd',
-                              style: SpeedyBoyTypography.readingAnchor(
+                              style: RunThruTypography.readingAnchor(
                                 24,
                                 color:
-                                    SpeedyBoyTokens.anchorColors[config
+                                    RunThruTokens.anchorColors[config
                                         .anchorColorIndex
                                         .clamp(
                                           0,
-                                          SpeedyBoyTokens.anchorColors.length -
+                                          RunThruTokens.anchorColors.length -
                                               1,
                                         )],
                               ),
                             ),
                             TextSpan(
                               text: 'ing',
-                              style: SpeedyBoyTypography.readingWord(24),
+                              style: RunThruTypography.readingWord(24),
                             ),
                           ],
                         ),
@@ -698,14 +698,14 @@ class SettingsScreen extends ConsumerWidget {
                   Builder(
                     builder: (context) {
                       final anchorColor =
-                          SpeedyBoyTokens.anchorColors[config.anchorColorIndex
+                          RunThruTokens.anchorColors[config.anchorColorIndex
                               .clamp(
                                 0,
-                                SpeedyBoyTokens.anchorColors.length - 1,
+                                RunThruTokens.anchorColors.length - 1,
                               )];
                       final ratio = WcagContrast.contrastRatio(
                         anchorColor,
-                        SpeedyBoyTokens.stageBase,
+                        RunThruTokens.stageBase,
                       );
                       if (ratio >= 4.5) return const SizedBox.shrink();
                       final isDanger = ratio < 3.0;
@@ -717,10 +717,10 @@ class SettingsScreen extends ConsumerWidget {
                             isDanger
                                 ? 'This color is very hard to see — consider a darker option'
                                 : 'This color may be hard to see at speed',
-                            style: SpeedyBoyTypography.caption.copyWith(
+                            style: RunThruTypography.caption.copyWith(
                               color: isDanger
-                                  ? SpeedyBoyTokens.shellError
-                                  : SpeedyBoyTokens.shellProcessing,
+                                  ? RunThruTokens.shellError
+                                  : RunThruTokens.shellProcessing,
                             ),
                           ),
                         ),
@@ -734,15 +734,15 @@ class SettingsScreen extends ConsumerWidget {
           // ── Reading Font (Premium only) ──
           if (hasPremium)
             NeumorphicCard(
-              surface: SpeedyBoySurface.shell,
+              surface: RunThruSurface.shell,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Reading Font', style: SpeedyBoyTypography.title),
+                  const Text('Reading Font', style: RunThruTypography.title),
                   const SizedBox(height: 4),
                   const Text(
                     'Bundled fonts are guaranteed. System fonts depend on your device.',
-                    style: SpeedyBoyTypography.caption,
+                    style: RunThruTypography.caption,
                   ),
                   const SizedBox(height: 12),
                   _FontPicker(
@@ -756,34 +756,34 @@ class SettingsScreen extends ConsumerWidget {
           // ── Upgrade to Premium (free users only) ──
           if (!hasPremium)
             NeumorphicCard(
-              surface: SpeedyBoySurface.shell,
+              surface: RunThruSurface.shell,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Unlock 3D Reading',
-                    style: SpeedyBoyTypography.title,
+                    style: RunThruTypography.title,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Get the immersive 3D cube viewport, head-tracking '
                     'parallax, custom fonts, and reading range selection.',
-                    style: SpeedyBoyTypography.body.copyWith(
-                      color: SpeedyBoyTokens.shellTextSecondary,
+                    style: RunThruTypography.body.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
                     ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: SpeedyBoyTokens.shellAccent,
-                      foregroundColor: SpeedyBoyTokens.shellBase,
+                      backgroundColor: RunThruTokens.shellAccent,
+                      foregroundColor: RunThruTokens.shellBase,
                     ),
                     onPressed: () =>
                         ref.read(purchaseServiceProvider).purchasePremium(),
                     child: Text(
                       'Upgrade',
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellBase,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellBase,
                       ),
                     ),
                   ),
@@ -793,18 +793,18 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── App Info (inset) ──
           const NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
+            surface: RunThruSurface.shell,
             inset: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Speedy Boy', style: SpeedyBoyTypography.title),
+                Text('RunThru', style: RunThruTypography.title),
                 SizedBox(height: 4),
-                Text('Version 2.0.0', style: SpeedyBoyTypography.caption),
+                Text('Version 2.0.0', style: RunThruTypography.caption),
                 SizedBox(height: 4),
                 Text(
                   'Speed reading with 3D depth.',
-                  style: SpeedyBoyTypography.caption,
+                  style: RunThruTypography.caption,
                 ),
               ],
             ),
@@ -819,12 +819,12 @@ class SettingsScreen extends ConsumerWidget {
                 icon: const Icon(
                   Icons.bug_report,
                   size: 16,
-                  color: SpeedyBoyTokens.shellTextSecondary,
+                  color: RunThruTokens.shellTextSecondary,
                 ),
                 label: Text(
                   'View Debug Logs',
-                  style: SpeedyBoyTypography.caption.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.caption.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                 ),
               ),
@@ -844,7 +844,7 @@ class _FontPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const fonts = SpeedyBoyTypography.availableFonts;
+    const fonts = RunThruTypography.availableFonts;
     final bundled = fonts.where((f) => f.isBundled).toList();
     final system = fonts.where((f) => !f.isBundled).toList();
 
@@ -856,7 +856,7 @@ class _FontPicker extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'System Fonts',
-          style: SpeedyBoyTypography.caption.copyWith(
+          style: RunThruTypography.caption.copyWith(
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -880,13 +880,13 @@ class _FontPicker extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? SpeedyBoyTokens.shellAccent.withAlpha(30)
-              : SpeedyBoyTokens.shellBase,
+              ? RunThruTokens.shellAccent.withAlpha(30)
+              : RunThruTokens.shellBase,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
-                ? SpeedyBoyTokens.shellAccent
-                : SpeedyBoyTokens.shellTextSecondary.withAlpha(40),
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellTextSecondary.withAlpha(40),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -899,14 +899,14 @@ class _FontPicker extends StatelessWidget {
                   fontFamily: font.family,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: SpeedyBoyTokens.shellTextPrimary,
+                  color: RunThruTokens.shellTextPrimary,
                 ),
               ),
             ),
             if (isSelected)
               const Icon(
                 Icons.check_circle,
-                color: SpeedyBoyTokens.shellAccent,
+                color: RunThruTokens.shellAccent,
                 size: 20,
               ),
           ],
@@ -923,13 +923,13 @@ class _FontPicker extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected
-              ? SpeedyBoyTokens.shellAccent.withAlpha(30)
-              : SpeedyBoyTokens.shellBase,
+              ? RunThruTokens.shellAccent.withAlpha(30)
+              : RunThruTokens.shellBase,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected
-                ? SpeedyBoyTokens.shellAccent
-                : SpeedyBoyTokens.shellTextSecondary.withAlpha(40),
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellTextSecondary.withAlpha(40),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -940,8 +940,8 @@ class _FontPicker extends StatelessWidget {
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
             color: isSelected
-                ? SpeedyBoyTokens.shellAccent
-                : SpeedyBoyTokens.shellTextPrimary,
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellTextPrimary,
           ),
         ),
       ),
@@ -1075,27 +1075,27 @@ class _ParallaxIntensitySelectorState
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: isSelected
-                        ? SpeedyBoyDecorations.insetDecoration(
-                            SpeedyBoySurface.shell,
-                            size: SpeedyBoyShadowSize.small,
+                        ? RunThruDecorations.insetDecoration(
+                            RunThruSurface.shell,
+                            size: RunThruShadowSize.small,
                             borderRadius: 10,
                           )
-                        : SpeedyBoyDecorations.raisedDecoration(
-                            SpeedyBoySurface.shell,
-                            size: SpeedyBoyShadowSize.small,
+                        : RunThruDecorations.raisedDecoration(
+                            RunThruSurface.shell,
+                            size: RunThruShadowSize.small,
                             borderRadius: 10,
                           ),
                     alignment: Alignment.center,
                     child: ExcludeSemantics(
                       child: Text(
                         option.label,
-                        style: SpeedyBoyTypography.caption.copyWith(
+                        style: RunThruTypography.caption.copyWith(
                           fontWeight: isSelected
                               ? FontWeight.w700
                               : FontWeight.w400,
                           color: isSelected
-                              ? SpeedyBoyTokens.shellAccent
-                              : SpeedyBoyTokens.shellTextSecondary,
+                              ? RunThruTokens.shellAccent
+                              : RunThruTokens.shellTextSecondary,
                         ),
                       ),
                     ),
@@ -1244,14 +1244,14 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: isSelected
-                        ? SpeedyBoyDecorations.insetDecoration(
-                            SpeedyBoySurface.shell,
-                            size: SpeedyBoyShadowSize.small,
+                        ? RunThruDecorations.insetDecoration(
+                            RunThruSurface.shell,
+                            size: RunThruShadowSize.small,
                             borderRadius: 10,
                           )
-                        : SpeedyBoyDecorations.raisedDecoration(
-                            SpeedyBoySurface.shell,
-                            size: SpeedyBoyShadowSize.small,
+                        : RunThruDecorations.raisedDecoration(
+                            RunThruSurface.shell,
+                            size: RunThruShadowSize.small,
                             borderRadius: 10,
                           ),
                     alignment: Alignment.center,
@@ -1261,13 +1261,13 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
                         child: Text(
                           label,
                           maxLines: 1,
-                          style: SpeedyBoyTypography.caption.copyWith(
+                          style: RunThruTypography.caption.copyWith(
                             fontWeight: isSelected
                                 ? FontWeight.w700
                                 : FontWeight.w400,
                             color: isSelected
-                                ? SpeedyBoyTokens.shellAccent
-                                : SpeedyBoyTokens.shellTextSecondary,
+                                ? RunThruTokens.shellAccent
+                                : RunThruTokens.shellTextSecondary,
                           ),
                         ),
                       ),

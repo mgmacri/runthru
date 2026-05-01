@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/hint_controller.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/core/hint_controller.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 
 /// Fake [ConfigNotifier] that stores state in memory (no SharedPreferences).
 class FakeConfigNotifier extends AsyncNotifier<AppConfig>

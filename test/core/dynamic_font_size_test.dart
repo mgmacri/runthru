@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/dynamic_font_size.dart';
+import 'package:runthru/core/dynamic_font_size.dart';
 
 void main() {
   group('dynamicFontSize', () {

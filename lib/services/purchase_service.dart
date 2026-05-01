@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/store/config.dart';
+import 'package:runthru/store/config.dart';
 
 /// Placeholder purchase service for freemium paywall.
 ///

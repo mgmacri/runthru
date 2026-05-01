@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:pdfrx/pdfrx.dart';
-import 'package:speedy_boy/core/logger.dart';
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/core/logger.dart';
+import 'package:runthru/services/models.dart';
 
 /// Per-file extraction timeout.
 const Duration _extractionTimeout = Duration(seconds: 30);
@@ -59,8 +59,16 @@ class PageRangeResult {
 
 /// Extracts text from a PDF file page-by-page.
 /// Records [PageBoundary] markers for reading range support.
-/// pdfrx uses FFI — must run on the main isolate.
-Future<ExtractedDocument> pdfExtract(String filePath) async {
+///
+/// pdfrx uses FFI — must run on the main isolate. Classification logic
+/// runs separately in [Isolate.run()] where applicable.
+///
+/// For PDFs with no text layer (image-only), returns an empty
+/// [ExtractedDocument] instead of throwing, unless [throwOnEmpty] is true.
+Future<ExtractedDocument> pdfExtract(
+  String filePath, {
+  bool throwOnEmpty = true,
+}) async {
   final file = File(filePath);
   if (!file.existsSync()) {
     throw FileSystemException('File not found', filePath);
@@ -99,7 +107,7 @@ Future<ExtractedDocument> pdfExtract(String filePath) async {
       }
     }
 
-    if (allSentences.isEmpty) {
+    if (allSentences.isEmpty && throwOnEmpty) {
       throw const UnsupportedPdfError('Image-only PDF — no extractable text');
     }
 
@@ -111,6 +119,88 @@ Future<ExtractedDocument> pdfExtract(String filePath) async {
   } finally {
     await document.dispose();
   }
+}
+
+/// Extracts text from a PDF with progress reporting.
+///
+/// Returns a [Stream] that emits progress values from 0.0 to 1.0 during
+/// extraction. The final [ExtractedDocument] is returned via the
+/// [onComplete] callback. Use this for UI progress indicators.
+///
+/// pdfrx uses FFI — must run on the main isolate.
+Stream<double> pdfExtractWithProgress(
+  String filePath, {
+  required void Function(ExtractedDocument document) onComplete,
+  required void Function(Object error) onError,
+}) {
+  final controller = StreamController<double>();
+
+  () async {
+    final file = File(filePath);
+    if (!file.existsSync()) {
+      onError(FileSystemException('File not found', filePath));
+      await controller.close();
+      return;
+    }
+
+    PdfDocument? document;
+    try {
+      document = await PdfDocument.openFile(filePath);
+      final totalPages = document.pages.length;
+      final allSentences = <Sentence>[];
+      final pageBoundaries = <PageBoundary>[];
+      var globalWordIndex = 0;
+
+      for (var i = 0; i < totalPages; i++) {
+        final pageText = await document.pages[i].loadText();
+        final trimmed = pageText?.fullText.trim() ?? '';
+
+        final startSentenceIndex = allSentences.length;
+        final firstWords = trimmed.split(RegExp(r'\s+')).take(5).join(' ');
+        pageBoundaries.add(
+          PageBoundary(
+            pageNumber: i,
+            startSentenceIndex: startSentenceIndex,
+            startWordIndex: globalWordIndex,
+            firstWords: firstWords,
+          ),
+        );
+
+        if (trimmed.isNotEmpty) {
+          final pageSentences = _textToSentences(trimmed);
+          for (final s in pageSentences) {
+            globalWordIndex += s.words.length;
+          }
+          allSentences.addAll(pageSentences);
+        }
+
+        // Emit progress (0.0 to 1.0).
+        controller.add((i + 1) / totalPages);
+      }
+
+      if (allSentences.isEmpty) {
+        // Graceful: return empty document instead of crashing.
+        onComplete(ExtractedDocument(
+          sentences: const [],
+          pageBoundaries: pageBoundaries,
+          totalPages: totalPages,
+        ));
+      } else {
+        onComplete(ExtractedDocument(
+          sentences: allSentences,
+          pageBoundaries: pageBoundaries,
+          totalPages: totalPages,
+        ));
+      }
+    } on Exception catch (e) {
+      onError(e);
+    } finally {
+      await document?.dispose();
+      await controller.close();
+    }
+  }();
+
+  return controller.stream;
 }
 
 /// Extracts text from a specific page range of a PDF.
@@ -218,7 +308,10 @@ Future<int> _pdfPageCount(String filePath) async {
 }
 
 /// Runs PDF extraction with a timeout.
-/// pdfrx uses FFI — must run on the main isolate.
+///
+/// pdfrx uses FFI — must run on the main isolate. Despite the name
+/// (`InIsolate`), this runs on the main isolate due to FFI constraints.
+/// The name is kept for API compatibility.
 Future<ExtractedDocument> extractPdfInIsolate(String filePath) async {
   return pdfExtract(filePath).timeout(
     _extractionTimeout,
@@ -227,7 +320,9 @@ Future<ExtractedDocument> extractPdfInIsolate(String filePath) async {
 }
 
 /// Extracts a page range with a timeout.
-/// pdfrx uses FFI — must run on the main isolate.
+///
+/// pdfrx uses FFI — must run on the main isolate. [startPage] and
+/// [endPage] are 0-based inclusive indices.
 Future<PageRangeResult> extractPdfPagesInIsolate(
   String filePath,
   int startPage,
@@ -245,6 +340,7 @@ Future<PageRangeResult> extractPdfPagesInIsolate(
 }
 
 /// Returns total page count with a timeout.
+///
 /// pdfrx uses FFI — must run on the main isolate.
 Future<int> pdfPageCountInIsolate(String filePath) async {
   return _pdfPageCount(filePath).timeout(

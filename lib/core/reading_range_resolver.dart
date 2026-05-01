@@ -1,7 +1,7 @@
 import 'dart:developer' as dev;
 import 'dart:math' as math;
 
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/services/models.dart';
 
 /// Resolves a [ReadingRange] to global word indices using page boundaries,
 /// with word-text anchor validation.

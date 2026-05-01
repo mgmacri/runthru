@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/screens/settings_screen.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/screens/settings_screen.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 
 /// Fake [ConfigNotifier] for widget tests.
 ///

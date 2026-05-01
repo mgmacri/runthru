@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/core/logger.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/opds_service.dart';
+import 'package:runthru/core/logger.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/services/opds_service.dart';
 
 /// Discover screen — browse and download Project Gutenberg books.
 class DiscoverScreen extends ConsumerStatefulWidget {
@@ -89,7 +89,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     );
 
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       body: SafeArea(
         child: Column(
           children: [
@@ -101,7 +101,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                   Expanded(
                     child: Text(
                       'Discover Books',
-                      style: SpeedyBoyTypography.display,
+                      style: RunThruTypography.display,
                     ),
                   ),
                 ],
@@ -112,23 +112,23 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Container(
-                decoration: SpeedyBoyDecorations.insetDecoration(
-                  SpeedyBoySurface.shell,
-                  size: SpeedyBoyShadowSize.small,
+                decoration: RunThruDecorations.insetDecoration(
+                  RunThruSurface.shell,
+                  size: RunThruShadowSize.small,
                   borderRadius: 12,
                 ),
                 child: TextField(
                   controller: _searchController,
                   onChanged: _onSearchChanged,
-                  style: SpeedyBoyTypography.body,
+                  style: RunThruTypography.body,
                   decoration: InputDecoration(
                     hintText: 'Search public domain books…',
-                    hintStyle: SpeedyBoyTypography.body.copyWith(
-                      color: SpeedyBoyTokens.shellTextSecondary,
+                    hintStyle: RunThruTypography.body.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
                     ),
                     prefixIcon: const Icon(
                       Icons.search,
-                      color: SpeedyBoyTokens.shellTextSecondary,
+                      color: RunThruTokens.shellTextSecondary,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
@@ -149,10 +149,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 ),
                 child: Text(
                   _statusMessage!,
-                  style: SpeedyBoyTypography.caption.copyWith(
+                  style: RunThruTypography.caption.copyWith(
                     color: _statusIsError
-                        ? SpeedyBoyTokens.shellError
-                        : SpeedyBoyTokens.shellReady,
+                        ? RunThruTokens.shellError
+                        : RunThruTokens.shellReady,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -166,8 +166,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 loading: () => Center(
                   child: Text(
                     'Searching…',
-                    style: SpeedyBoyTypography.body.copyWith(
-                      color: SpeedyBoyTokens.shellTextSecondary,
+                    style: RunThruTypography.body.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
                     ),
                   ),
                 ),
@@ -189,8 +189,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             _query != null
                 ? 'No results for "$_query".'
                 : 'Browse Project Gutenberg\'s catalog.\nType a title or author above.',
-            style: SpeedyBoyTypography.body.copyWith(
-              color: SpeedyBoyTokens.shellTextSecondary,
+            style: RunThruTypography.body.copyWith(
+              color: RunThruTokens.shellTextSecondary,
             ),
             textAlign: TextAlign.center,
           ),
@@ -230,22 +230,22 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                     onPressed: () => setState(() => _page--),
                     child: Text(
                       '← Previous',
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellAccent,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellAccent,
                       ),
                     ),
                   ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Page $_page', style: SpeedyBoyTypography.body),
+                  child: Text('Page $_page', style: RunThruTypography.body),
                 ),
                 if (catalog.nextUrl != null)
                   TextButton(
                     onPressed: () => setState(() => _page++),
                     child: Text(
                       'Next →',
-                      style: SpeedyBoyTypography.body.copyWith(
-                        color: SpeedyBoyTokens.shellAccent,
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellAccent,
                       ),
                     ),
                   ),
@@ -266,19 +266,19 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             const Icon(
               Icons.cloud_off,
               size: 48,
-              color: SpeedyBoyTokens.shellTextSecondary,
+              color: RunThruTokens.shellTextSecondary,
             ),
             const SizedBox(height: 16),
             Text(
               'Could not load catalog',
-              style: SpeedyBoyTypography.title.copyWith(
-                color: SpeedyBoyTokens.shellError,
+              style: RunThruTypography.title.copyWith(
+                color: RunThruTokens.shellError,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               '$error',
-              style: SpeedyBoyTypography.caption,
+              style: RunThruTypography.caption,
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
@@ -286,8 +286,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             const SizedBox(height: 24),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: SpeedyBoyTokens.shellAccent,
-                foregroundColor: SpeedyBoyTokens.shellBase,
+                backgroundColor: RunThruTokens.shellAccent,
+                foregroundColor: RunThruTokens.shellBase,
               ),
               onPressed: () {
                 // Force re-fetch by invalidating the provider.
@@ -297,8 +297,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               },
               child: Text(
                 'Retry',
-                style: SpeedyBoyTypography.body.copyWith(
-                  color: SpeedyBoyTokens.shellBase,
+                style: RunThruTypography.body.copyWith(
+                  color: RunThruTokens.shellBase,
                 ),
               ),
             ),
@@ -325,9 +325,9 @@ class _BookCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: SpeedyBoyDecorations.raisedDecoration(
-        SpeedyBoySurface.shell,
-        size: SpeedyBoyShadowSize.standard,
+      decoration: RunThruDecorations.raisedDecoration(
+        RunThruSurface.shell,
+        size: RunThruShadowSize.standard,
         borderRadius: 16,
       ),
       child: ClipRRect(
@@ -353,9 +353,9 @@ class _BookCard extends StatelessWidget {
                   children: [
                     Text(
                       entry.title,
-                      style: SpeedyBoyTypography.caption.copyWith(
+                      style: RunThruTypography.caption.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: SpeedyBoyTokens.shellTextPrimary,
+                        color: RunThruTokens.shellTextPrimary,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -364,7 +364,7 @@ class _BookCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         entry.author!,
-                        style: SpeedyBoyTypography.caption,
+                        style: RunThruTypography.caption,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -376,8 +376,8 @@ class _BookCard extends StatelessWidget {
                       height: 30,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: SpeedyBoyTokens.shellAccent,
-                          foregroundColor: SpeedyBoyTokens.shellBase,
+                          backgroundColor: RunThruTokens.shellAccent,
+                          foregroundColor: RunThruTokens.shellBase,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -386,8 +386,8 @@ class _BookCard extends StatelessWidget {
                         onPressed: isDownloading ? null : onDownload,
                         child: Text(
                           isDownloading ? 'Downloading…' : 'Download',
-                          style: SpeedyBoyTypography.caption.copyWith(
-                            color: SpeedyBoyTokens.shellBase,
+                          style: RunThruTypography.caption.copyWith(
+                            color: RunThruTokens.shellBase,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -463,12 +463,12 @@ class _CoverPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: SpeedyBoyTokens.shellDarkShadow,
+      color: RunThruTokens.shellDarkShadow,
       child: const Center(
         child: Icon(
           Icons.menu_book,
           size: 40,
-          color: SpeedyBoyTokens.shellTextSecondary,
+          color: RunThruTokens.shellTextSecondary,
         ),
       ),
     );

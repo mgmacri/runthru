@@ -1,7 +1,7 @@
 import 'dart:isolate';
 
 import 'package:flutter/services.dart';
-import 'package:speedy_boy/core/clipboard_document.dart';
+import 'package:runthru/core/clipboard_document.dart';
 
 /// Service to read text from the system clipboard (Rule 28).
 ///

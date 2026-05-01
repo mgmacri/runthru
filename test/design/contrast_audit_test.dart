@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/design/tokens.dart';
+import 'package:runthru/design/tokens.dart';
 
 void main() {
   /// Compute WCAG relative luminance of a Color.
@@ -24,40 +24,40 @@ void main() {
   group('WCAG Contrast Audit', () {
     test('stageText / stageBase ≥ 7:1 (AAA)', () {
       final ratio = contrastRatio(
-        SpeedyBoyTokens.stageText,
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.stageText,
+        RunThruTokens.stageBase,
       );
       expect(ratio, greaterThanOrEqualTo(7.0));
     });
 
     test('stageAnchor / stageBase ≥ 3:1 (AA Large Text)', () {
       final ratio = contrastRatio(
-        SpeedyBoyTokens.stageAnchor,
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.stageAnchor,
+        RunThruTokens.stageBase,
       );
       expect(ratio, greaterThanOrEqualTo(3.0));
     });
 
     test('shellTextPrimary / shellBase ≥ 7:1 (AAA)', () {
       final ratio = contrastRatio(
-        SpeedyBoyTokens.shellTextPrimary,
-        SpeedyBoyTokens.shellBase,
+        RunThruTokens.shellTextPrimary,
+        RunThruTokens.shellBase,
       );
       expect(ratio, greaterThanOrEqualTo(7.0));
     });
 
     test('shellTextSecondary / shellBase ≥ 4.5:1 (AA)', () {
       final ratio = contrastRatio(
-        SpeedyBoyTokens.shellTextSecondary,
-        SpeedyBoyTokens.shellBase,
+        RunThruTokens.shellTextSecondary,
+        RunThruTokens.shellBase,
       );
       expect(ratio, greaterThanOrEqualTo(4.5));
     });
 
     test('shellAccent / shellBase ≥ 3:1 (AA Large Text)', () {
       final ratio = contrastRatio(
-        SpeedyBoyTokens.shellAccent,
-        SpeedyBoyTokens.shellBase,
+        RunThruTokens.shellAccent,
+        RunThruTokens.shellBase,
       );
       expect(ratio, greaterThanOrEqualTo(3.0));
     });

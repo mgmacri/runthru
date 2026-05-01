@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/core/orp.dart';
-import 'package:speedy_boy/core/wcag_contrast.dart';
-import 'package:speedy_boy/design/tokens.dart';
-import 'package:speedy_boy/design/typography.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/three_d/glyph_measurer.dart';
-import 'package:speedy_boy/three_d/text_painter_pool.dart';
+import 'package:runthru/core/orp.dart';
+import 'package:runthru/core/wcag_contrast.dart';
+import 'package:runthru/design/tokens.dart';
+import 'package:runthru/design/typography.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/glyph_measurer.dart';
+import 'package:runthru/three_d/text_painter_pool.dart';
 
 /// CustomPainter for word rendering with ORP-anchored centering.
 /// The anchor letter is always pinned to the horizontal center of the canvas.
@@ -68,11 +68,11 @@ class WordPainter extends CustomPainter {
 
     // ── Draw each glyph using pooled painters (round-robin) ──
     // P14 Grade C — apply shadow behind anchor when contrast < 4.5:1
-    final effectiveAnchorColor = anchorColor ?? SpeedyBoyTokens.stageAnchor;
+    final effectiveAnchorColor = anchorColor ?? RunThruTokens.stageAnchor;
     final needsAnchorShadow =
         WcagContrast.contrastRatio(
           effectiveAnchorColor,
-          SpeedyBoyTokens.stageBase,
+          RunThruTokens.stageBase,
         ) <
         4.5;
 
@@ -84,9 +84,9 @@ class WordPainter extends CustomPainter {
       if (isAnchor &&
           needsAnchorShadow &&
           orpCondition != OrpCondition.orpColorOnly) {
-        final shadowStyle = SpeedyBoyTypography.readingAnchor(
+        final shadowStyle = RunThruTypography.readingAnchor(
           fontSize,
-          color: SpeedyBoyTokens.stageText.withAlpha(77),
+          color: RunThruTokens.stageText.withAlpha(77),
           fontFamily: fontFamily,
         );
         final shadowPoolIndex = i % TextPainterPool.maxSize;
@@ -104,27 +104,27 @@ class WordPainter extends CustomPainter {
       // P18 Grade B — ORP condition determines anchor styling
       final TextStyle style;
       if (!isAnchor) {
-        style = SpeedyBoyTypography.readingWord(
+        style = RunThruTypography.readingWord(
           fontSize,
           fontFamily: fontFamily,
         );
       } else {
         switch (orpCondition) {
           case OrpCondition.orpBoldColor:
-            style = SpeedyBoyTypography.readingAnchor(
+            style = RunThruTypography.readingAnchor(
               fontSize,
               color: anchorColor,
               fontFamily: fontFamily,
             );
           case OrpCondition.orpColorOnly:
             // Regular weight + anchor color
-            style = SpeedyBoyTypography.readingWord(
+            style = RunThruTypography.readingWord(
               fontSize,
-              color: anchorColor ?? SpeedyBoyTokens.stageAnchor,
+              color: anchorColor ?? RunThruTokens.stageAnchor,
               fontFamily: fontFamily,
             );
           case OrpCondition.centerAligned:
-            style = SpeedyBoyTypography.readingAnchor(
+            style = RunThruTypography.readingAnchor(
               fontSize,
               color: anchorColor,
               fontFamily: fontFamily,

@@ -3,8 +3,8 @@ import 'dart:developer' as dev;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 
 /// Tracks and persists reading position for a given PDF file.
 class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {

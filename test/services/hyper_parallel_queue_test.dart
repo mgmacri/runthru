@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/services/device_capability.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/pdf_extractor.dart';
+import 'package:runthru/services/device_capability.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/pdf_extractor.dart';
 
 void main() {
   group('DeviceCapability — adaptive worker pool', () {

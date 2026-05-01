@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:speedy_boy/core/reading_goal_presets.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/design/design.dart';
 
 /// Displays the 3 reading goal preset cards.
 ///
@@ -75,11 +75,11 @@ class _ReadingGoalPresetsState extends State<ReadingGoalPresets> {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
-                  decoration: SpeedyBoyDecorations.raisedDecoration(
-                    SpeedyBoySurface.shell,
+                  decoration: RunThruDecorations.raisedDecoration(
+                    RunThruSurface.shell,
                     size: isFocused
-                        ? SpeedyBoyShadowSize.large
-                        : SpeedyBoyShadowSize.standard,
+                        ? RunThruShadowSize.large
+                        : RunThruShadowSize.standard,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,16 +90,16 @@ class _ReadingGoalPresetsState extends State<ReadingGoalPresets> {
                           ExcludeSemantics(
                             child: Text(
                               config.name,
-                              style: SpeedyBoyTypography.title.copyWith(
-                                color: SpeedyBoyTokens.shellTextPrimary,
+                              style: RunThruTypography.title.copyWith(
+                                color: RunThruTokens.shellTextPrimary,
                               ),
                             ),
                           ),
                           ExcludeSemantics(
                             child: Text(
                               '${config.wpm} WPM',
-                              style: SpeedyBoyTypography.caption.copyWith(
-                                color: SpeedyBoyTokens.shellAccent,
+                              style: RunThruTypography.caption.copyWith(
+                                color: RunThruTokens.shellAccent,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -110,8 +110,8 @@ class _ReadingGoalPresetsState extends State<ReadingGoalPresets> {
                       ExcludeSemantics(
                         child: Text(
                           config.description,
-                          style: SpeedyBoyTypography.body.copyWith(
-                            color: SpeedyBoyTokens.shellTextSecondary,
+                          style: RunThruTypography.body.copyWith(
+                            color: RunThruTokens.shellTextSecondary,
                           ),
                         ),
                       ),

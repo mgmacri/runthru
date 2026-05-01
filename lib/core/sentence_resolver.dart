@@ -1,5 +1,5 @@
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/store/models.dart';
 
 /// Returns the index of the first word of the sentence
 /// containing [bookmark.wordIndex].

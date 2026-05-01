@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-/// Single source of truth for all Speedy Boy colors.
+/// Single source of truth for all RunThru colors.
 /// This is the ONLY file that may contain raw Color(0xFF...) constructors.
 ///
 /// RULE: shell* tokens are for the library/settings UI.
 ///       stage* tokens are for the reading viewport interior.
 ///       Never cross-reference. See copilot-instructions.md rule 7.
 ///
-/// Palette sourced from the Speedy Boy Design-Colors spec.
-class SpeedyBoyTokens extends ThemeExtension<SpeedyBoyTokens> {
-  const SpeedyBoyTokens._();
+/// Palette sourced from the RunThru Design-Colors spec.
+class RunThruTokens extends ThemeExtension<RunThruTokens> {
+  const RunThruTokens._();
 
   // ── Reading Stage (neumorphic raised surface) ──
   // stageBase = Antique White (warm light card surface)
@@ -146,14 +146,14 @@ class SpeedyBoyTokens extends ThemeExtension<SpeedyBoyTokens> {
     'High Risk Red',
   ];
 
-  static const SpeedyBoyTokens instance = SpeedyBoyTokens._();
+  static const RunThruTokens instance = RunThruTokens._();
 
   @override
-  SpeedyBoyTokens copyWith() => this;
+  RunThruTokens copyWith() => this;
 
   @override
-  SpeedyBoyTokens lerp(
-    covariant ThemeExtension<SpeedyBoyTokens>? other,
+  RunThruTokens lerp(
+    covariant ThemeExtension<RunThruTokens>? other,
     double t,
   ) =>
       this;

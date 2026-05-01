@@ -18,7 +18,7 @@ import 'package:flutter/services.dart';
 class NotificationService {
   NotificationService._();
 
-  static const _channel = MethodChannel('com.speedyboy/notifications');
+  static const _channel = MethodChannel('com.runthru/notifications');
   static const String _tag = 'notification_service';
 
   /// Show or update a persistent progress notification.

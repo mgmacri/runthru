@@ -1,5 +1,5 @@
-import 'package:speedy_boy/three_d/glyph_measurer.dart';
-import 'package:speedy_boy/three_d/off_axis_projection.dart';
+import 'package:runthru/three_d/glyph_measurer.dart';
+import 'package:runthru/three_d/off_axis_projection.dart';
 
 /// Computes font size so the longest reasonable word (~12 chars) fills
 /// approximately 80% of the back wall's visible width at the current

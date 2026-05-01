@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/orp.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/three_d/text_painter_pool.dart';
-import 'package:speedy_boy/three_d/word_painter.dart';
+import 'package:runthru/core/orp.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/text_painter_pool.dart';
+import 'package:runthru/three_d/word_painter.dart';
 
 void main() {
   group('OrpCondition in WordPainter', () {

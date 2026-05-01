@@ -5,9 +5,9 @@ import 'dart:isolate';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/core/logger.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/store/config.dart';
+import 'package:runthru/core/logger.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/store/config.dart';
 
 /// Scans one or more folders recursively for .pdf files.
 /// Supports multi-directory concurrent scanning with streaming results.

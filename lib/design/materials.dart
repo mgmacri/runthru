@@ -1,6 +1,6 @@
 /// 3D material constants consumed by CustomPainter shaders.
-class SpeedyBoyMaterials {
-  SpeedyBoyMaterials._();
+class RunThruMaterials {
+  RunThruMaterials._();
 
   /// PBR-approximation material for marble box interior walls.
   static const MaterialParams stageWall = MaterialParams(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
-import 'package:speedy_boy/widgets/context_reveal_overlay.dart';
+import 'package:runthru/core/context_reveal_state.dart';
+import 'package:runthru/widgets/context_reveal_overlay.dart';
 
 void main() {
   group('ContextRevealOverlay', () {

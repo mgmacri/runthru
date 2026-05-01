@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speedy_boy/store/analytics_models.dart';
+import 'package:runthru/store/analytics_models.dart';
 
 /// Service for persisting and querying reading analytics.
 ///

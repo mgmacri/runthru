@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/core/clipboard_document.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/navigation/cube_transition.dart';
-import 'package:speedy_boy/navigation/wall_fold_transition.dart';
-import 'package:speedy_boy/screens/home_shell.dart';
-import 'package:speedy_boy/screens/parallax_reading_screen.dart';
-import 'package:speedy_boy/screens/range_picker_screen.dart';
-import 'package:speedy_boy/screens/reading_screen.dart';
-import 'package:speedy_boy/services/purchase_service.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/core/clipboard_document.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/navigation/cube_transition.dart';
+import 'package:runthru/navigation/wall_fold_transition.dart';
+import 'package:runthru/screens/home_shell.dart';
+import 'package:runthru/screens/parallax_reading_screen.dart';
+import 'package:runthru/screens/range_picker_screen.dart';
+import 'package:runthru/screens/reading_screen.dart';
+import 'package:runthru/services/purchase_service.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -117,7 +117,7 @@ class _RangePickerUpsellScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       body: SafeArea(
         child: Center(
           child: Column(
@@ -126,18 +126,18 @@ class _RangePickerUpsellScreen extends ConsumerWidget {
               const Icon(
                 Icons.auto_stories,
                 size: 48,
-                color: SpeedyBoyTokens.shellTextSecondary,
+                color: RunThruTokens.shellTextSecondary,
               ),
               const SizedBox(height: 16),
-              const Text('Reading Ranges', style: SpeedyBoyTypography.title),
+              const Text('Reading Ranges', style: RunThruTypography.title),
               const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
                   'Select exactly which pages to read — perfect for '
                   'assigned chapters or focused review. Available with Premium.',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -145,15 +145,15 @@ class _RangePickerUpsellScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: SpeedyBoyTokens.shellAccent,
-                  foregroundColor: SpeedyBoyTokens.shellBase,
+                  backgroundColor: RunThruTokens.shellAccent,
+                  foregroundColor: RunThruTokens.shellBase,
                 ),
                 onPressed: () =>
                     ref.read(purchaseServiceProvider).purchasePremium(),
                 child: Text(
                   'Upgrade',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellBase,
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellBase,
                   ),
                 ),
               ),
@@ -162,8 +162,8 @@ class _RangePickerUpsellScreen extends ConsumerWidget {
                 onPressed: () => context.pop(),
                 child: Text(
                   'Back to Library',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                 ),
               ),

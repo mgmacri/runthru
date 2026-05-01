@@ -1,4 +1,4 @@
-package com.speedyboy.speedy_boy
+package com.runthru.app
 
 import android.app.Activity
 import android.content.Intent
@@ -12,17 +12,26 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val CHANNEL = "com.speedyboy/android_file_access"
-        private const val TAG = "SpeedyBoyAndroid"
+        private const val CHANNEL = "com.runthru/android_file_access"
+        private const val SHARE_CHANNEL = "com.runthru/share_intent"
+        private const val TAG = "RunThruAndroid"
         private const val REQUEST_PICK_DIRECTORY = 9001
     }
 
     private var pendingResult: MethodChannel.Result? = null
     private var pendingDestPath: String? = null
+    private var shareChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Share intent channel — forwards incoming share intents to Dart.
+        shareChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SHARE_CHANNEL
+        )
+
+        // Existing file access channel.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -43,6 +52,102 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // Handle cold-start share intent.
+        handleShareIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        if (intent == null) return
+
+        when (intent.action) {
+            Intent.ACTION_SEND -> handleActionSend(intent)
+            Intent.ACTION_VIEW -> handleActionView(intent)
+        }
+    }
+
+    private fun handleActionSend(intent: Intent) {
+        val mimeType = intent.type ?: return
+
+        when {
+            mimeType.startsWith("text/") -> {
+                val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+                val type = if (mimeType == "text/html") "htmlText" else "text"
+                shareChannel?.invokeMethod("onSharedContent", mapOf(
+                    "type" to type,
+                    "data" to text,
+                    "mimeType" to mimeType
+                ))
+            }
+            mimeType == "application/pdf" || mimeType == "application/epub+zip" -> {
+                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return
+                copySharedFileAndForward(uri, mimeType)
+            }
+        }
+    }
+
+    private fun handleActionView(intent: Intent) {
+        val uri = intent.data ?: return
+        val url = uri.toString()
+        shareChannel?.invokeMethod("onSharedContent", mapOf(
+            "type" to "url",
+            "data" to url
+        ))
+    }
+
+    /**
+     * Copies a shared file (PDF/EPUB) to app-private storage, then forwards
+     * the private path to Dart. This ensures we don't hold URI permissions
+     * indefinitely (security best practice).
+     */
+    private fun copySharedFileAndForward(uri: Uri, mimeType: String) {
+        Thread {
+            try {
+                val inputStream = contentResolver.openInputStream(uri) ?: return@Thread
+
+                val type = if (mimeType == "application/pdf") "pdfFile" else "epubFile"
+                val ext = if (mimeType == "application/pdf") "pdf" else "epub"
+                val fileName = getFileNameFromUri(uri) ?: "shared_${System.currentTimeMillis()}.$ext"
+                val destDir = File(filesDir, "shared_imports")
+                if (!destDir.exists()) destDir.mkdirs()
+                val destFile = File(destDir, fileName)
+
+                inputStream.use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                Log.d(TAG, "Copied shared file to: ${destFile.absolutePath}")
+
+                runOnUiThread {
+                    shareChannel?.invokeMethod("onSharedContent", mapOf(
+                        "type" to type,
+                        "data" to destFile.absolutePath,
+                        "title" to fileName,
+                        "mimeType" to mimeType
+                    ))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to copy shared file: ${e.message}", e)
+            }
+        }.start()
+    }
+
+    private fun getFileNameFromUri(uri: Uri): String? {
+        var name: String? = null
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                name = cursor.getString(nameIndex)
+            }
+        }
+        return name
     }
 
     private fun launchDirectoryPicker() {

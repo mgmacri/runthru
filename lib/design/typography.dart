@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/tokens.dart';
+import 'package:runthru/design/tokens.dart';
 
 /// Typography system — all TextStyles sourced from here.
 /// Bricolage Grotesque for UI shell. Reading stage font is user-selectable.
-class SpeedyBoyTypography {
-  SpeedyBoyTypography._();
+class RunThruTypography {
+  RunThruTypography._();
 
   /// Default UI font.
   static const String _uiFamily = 'BricolageGrotesque';
@@ -16,7 +16,7 @@ class SpeedyBoyTypography {
     fontSize: 32,
     fontWeight: FontWeight.w600,
     height: 1.2,
-    color: SpeedyBoyTokens.shellTextPrimary,
+    color: RunThruTokens.shellTextPrimary,
   );
 
   static const TextStyle title = TextStyle(
@@ -24,7 +24,7 @@ class SpeedyBoyTypography {
     fontSize: 20,
     fontWeight: FontWeight.w500,
     height: 1.3,
-    color: SpeedyBoyTokens.shellTextPrimary,
+    color: RunThruTokens.shellTextPrimary,
   );
 
   static const TextStyle body = TextStyle(
@@ -32,7 +32,7 @@ class SpeedyBoyTypography {
     fontSize: 16,
     fontWeight: FontWeight.w400,
     height: 1.5,
-    color: SpeedyBoyTokens.shellTextPrimary,
+    color: RunThruTokens.shellTextPrimary,
   );
 
   static const TextStyle caption = TextStyle(
@@ -40,7 +40,7 @@ class SpeedyBoyTypography {
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.4,
-    color: SpeedyBoyTokens.shellTextSecondary,
+    color: RunThruTokens.shellTextSecondary,
   );
 
   static const TextStyle badge = TextStyle(
@@ -48,7 +48,7 @@ class SpeedyBoyTypography {
     fontSize: 24,
     fontWeight: FontWeight.w600,
     height: 1.0,
-    color: SpeedyBoyTokens.shellTextPrimary,
+    color: RunThruTokens.shellTextPrimary,
   );
 
   // ── Reading Stage (user-selectable font) ──
@@ -63,7 +63,7 @@ class SpeedyBoyTypography {
         fontSize: fontSize,
         fontWeight: FontWeight.w400,
         height: 1.0,
-        color: color ?? SpeedyBoyTokens.stageText,
+        color: color ?? RunThruTokens.stageText,
       );
 
   static TextStyle readingAnchor(
@@ -76,7 +76,7 @@ class SpeedyBoyTypography {
         fontSize: fontSize,
         fontWeight: FontWeight.w700,
         height: 1.0,
-        color: color ?? SpeedyBoyTokens.stageAnchor,
+        color: color ?? RunThruTokens.stageAnchor,
       );
 
   // ── Stage badge (WPM display on pause) ──
@@ -86,7 +86,7 @@ class SpeedyBoyTypography {
     fontSize: 14,
     fontWeight: FontWeight.w500,
     height: 1.0,
-    color: SpeedyBoyTokens.stageWpmBadge,
+    color: RunThruTokens.stageWpmBadge,
   );
 
   /// All available reading font choices. Bundled fonts first, then system fonts.

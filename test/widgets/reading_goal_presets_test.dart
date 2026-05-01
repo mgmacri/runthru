@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/reading_goal_presets.dart';
-import 'package:speedy_boy/screens/settings_screen.dart';
-import 'package:speedy_boy/store/config.dart';
-import 'package:speedy_boy/store/models.dart';
-import 'package:speedy_boy/widgets/reading_goal_presets.dart';
+import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/screens/settings_screen.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/reading_goal_presets.dart';
 
 /// Fake [ConfigNotifier] that stores state in memory.
 class FakeConfigNotifier extends AsyncNotifier<AppConfig>

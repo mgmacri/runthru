@@ -1,8 +1,8 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/context_reveal_state.dart';
+import 'package:runthru/design/design.dart';
 
 /// Full-screen overlay for ContextReveal comprehension recovery.
 ///
@@ -24,7 +24,7 @@ class ContextRevealOverlay extends StatefulWidget {
     this.fontFamily = 'BricolageGrotesque',
     this.isJiggling = false,
     this.isSweepPaused = false,
-    this.backgroundColor = SpeedyBoyTokens.roomBackground,
+    this.backgroundColor = RunThruTokens.roomBackground,
     this.backgroundOpacity = 1.0,
     this.onExitComplete,
     this.onJiggleComplete,
@@ -131,7 +131,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
       return;
     }
     // P17 Grade C — enter: 200ms easeOut
-    _controller.duration = SpeedyBoyTiming.contextRevealEnter;
+    _controller.duration = RunThruTiming.contextRevealEnter;
     _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.forward(from: 0.0);
   }
@@ -146,7 +146,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
       return;
     }
     // P17 Grade C — exit: 150ms easeOut
-    _controller.duration = SpeedyBoyTiming.contextRevealExit;
+    _controller.duration = RunThruTiming.contextRevealExit;
     _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.reverse(from: 1.0).then((_) {
       widget.onExitComplete?.call();
@@ -158,7 +158,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
   /// Full motion: scale 1.0 → 1.2 (100ms ease-out), then spring back to 1.0
   /// (~200ms damped spring). Total ~300ms.
   /// Reduced motion (Rule 5): opacity flash 1.0 → 0.7 → 1.0 over 150ms.
-  // P1 Grade C — elastic jiggle uses SpeedyBoyTiming tokens
+  // P1 Grade C — elastic jiggle uses RunThruTiming tokens
   void _animateJiggle() {
     final reduced = isReducedMotion(context);
     if (reduced) {
@@ -168,14 +168,14 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
 
     // Phase 1: Scale up to max
     _jiggleController.duration = const Duration(
-      milliseconds: SpeedyBoyTiming.jiggleScaleUpMs,
+      milliseconds: RunThruTiming.jiggleScaleUpMs,
     );
     _jiggleController.addListener(_onJiggleUpdate);
 
     _jiggleController.forward(from: 0.0).then((_) {
       if (!mounted) return;
       // Phase 2: Spring back
-      final simulation = SpeedyBoyAnimations.jiggleSimulation(
+      final simulation = RunThruAnimations.jiggleSimulation(
         from: 1.0,
         to: 0.0,
       );
@@ -189,7 +189,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
   }
 
   void _onJiggleUpdate() {
-    const maxScale = SpeedyBoyTiming.jiggleMaxScale;
+    const maxScale = RunThruTiming.jiggleMaxScale;
     // Map controller value (0→1→0) to scale (1.0→maxScale→1.0)
     final t = _jiggleController.value;
     setState(() => _jiggleScale = 1.0 + (maxScale - 1.0) * t);
@@ -332,7 +332,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
     double fontSize,
     double availableWidth,
   ) {
-    final style = SpeedyBoyTypography.readingAnchor(
+    final style = RunThruTypography.readingAnchor(
       fontSize,
       fontFamily: widget.fontFamily,
     );
@@ -373,7 +373,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
     // Pre-measure every word at bold weight so each child has a fixed
     // intrinsic width. This prevents line-break jitter when the sweep
     // highlight toggles a boundary word between normal and bold.
-    final boldStyle = SpeedyBoyTypography.readingAnchor(
+    final boldStyle = RunThruTypography.readingAnchor(
       adaptedSize,
       fontFamily: widget.fontFamily,
     );
@@ -423,7 +423,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
   /// on Android when there's no Material ancestor.
   Widget _wrapInTextDefaults(double fontSize, Widget child) {
     return DefaultTextStyle(
-      style: SpeedyBoyTypography.readingWord(
+      style: RunThruTypography.readingWord(
         fontSize,
         fontFamily: widget.fontFamily,
       ),
@@ -447,16 +447,16 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
     }
 
     final style = isFocus
-        ? SpeedyBoyTypography.readingAnchor(
+        ? RunThruTypography.readingAnchor(
             fontSize,
-            color: SpeedyBoyTokens.stageAnchor.withAlpha(
+            color: RunThruTokens.stageAnchor.withAlpha(
               (opacity * 255).round(),
             ),
             fontFamily: widget.fontFamily,
           )
-        : SpeedyBoyTypography.readingWord(
+        : RunThruTypography.readingWord(
             fontSize,
-            color: SpeedyBoyTokens.stageText.withAlpha((opacity * 255).round()),
+            color: RunThruTokens.stageText.withAlpha((opacity * 255).round()),
             fontFamily: widget.fontFamily,
           );
 
@@ -481,7 +481,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
           width: barWidth,
           height: barHeight,
           decoration: BoxDecoration(
-            color: SpeedyBoyTokens.stageText,
+            color: RunThruTokens.stageText,
             borderRadius: BorderRadius.circular(barWidth * 0.4),
           ),
         ),
@@ -490,7 +490,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
           width: barWidth,
           height: barHeight,
           decoration: BoxDecoration(
-            color: SpeedyBoyTokens.stageText,
+            color: RunThruTokens.stageText,
             borderRadius: BorderRadius.circular(barWidth * 0.4),
           ),
         ),

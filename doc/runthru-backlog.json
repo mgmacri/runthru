@@ -1,0 +1,3036 @@
+{
+  "$schema": "https://runthru.app/schemas/backlog.v1.json",
+  "project": "RunThru",
+  "generated": "2026-04-30",
+  "generator": "agile-backlog-architect",
+  "existing_capabilities": [
+    "ORP Pacing Engine (competitive core — do not rebuild)",
+    "3D Neumorphic Cube Viewport",
+    "ContextReveal (2-state sentence recovery)",
+    "Gesture System v4 (calibrated swipes, WPM dial, hints)",
+    "Text/Clipboard Import",
+    "PDF Extraction (pdfrx + pdfium, beta)",
+    "EPUB Parsing (dart_epub_viewer, beta)",
+    "Basic App Scaffold (library, reading, parallax_reading, settings, analytics screens)"
+  ],
+  "skill_gaps": [
+    {
+      "skill": "Atlassian Forge development",
+      "needed_for": "Release 2 — Confluence Marketplace App",
+      "status": "not_available",
+      "action": "Acquire before Release 2 planning begins (Week 18)"
+    }
+  ],
+  "assumptions": [
+    "Isar is the persistence layer for new features; existing SharedPreferences config stays",
+    "Desktop/web targets are stretch goals, not blockers for any release",
+    "pdfrx FFI constraint limits PDF page rendering to main isolate; text classification can use Isolate.run()",
+    "Solo developer capacity: 20 hours/week, max 3 concurrent agents",
+    "Test baseline: 264 pass, 20 skip, 4 pre-existing failures — do not introduce new failures",
+    "Analysis baseline: dart analyze lib/ must report zero issues"
+  ],
+  "releases": [
+    {
+      "id": "R1",
+      "title": "RunThru MVP",
+      "weeks": "1-12",
+      "model": {
+        "primary": "Opus 4.7",
+        "fallback": "Opus 4.6",
+        "rationale": "Release-level strategic planning requires broad reasoning"
+      },
+      "milestones": [
+        {
+          "id": "M1.1",
+          "title": "Identity and Infrastructure",
+          "weeks": "1-2",
+          "model": {
+            "primary": "Opus 4.7",
+            "fallback": "Opus 4.6",
+            "rationale": "Milestone-level planning with cross-cutting concerns"
+          },
+          "epics": [
+            {
+              "id": "E1.1.1",
+              "title": "Rebrand",
+              "description": "Rename app to RunThru, update icons, store listing prep, remove all legacy app name references",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Multi-file coordination across codebase"
+              },
+              "depends_on": [],
+              "parallelizable_with": [
+                "E1.1.2"
+              ],
+              "skills_required": [
+                "flutter-building-layouts"
+              ],
+              "guardrails": [
+                "No ableist language in any copy or code comments"
+              ],
+              "features": [
+                {
+                  "id": "F1.1.1.1",
+                  "title": "Code Reference Rename",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Single-scope mechanical changes"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.1.1.1.1",
+                      "title": "Remove all legacy app name references from Dart source",
+                      "tasks": [
+                        {
+                          "id": "T1.1.1.1.1.1",
+                          "title": "Rename string literals and comments in lib/",
+                          "model": {
+                            "primary": "Haiku 4.5",
+                            "rationale": "Mechanical find-and-replace across files"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.1.1.1.2"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "lib/**/*.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/**/*.g.dart"
+                          ],
+                          "verification_command": "! grep -ri 'speedy.boy' lib/ --include='*.dart' --exclude='*.g.dart'",
+                          "acceptance_criteria": [
+                            "Zero occurrences of legacy app name variants in lib/**/*.dart (excluding .g.dart) — grep pattern: 'speedy.boy'",
+                            "All user-visible strings reference 'RunThru'",
+                            "dart analyze lib/ reports zero issues"
+                          ],
+                          "estimated_hours": 1,
+                          "granularity_rationale": "Atomic: mechanical grep-and-replace across lib/**/*.dart — single operation verifiable by grep returning zero matches"
+                        },
+                        {
+                          "id": "T1.1.1.1.1.2",
+                          "title": "Rename string literals and comments in test/",
+                          "model": {
+                            "primary": "Haiku 4.5",
+                            "rationale": "Mechanical find-and-replace"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.1.1.1.1"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "test/**/*.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "! grep -ri 'speedy.boy' test/",
+                          "acceptance_criteria": [
+                            "Zero occurrences of legacy app name variants in test/**/*.dart — grep pattern: 'speedy.boy'",
+                            "flutter test completes with no new failures"
+                          ],
+                          "estimated_hours": 0.5,
+                          "granularity_rationale": "Atomic: mechanical grep-and-replace across test/**/*.dart — mirrors T1.1.1.1.1.1 in different directory scope, parallelizable"
+                        },
+                        {
+                          "id": "T1.1.1.1.1.3",
+                          "title": "Update pubspec.yaml app name and description",
+                          "model": {
+                            "primary": "Haiku 4.5",
+                            "rationale": "Single-file config change"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.1.1.1.1",
+                            "T1.1.1.1.1.2"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "pubspec.yaml"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "grep 'name: runthru' pubspec.yaml",
+                          "acceptance_criteria": [
+                            "pubspec.yaml name field is 'runthru'",
+                            "pubspec.yaml description references RunThru, not the legacy app name",
+                            "flutter pub get succeeds"
+                          ],
+                          "estimated_hours": 0.25,
+                          "granularity_rationale": "Atomic: single-file config edit (pubspec.yaml name and description fields) — 15-minute change not worth subdividing"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 3 tasks across lib/, test/, and pubspec.yaml — same user outcome (no legacy app name references) but different file scopes enable parallel execution"
+                    },
+                    {
+                      "id": "S1.1.1.1.2",
+                      "title": "Remove all legacy app name references from platform configs",
+                      "tasks": [
+                        {
+                          "id": "T1.1.1.1.2.1",
+                          "title": "Update Android app name and package references",
+                          "model": {
+                            "primary": "Haiku 4.5",
+                            "rationale": "Mechanical config changes"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.1.1.2.2"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "android/app/build.gradle",
+                            "android/app/src/main/AndroidManifest.xml",
+                            "android/app/src/main/res/values/strings.xml",
+                            "android/settings.gradle"
+                          ],
+                          "files_out_of_scope": [
+                            "android/gradle/**"
+                          ],
+                          "verification_command": "! grep -ri 'speedy' android/",
+                          "acceptance_criteria": [
+                            "Android app_name is 'RunThru'",
+                            "Zero matches for legacy app name pattern in android/ directory — grep pattern: 'speedy'",
+                            "flutter build apk --debug completes without errors"
+                          ],
+                          "estimated_hours": 0.5,
+                          "granularity_rationale": "Atomic: Android platform config files (manifest, build.gradle, strings.xml, settings.gradle) change together as one platform unit"
+                        },
+                        {
+                          "id": "T1.1.1.1.2.2",
+                          "title": "Update iOS app name and bundle references",
+                          "model": {
+                            "primary": "Haiku 4.5",
+                            "rationale": "Mechanical config changes"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.1.1.2.1"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "ios/Runner/Info.plist",
+                            "ios/Runner.xcodeproj/project.pbxproj"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "! grep -ri 'speedy' ios/",
+                          "acceptance_criteria": [
+                            "iOS CFBundleDisplayName is 'RunThru'",
+                            "Zero matches for legacy app name pattern in ios/ directory — grep pattern: 'speedy'"
+                          ],
+                          "estimated_hours": 0.5,
+                          "granularity_rationale": "Atomic: iOS platform config files (Info.plist, project.pbxproj) change together as one platform unit"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 platform config tasks (Android, iOS) — same outcome (platform names updated) but platform-isolated files enable parallel execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: code reference renaming is mechanical grep-and-replace across Dart/test files — distinct tooling and skill from visual asset replacement in F1.1.1.2"
+                },
+                {
+                  "id": "F1.1.1.2",
+                  "title": "App Icon and Splash Screen",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Asset creation and configuration"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.1.1.2.1",
+                      "title": "Replace app icons with RunThru branding",
+                      "tasks": [
+                        {
+                          "id": "T1.1.1.2.1.1",
+                          "title": "Generate and place RunThru launcher icons for Android and iOS",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Asset pipeline configuration requires understanding platform conventions"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "android/app/src/main/res/mipmap-*/",
+                            "ios/Runner/Assets.xcassets/AppIcon.appiconset/",
+                            "pubspec.yaml"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+                          "acceptance_criteria": [
+                            "Launcher icons exist at all required Android densities (mdpi through xxxhdpi)",
+                            "iOS AppIcon.appiconset contains all required sizes per Contents.json",
+                            "Icons do not reference the legacy app name visually or in filenames"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: icon generation and placement is one design-then-copy operation across Android mipmap directories and iOS xcassets — indivisible workflow"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: icon replacement is one design-then-place operation across both platforms — not worth splitting per-platform since assets are generated together"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: app icons require platform-specific asset pipelines (Android mipmap densities, iOS xcassets) — different skill from text find-replace"
+                }
+              ],
+              "granularity_rationale": "Epic scope: rebrand is a cross-cutting concern spanning Dart source, test files, platform configs (Android XML, iOS plist), asset files, and pubspec.yaml — requires coordinated multi-file sweep"
+            },
+            {
+              "id": "E1.1.2",
+              "title": "CI/CD Foundation",
+              "description": "GitHub Actions lint+test pipeline, Fastlane signing scaffolding, release build verification",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Infrastructure coordination across multiple config files"
+              },
+              "depends_on": [],
+              "parallelizable_with": [
+                "E1.1.1"
+              ],
+              "skills_required": [],
+              "guardrails": [
+                "CI must run dart analyze --fatal-infos",
+                "CI must not allow test count regression"
+              ],
+              "features": [
+                {
+                  "id": "F1.1.2.1",
+                  "title": "GitHub Actions Pipeline",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Single-scope CI config"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.1.2.1.1",
+                      "title": "Create lint and test workflow",
+                      "tasks": [
+                        {
+                          "id": "T1.1.2.1.1.1",
+                          "title": "Create GitHub Actions workflow for analyze + test on PR",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "YAML workflow requires understanding CI patterns"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.2.1.1.2"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            ".github/workflows/ci.yml"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -f .github/workflows/ci.yml",
+                          "acceptance_criteria": [
+                            ".github/workflows/ci.yml exists and is valid YAML",
+                            "Workflow triggers on push to main and pull_request",
+                            "Workflow runs 'flutter pub get', 'dart analyze --fatal-infos', 'flutter test'",
+                            "Workflow uses Flutter stable channel"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: single YAML workflow file (.github/workflows/ci.yml) — one CI concern per file, verifiable by file existence and YAML validity"
+                        },
+                        {
+                          "id": "T1.1.2.1.1.2",
+                          "title": "Create release build verification workflow",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Build verification workflow"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.1.2.1.1.1"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            ".github/workflows/release-build.yml"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -f .github/workflows/release-build.yml",
+                          "acceptance_criteria": [
+                            ".github/workflows/release-build.yml exists and is valid YAML",
+                            "Workflow runs 'flutter build apk --release' successfully",
+                            "Workflow triggers on push to main with version tag pattern"
+                          ],
+                          "estimated_hours": 1,
+                          "granularity_rationale": "Atomic: single YAML workflow file (.github/workflows/release-build.yml) — independent trigger pattern from ci.yml, parallelizable"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 CI workflow tasks (lint+test, release build) — independent YAML files with no shared state, parallelizable by two agents"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: GitHub Actions uses YAML workflow syntax on Ubuntu runners — distinct from Fastlane Ruby DSL in F1.1.2.2"
+                },
+                {
+                  "id": "F1.1.2.2",
+                  "title": "Fastlane Signing Scaffolding",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Platform signing configuration"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.1.2.2.1",
+                      "title": "Set up Fastlane directory structure",
+                      "tasks": [
+                        {
+                          "id": "T1.1.2.2.1.1",
+                          "title": "Create Fastlane configuration files for iOS and Android",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Platform-specific signing requires understanding Fastlane conventions"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "ios/fastlane/Fastfile",
+                            "ios/fastlane/Appfile",
+                            "android/fastlane/Fastfile",
+                            "android/fastlane/Appfile"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -f ios/fastlane/Fastfile",
+                          "acceptance_criteria": [
+                            "ios/fastlane/Fastfile exists with beta and release lanes",
+                            "android/fastlane/Fastfile exists with beta and release lanes",
+                            "Appfile references correct bundle IDs for RunThru",
+                            "No signing secrets hardcoded in any file (uses environment variables)"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: Fastlane config for both platforms is one coordinated setup — splitting iOS/Android Fastlane would duplicate shared Appfile conventions"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: Fastlane setup for both platforms is one coordinated configuration — splitting iOS/Android would create cross-dependency on shared signing conventions"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: Fastlane involves platform signing certificates, provisioning profiles, and Ruby lane definitions — isolated from GitHub Actions YAML"
+                }
+              ],
+              "granularity_rationale": "Epic scope: CI/CD infrastructure (GitHub Actions YAML, Fastlane Ruby DSL) is a distinct skill domain from app Dart code — parallelizable with rebrand due to zero file overlap"
+            }
+          ],
+          "parallel_clusters": [
+            {
+              "agents": 2,
+              "cluster": [
+                "E1.1.1",
+                "E1.1.2"
+              ],
+              "rationale": "Rebrand and CI/CD have zero file overlap — fully independent"
+            }
+          ],
+          "granularity_rationale": "Milestone boundary: identity and CI/CD must stabilize before feature branches begin — all subsequent milestones depend on correct app naming and automated build verification"
+        },
+        {
+          "id": "M1.2",
+          "title": "Calming UI + Design System",
+          "weeks": "2-6",
+          "model": {
+            "primary": "Opus 4.7",
+            "fallback": "Opus 4.6",
+            "rationale": "Milestone planning with design system and state migration coordination"
+          },
+          "epics": [
+            {
+              "id": "E1.2.1",
+              "title": "Design System",
+              "description": "Warm grays, soft creams, muted sage/slate; Atkinson Hyperlegible default, OpenDyslexic option; CVD-safe blue+orange; 3-4 themes (Light Warm, Dark, Sepia, High Contrast); Flutter ThemeData tokens",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Design system requires coordinating color science, accessibility, and Flutter theming APIs"
+              },
+              "depends_on": [],
+              "parallelizable_with": [
+                "E1.2.3"
+              ],
+              "skills_required": [
+                "flutter-theming-apps",
+                "flutter-improving-accessibility",
+                "flutter-building-layouts"
+              ],
+              "guardrails": [
+                "CVD-safe: blue+orange with lightness variation",
+                "No color-only signals",
+                "Touch targets ≥44pt/48dp",
+                "Accessibility features NEVER paywalled"
+              ],
+              "features": [
+                {
+                  "id": "F1.2.1.1",
+                  "title": "Color Token System",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Token architecture is single-scope"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.1.1.1",
+                      "title": "Define semantic color tokens for all themes",
+                      "tasks": [
+                        {
+                          "id": "T1.2.1.1.1.1",
+                          "title": "Create RunThruColors token class with Light Warm, Dark, Sepia, High Contrast palettes",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Color system design requires understanding WCAG contrast and CVD simulation"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.2.1.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-theming-apps",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/shared/design/colors.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/design/tokens.dart"
+                          ],
+                          "verification_command": "dart analyze lib/shared/design/colors.dart",
+                          "acceptance_criteria": [
+                            "RunThruColors class defines semantic tokens (surface, onSurface, primary, secondary, accent, error) for 4 themes",
+                            "All color pairs meet WCAG 2.1 AA contrast ratio (≥4.5:1 for text, ≥3:1 for large text)",
+                            "Blue+orange CVD-safe pair with lightness differentiation verified against protanopia simulation",
+                            "No raw Color(0xFF...) values in any widget — all access via RunThruColors",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: color token class is one Dart file defining all 4 theme palettes — splitting per-theme would scatter semantically related constants across files"
+                        },
+                        {
+                          "id": "T1.2.1.1.1.2",
+                          "title": "Create ThemeData factories for each theme variant",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Flutter ThemeData wiring"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.2.1.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-theming-apps"
+                          ],
+                          "files_in_scope": [
+                            "lib/shared/design/theme.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/shared/design/theme.dart",
+                          "acceptance_criteria": [
+                            "RunThruTheme class provides static ThemeData factories: lightWarm(), dark(), sepia(), highContrast()",
+                            "Each ThemeData uses RunThruColors tokens — no hardcoded colors",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: ThemeData factory is one Dart file consuming color tokens — tightly coupled to T1.2.1.1.1.1 token API but parallelizable via agreed interface contract"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: color token definition and ThemeData factory — tightly coupled by API contract but parallelizable via agreed token interface"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: color tokens are the foundation consumed by typography, decoration, and animation tokens — must stabilize API surface before dependents begin"
+                },
+                {
+                  "id": "F1.2.1.2",
+                  "title": "Typography Token System",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Typography system is single-scope"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.1.2.1",
+                      "title": "Define typography tokens with Atkinson Hyperlegible and OpenDyslexic",
+                      "tasks": [
+                        {
+                          "id": "T1.2.1.2.1.1",
+                          "title": "Create RunThruTypography token class with font family switching",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Typography architecture with accessibility font support"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-theming-apps",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/shared/design/typography.dart",
+                            "assets/fonts/"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/design/typography.dart"
+                          ],
+                          "verification_command": "dart analyze lib/shared/design/typography.dart",
+                          "acceptance_criteria": [
+                            "RunThruTypography provides semantic text styles (headline, body, caption, label) via factory methods",
+                            "Atkinson Hyperlegible is the default font family",
+                            "OpenDyslexic is available as an accessibility option (NEVER paywalled)",
+                            "Font family switching does not require app restart",
+                            "No hardcoded TextStyle in any widget — all via RunThruTypography",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: typography token class is one Dart file with font-family switching — splitting per-style-variant would break the cohesive TextTheme API"
+                        },
+                        {
+                          "id": "T1.2.1.2.1.2",
+                          "title": "Bundle Atkinson Hyperlegible and OpenDyslexic font assets",
+                          "model": {
+                            "primary": "Haiku 4.5",
+                            "rationale": "Mechanical font asset placement"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.2.1.2.1.1"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "assets/fonts/AtkinsonHyperlegible/",
+                            "assets/fonts/OpenDyslexic/",
+                            "pubspec.yaml"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -d assets/fonts/AtkinsonHyperlegible",
+                          "acceptance_criteria": [
+                            "Atkinson Hyperlegible font files (Regular, Bold, Italic, BoldItalic) exist in assets/fonts/",
+                            "OpenDyslexic font files exist in assets/fonts/",
+                            "pubspec.yaml declares both font families under flutter.fonts",
+                            "flutter pub get succeeds"
+                          ],
+                          "estimated_hours": 0.5,
+                          "granularity_rationale": "Atomic: font asset placement is one mechanical copy-and-declare operation — Haiku-routed due to zero decision complexity"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: typography Dart code and font asset bundling — different file types (.dart vs .ttf + pubspec.yaml) enable parallel execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: typography tokens require font asset bundling (pubspec.yaml fonts section, OTF/TTF files) plus family-switching logic — different concern from color math"
+                },
+                {
+                  "id": "F1.2.1.3",
+                  "title": "Decoration and Animation Tokens",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Completing design token layer"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.1.3.1",
+                      "title": "Define decoration factories and animation constants",
+                      "tasks": [
+                        {
+                          "id": "T1.2.1.3.1.1",
+                          "title": "Create RunThruDecorations factory with neumorphic and elevation styles",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Decoration system requires understanding shadow/elevation patterns"
+                          },
+                          "depends_on": [
+                            "T1.2.1.1.1.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.1.3.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts"
+                          ],
+                          "files_in_scope": [
+                            "lib/shared/design/decorations.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/design/decorations.dart"
+                          ],
+                          "verification_command": "dart analyze lib/shared/design/decorations.dart",
+                          "acceptance_criteria": [
+                            "RunThruDecorations class provides factory methods for card, elevated, inset, and neumorphic styles",
+                            "All shadows use theme-aware colors from RunThruColors",
+                            "No hardcoded BoxDecoration shadows in any widget",
+                            "Rounded geometry: default borderRadius ≥12.0",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: decoration factory is one Dart file defining shadow/border/radius recipes — depends on color tokens being defined, single-file output"
+                        },
+                        {
+                          "id": "T1.2.1.3.1.2",
+                          "title": "Create RunThruAnimations constants with reduced motion support",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Animation constants with accessibility consideration"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.2.1.3.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-animating-apps",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/shared/design/animations.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/design/animations.dart"
+                          ],
+                          "verification_command": "dart analyze lib/shared/design/animations.dart",
+                          "acceptance_criteria": [
+                            "RunThruAnimations provides duration and curve constants for standard, slow-eased, and spring animations",
+                            "Every animation constant has a reduced-motion variant (shorter duration or no animation)",
+                            "isReducedMotion(context) helper function is available",
+                            "Text fades use slow-eased curves (≥300ms default duration)",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: animation constants is one Dart file defining duration/curve pairs with reduced-motion variants — independent from decoration factory file"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: decoration factories and animation constants — independent design token categories sharing only color token dependency"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: decoration factories and animation constants depend on color tokens being defined — separate rendering concern from text styling, parallelizable internally"
+                }
+              ],
+              "ethical_blockers": [
+                {
+                  "type": "accessibility",
+                  "rule": "Accessibility features (OpenDyslexic font, CVD-safe themes, font size controls) are NEVER paywalled — free forever per ethical commitment",
+                  "blocker": true
+                }
+              ],
+              "granularity_rationale": "Epic scope: design system defines color, typography, decoration, and animation tokens consumed by every widget — requires CVD validation, WCAG contrast math, and Flutter ThemeData coordination across 3 features"
+            },
+            {
+              "id": "E1.2.2",
+              "title": "Calming UI Application",
+              "description": "Apply design system to all screens; generous whitespace, rounded geometry, slow-eased transitions; text fades softly; CVD simulator pass",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Cross-screen UI coordination"
+              },
+              "depends_on": [
+                "E1.2.1",
+                "E1.2.3"
+              ],
+              "parallelizable_with": [],
+              "skills_required": [
+                "flutter-building-layouts",
+                "flutter-animating-apps",
+                "flutter-improving-accessibility",
+                "flutter-theming-apps"
+              ],
+              "guardrails": [
+                "Every animation checks isReducedMotion(context)",
+                "No color-only signals",
+                "CVD simulator pass required before merge"
+              ],
+              "features": [
+                {
+                  "id": "F1.2.2.1",
+                  "title": "Library Screen Redesign",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Single screen redesign"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.2.1.1",
+                      "title": "Apply design system to library screen",
+                      "tasks": [
+                        {
+                          "id": "T1.2.2.1.1.1",
+                          "title": "Refactor library_screen.dart to use design tokens and ConsumerWidget",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Screen refactoring with state migration"
+                          },
+                          "depends_on": [
+                            "T1.2.1.1.1.1",
+                            "T1.2.1.1.1.2",
+                            "T1.2.1.2.1.1",
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.2.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-theming-apps",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/library_screen.dart",
+                            "lib/shared/design/colors.dart",
+                            "lib/shared/design/typography.dart",
+                            "lib/shared/design/decorations.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/**"
+                          ],
+                          "verification_command": "dart analyze lib/screens/library_screen.dart",
+                          "acceptance_criteria": [
+                            "library_screen.dart uses ConsumerWidget (no StatefulWidget)",
+                            "All colors from RunThruColors tokens",
+                            "All text styles from RunThruTypography tokens",
+                            "Generous whitespace (minimum 16dp padding between sections)",
+                            "Rounded geometry on all cards (borderRadius ≥12)",
+                            "Touch targets ≥48dp on all interactive elements",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: library_screen.dart redesign applies tokens to one screen file — parallelizable with other screen redesigns due to independent file scope"
+                        },
+                        {
+                          "id": "T1.2.2.1.1.2",
+                          "title": "Refactor settings_screen.dart to use design tokens and ConsumerWidget",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Screen refactoring with state migration"
+                          },
+                          "depends_on": [
+                            "T1.2.1.1.1.1",
+                            "T1.2.1.1.1.2",
+                            "T1.2.1.2.1.1",
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.2.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-theming-apps",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/settings_screen.dart",
+                            "lib/shared/design/colors.dart",
+                            "lib/shared/design/typography.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/**"
+                          ],
+                          "verification_command": "dart analyze lib/screens/settings_screen.dart",
+                          "acceptance_criteria": [
+                            "settings_screen.dart uses ConsumerWidget (no StatefulWidget)",
+                            "All colors from RunThruColors tokens",
+                            "All text styles from RunThruTypography tokens",
+                            "Theme selector allows switching between Light Warm, Dark, Sepia, High Contrast",
+                            "Font selector allows switching between Atkinson Hyperlegible and OpenDyslexic",
+                            "Touch targets ≥48dp on all interactive elements",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: settings_screen.dart redesign applies tokens to one screen file — parallelizable with library screen redesign"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 screen redesign tasks (library, settings) — independent screen files with no shared state enable parallel execution by two agents"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: library and settings screens are independent screen files with no shared mutable state — two agents can redesign them in parallel"
+                },
+                {
+                  "id": "F1.2.2.2",
+                  "title": "Reading Screen Redesign",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Core reading screen redesign"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.2.2.1",
+                      "title": "Apply design system to reading screen",
+                      "tasks": [
+                        {
+                          "id": "T1.2.2.2.1.1",
+                          "title": "Refactor reading_screen.dart to use design tokens with soft transitions",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Reading screen is core UX — needs careful animation work"
+                          },
+                          "depends_on": [
+                            "T1.2.1.1.1.1",
+                            "T1.2.1.3.1.2",
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.2.2.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-animating-apps",
+                            "flutter-theming-apps",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/reading_screen.dart",
+                            "lib/shared/design/animations.dart",
+                            "lib/shared/design/colors.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/**"
+                          ],
+                          "verification_command": "dart analyze lib/screens/reading_screen.dart",
+                          "acceptance_criteria": [
+                            "reading_screen.dart uses ConsumerWidget",
+                            "Text transitions use slow-eased fades (≥300ms)",
+                            "All animations check isReducedMotion(context)",
+                            "All colors from RunThruColors tokens",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 4,
+                          "granularity_rationale": "Atomic: reading_screen.dart redesign requires animation integration (slow-eased fades, reduced-motion checks) — higher complexity justified by 4-hour estimate"
+                        },
+                        {
+                          "id": "T1.2.2.2.1.2",
+                          "title": "Refactor analytics_screen.dart to use design tokens",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Screen redesign"
+                          },
+                          "depends_on": [
+                            "T1.2.1.1.1.1",
+                            "T1.2.1.2.1.1",
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.2.2.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-theming-apps",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/analytics_screen.dart",
+                            "lib/shared/design/colors.dart",
+                            "lib/shared/design/typography.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/screens/analytics_screen.dart",
+                          "acceptance_criteria": [
+                            "analytics_screen.dart uses ConsumerWidget",
+                            "All colors from RunThruColors tokens",
+                            "No color-only data indicators — shape/label fallbacks on all charts",
+                            "Touch targets ≥48dp",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: analytics_screen.dart redesign applies tokens to one screen file — parallelizable with reading screen redesign"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 screen redesign tasks (reading, analytics) — independent screen files enable parallel execution despite different animation complexity"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: reading and analytics screens have different animation requirements — reading needs slow-eased word fades, analytics needs data visualization patterns"
+                },
+                {
+                  "id": "F1.2.2.3",
+                  "title": "CVD Simulator Verification",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Accessibility testing pass"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.2.3.1",
+                      "title": "Verify all themes pass CVD simulation",
+                      "tasks": [
+                        {
+                          "id": "T1.2.2.3.1.1",
+                          "title": "Create contrast audit test covering all theme variants",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation requires understanding color science"
+                          },
+                          "depends_on": [
+                            "T1.2.1.1.1.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-testing-apps",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "test/design/contrast_audit_test.dart",
+                            "lib/shared/design/colors.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/design/contrast_audit_test.dart",
+                          "acceptance_criteria": [
+                            "Test file verifies WCAG 4.5:1 contrast for all text color pairs in all 4 themes",
+                            "Test file verifies WCAG 3:1 contrast for all large text and UI component pairs",
+                            "Test passes for protanopia, deuteranopia, and tritanopia simulated palettes",
+                            "All tests pass with zero failures"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: contrast audit is one test file asserting WCAG ratios across all 4 theme × color-pair combinations — single verification artifact"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: contrast audit is one comprehensive test file covering all theme × color-pair combinations — one test suite, one verification command"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: CVD verification is a test-only pass gated on all screen redesigns completing — produces no production code, only test assertions against color pairs"
+                }
+              ],
+              "granularity_rationale": "Epic scope: applying design system requires touching every existing screen file — depends on both E1.2.1 (design tokens) and E1.2.3 (ConsumerWidget migration) completing first"
+            },
+            {
+              "id": "E1.2.3",
+              "title": "Riverpod State Migration",
+              "description": "Migrate existing StatefulWidget screens to ConsumerWidget; establish provider architecture. FOUNDATIONAL — other epics depend on it.",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Foundational state architecture migration affecting all screens"
+              },
+              "depends_on": [],
+              "parallelizable_with": [
+                "E1.2.1"
+              ],
+              "skills_required": [
+                "flutter-managing-state",
+                "riverpod-providers",
+                "riverpod-consumers",
+                "riverpod-codegen-and-hooks"
+              ],
+              "guardrails": [
+                "No setState() for shared state",
+                "Auto-dispose by default",
+                "Run build_runner after any @riverpod change"
+              ],
+              "instruction_file_updates": [
+                "Append to CLAUDE.md ## State Management — Riverpod Conventions: providers co-located with features, auto-dispose by default, codegen with @riverpod annotation"
+              ],
+              "features": [
+                {
+                  "id": "F1.2.3.1",
+                  "title": "Provider Architecture Foundation",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Provider setup is well-scoped"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.3.1.1",
+                      "title": "Establish feature-scoped provider structure",
+                      "tasks": [
+                        {
+                          "id": "T1.2.3.1.1.1",
+                          "title": "Create provider directory structure and base providers for reading feature",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Establishing provider patterns requires Riverpod expertise"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.2.3.1.1.2"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "riverpod-codegen-and-hooks"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/reading/providers/",
+                            "lib/store/config.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart run build_runner build --delete-conflicting-outputs",
+                          "acceptance_criteria": [
+                            "lib/features/reading/providers/ directory exists",
+                            "At least one @riverpod annotated provider compiles and generates .g.dart",
+                            "Provider uses AutoDisposeNotifier pattern",
+                            "build_runner completes without errors",
+                            "dart analyze lib/ reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: reading feature provider scaffolding creates one directory and one exemplar @riverpod provider — establishes pattern for other features"
+                        },
+                        {
+                          "id": "T1.2.3.1.1.2",
+                          "title": "Create provider directory structure for library and settings features",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Provider scaffolding"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.2.3.1.1.1"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "riverpod-codegen-and-hooks"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/library/providers/",
+                            "lib/features/settings/providers/"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart run build_runner build --delete-conflicting-outputs",
+                          "acceptance_criteria": [
+                            "lib/features/library/providers/ directory exists with at least one provider",
+                            "lib/features/settings/providers/ directory exists with theme and font providers",
+                            "All providers use @riverpod codegen annotation",
+                            "build_runner completes without errors"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: library + settings provider scaffolding creates two directories with theme and font providers — parallelizable with reading provider setup"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 provider scaffolding tasks (reading feature, library+settings feature) — independent feature directories enable parallel agent execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: provider architecture scaffolding creates directory structure and exemplar providers — must exist before screen migration (F1.2.3.2) can reference providers"
+                },
+                {
+                  "id": "F1.2.3.2",
+                  "title": "Screen Migration to ConsumerWidget",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Widget migration"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.2.3.2.1",
+                      "title": "Migrate StatefulWidget screens to ConsumerWidget",
+                      "tasks": [
+                        {
+                          "id": "T1.2.3.2.1.1",
+                          "title": "Migrate library_screen.dart from StatefulWidget to ConsumerWidget",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "State migration requires understanding existing state logic"
+                          },
+                          "depends_on": [
+                            "T1.2.3.1.1.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.3.2.1.2",
+                            "T1.2.3.2.1.3"
+                          ],
+                          "skills_required": [
+                            "riverpod-consumers",
+                            "flutter-managing-state"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/library_screen.dart",
+                            "lib/features/library/providers/"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/**"
+                          ],
+                          "verification_command": "dart analyze lib/screens/library_screen.dart",
+                          "acceptance_criteria": [
+                            "library_screen.dart extends ConsumerWidget (not StatefulWidget)",
+                            "No setState() calls remain in the file",
+                            "All shared state managed via Riverpod providers",
+                            "Existing functionality preserved (no regressions in integration tests)",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: library_screen.dart migration is one file converting StatefulWidget → ConsumerWidget — parallelizable with other screen migrations"
+                        },
+                        {
+                          "id": "T1.2.3.2.1.2",
+                          "title": "Migrate settings_screen.dart from StatefulWidget to ConsumerWidget",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "State migration"
+                          },
+                          "depends_on": [
+                            "T1.2.3.1.1.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.3.2.1.1",
+                            "T1.2.3.2.1.3"
+                          ],
+                          "skills_required": [
+                            "riverpod-consumers",
+                            "flutter-managing-state"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/settings_screen.dart",
+                            "lib/features/settings/providers/"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/screens/settings_screen.dart",
+                          "acceptance_criteria": [
+                            "settings_screen.dart extends ConsumerWidget (not StatefulWidget)",
+                            "No setState() calls remain",
+                            "Theme and font preferences stored via Riverpod provider backed by SharedPreferences/Isar",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: settings_screen.dart migration is one file converting StatefulWidget → ConsumerWidget — parallelizable with library and analytics"
+                        },
+                        {
+                          "id": "T1.2.3.2.1.3",
+                          "title": "Migrate analytics_screen.dart from StatefulWidget to ConsumerWidget",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "State migration"
+                          },
+                          "depends_on": [
+                            "T1.2.3.1.1.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.2.3.2.1.1",
+                            "T1.2.3.2.1.2"
+                          ],
+                          "skills_required": [
+                            "riverpod-consumers",
+                            "flutter-managing-state"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/analytics_screen.dart",
+                            "lib/features/reading/providers/"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/screens/analytics_screen.dart",
+                          "acceptance_criteria": [
+                            "analytics_screen.dart extends ConsumerWidget (not StatefulWidget)",
+                            "No setState() calls remain",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: analytics_screen.dart migration is one file converting StatefulWidget → ConsumerWidget — parallelizable with library and settings"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 3 screen migration tasks — independent screen files enable 3-agent parallel execution at maximum concurrent capacity"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: screen migration to ConsumerWidget is mechanical once providers exist — three independent screen files parallelizable at 3-agent capacity"
+                }
+              ],
+              "granularity_rationale": "Epic scope: Riverpod state migration is foundational architecture — 8 downstream epics declare depends_on E1.2.3 because they require ConsumerWidget + provider patterns established"
+            }
+          ],
+          "parallel_clusters": [
+            {
+              "agents": 2,
+              "cluster": [
+                "E1.2.1",
+                "E1.2.3"
+              ],
+              "rationale": "Design system tokens and Riverpod migration touch different files — can proceed in parallel"
+            },
+            {
+              "agents": 3,
+              "cluster": [
+                "T1.2.3.2.1.1",
+                "T1.2.3.2.1.2",
+                "T1.2.3.2.1.3"
+              ],
+              "rationale": "Three screen migrations are independent after provider scaffolding is done"
+            }
+          ],
+          "granularity_rationale": "Milestone boundary: design system tokens and Riverpod provider architecture are consumed by every downstream screen epic — 8 epics declare dependency on M1.2 outputs"
+        },
+        {
+          "id": "M1.3",
+          "title": "Content Ingestion",
+          "weeks": "5-9",
+          "model": {
+            "primary": "Opus 4.7",
+            "fallback": "Opus 4.6",
+            "rationale": "Milestone-level planning across content pipeline"
+          },
+          "epics": [
+            {
+              "id": "E1.3.1",
+              "title": "Universal Share Sheet",
+              "description": "iOS Share Extension + Android Intent receiver — HIGHEST PRIORITY content source",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Platform-native integration across iOS and Android requires coordinated planning"
+              },
+              "depends_on": [
+                "E1.2.3"
+              ],
+              "parallelizable_with": [
+                "E1.3.3"
+              ],
+              "skills_required": [
+                "flutter-interoperating-with-native-apis",
+                "riverpod-providers"
+              ],
+              "guardrails": [
+                "Privacy: no content uploaded to cloud",
+                "Reading content stays on device"
+              ],
+              "features": [
+                {
+                  "id": "F1.3.1.1",
+                  "title": "Android Share Intent Receiver",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Platform-specific implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.1.1.1",
+                      "title": "Receive shared text and URLs via Android Intent",
+                      "tasks": [
+                        {
+                          "id": "T1.3.1.1.1.1",
+                          "title": "Configure AndroidManifest.xml intent filters for text and URL sharing",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Intent filter configuration requires understanding Android sharing patterns"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.1.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-interoperating-with-native-apis"
+                          ],
+                          "files_in_scope": [
+                            "android/app/src/main/AndroidManifest.xml"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "grep 'android.intent.action.SEND' android/app/src/main/AndroidManifest.xml",
+                          "acceptance_criteria": [
+                            "AndroidManifest.xml declares intent-filter for ACTION_SEND with text/plain MIME type",
+                            "AndroidManifest.xml declares intent-filter for ACTION_SEND with text/html MIME type",
+                            "AndroidManifest.xml declares intent-filter for ACTION_VIEW with http/https schemes",
+                            "flutter build apk --debug completes without errors"
+                          ],
+                          "estimated_hours": 1,
+                          "granularity_rationale": "Atomic: AndroidManifest.xml intent-filter addition is one XML config edit — verifiable by grep for ACTION_SEND string"
+                        },
+                        {
+                          "id": "T1.3.1.1.1.2",
+                          "title": "Create Dart-side intent handler provider to receive and route shared content",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Provider creation with platform channel handling"
+                          },
+                          "depends_on": [
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.1.1.1.1"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-interoperating-with-native-apis"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/share_intent_provider.dart",
+                            "lib/features/content/models/shared_content.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/",
+                          "acceptance_criteria": [
+                            "ShareIntentProvider exists as @riverpod annotated provider",
+                            "SharedContent model class distinguishes text, URL, and file types",
+                            "Provider handles incoming intent on app cold start and while running",
+                            "Content stored on-device only (no cloud upload)",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: Dart-side share intent provider is one new file creating @riverpod annotated provider with platform channel — parallelizable with manifest config"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: Android manifest config and Dart intent handler — tightly coupled platform channel pair but touch different file types (XML vs Dart)"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: Android Intent receiver uses AndroidManifest.xml intent-filters and Dart platform channels — platform-isolated from iOS Share Extension in F1.3.1.2"
+                },
+                {
+                  "id": "F1.3.1.2",
+                  "title": "iOS Share Extension",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Platform-specific iOS extension"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.1.2.1",
+                      "title": "Create iOS Share Extension target",
+                      "tasks": [
+                        {
+                          "id": "T1.3.1.2.1.1",
+                          "title": "Create Share Extension target in Xcode project with app group",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "iOS extension setup requires Xcode project understanding"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-interoperating-with-native-apis"
+                          ],
+                          "files_in_scope": [
+                            "ios/ShareExtension/",
+                            "ios/Runner.xcodeproj/project.pbxproj",
+                            "ios/Runner/Info.plist"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -d ios/ShareExtension",
+                          "acceptance_criteria": [
+                            "ios/ShareExtension/ directory exists with ShareViewController.swift",
+                            "Share Extension registered in project.pbxproj",
+                            "App Group configured for data sharing between extension and main app",
+                            "Extension accepts text/plain, text/html, and public.url types"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: iOS Share Extension target creation is one Xcode project operation producing ShareViewController.swift and project.pbxproj changes — indivisible"
+                        },
+                        {
+                          "id": "T1.3.1.2.1.2",
+                          "title": "Create Dart-side handler to read content from iOS app group on launch",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Cross-platform content routing"
+                          },
+                          "depends_on": [
+                            "T1.3.1.2.1.1",
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-interoperating-with-native-apis"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/share_intent_provider.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/providers/share_intent_provider.dart",
+                          "acceptance_criteria": [
+                            "ShareIntentProvider handles iOS app group content on app foreground",
+                            "Shared content from iOS extension appears in library within 1 second of app open",
+                            "Content stored on-device only",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: Dart-side iOS handler extends existing share_intent_provider.dart to read from App Group — depends on extension target existing first"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: Xcode target creation then Dart-side reader — sequential dependency (Swift extension must exist before Dart handler can read App Group)"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: iOS Share Extension requires Xcode target creation, App Group configuration, and Swift code — platform-isolated from Android intent handling"
+                }
+              ],
+              "granularity_rationale": "Epic scope: universal share sheet coordinates iOS Share Extension (Swift, Xcode target, App Group) with Android Intent receiver (manifest XML, Dart handler) — two platform-native implementations sharing one Dart provider"
+            },
+            {
+              "id": "E1.3.2",
+              "title": "Content Pipeline Cleanup",
+              "description": "PDF cleanup with pdfrx, EPUB cleanup, plain text/Markdown/HTML normalisation; beta label OK",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Multi-format content pipeline coordination"
+              },
+              "depends_on": [
+                "E1.3.1"
+              ],
+              "parallelizable_with": [],
+              "skills_required": [
+                "flutter-handling-concurrency"
+              ],
+              "guardrails": [
+                "pdfrx on main isolate only (FFI)",
+                "Classification in Isolate.run()",
+                "Heavy computation in isolates"
+              ],
+              "features": [
+                {
+                  "id": "F1.3.2.1",
+                  "title": "PDF Extraction Cleanup",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Refactoring existing PDF code"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.2.1.1",
+                      "title": "Stabilize PDF text extraction pipeline",
+                      "tasks": [
+                        {
+                          "id": "T1.3.2.1.1.1",
+                          "title": "Refactor pdf_extractor.dart to handle edge cases and add progress reporting",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Refactoring complex existing code"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.2.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-concurrency"
+                          ],
+                          "files_in_scope": [
+                            "lib/services/pdf_extractor.dart",
+                            "lib/services/pdf_cache.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart"
+                          ],
+                          "verification_command": "dart analyze lib/services/pdf_extractor.dart",
+                          "acceptance_criteria": [
+                            "PDF extraction reports progress as percentage (0-100) via stream",
+                            "Handles PDFs with no text layer gracefully (returns empty with informative message)",
+                            "Classification logic runs in Isolate.run(), not main isolate",
+                            "pdfrx page rendering stays on main isolate (FFI constraint)",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 4,
+                          "granularity_rationale": "Atomic: pdf_extractor.dart refactoring adds progress stream and error handling to one existing file — splitting would create merge conflicts in shared extraction function"
+                        },
+                        {
+                          "id": "T1.3.2.1.1.2",
+                          "title": "Add unit tests for PDF extraction edge cases",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation for complex extraction logic"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.2.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps"
+                          ],
+                          "files_in_scope": [
+                            "test/services/pdf_extractor_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/services/pdf_extractor_test.dart",
+                          "acceptance_criteria": [
+                            "Tests cover: empty PDF, single page, multi-page, PDF with no text layer",
+                            "Tests verify progress reporting emits values 0-100",
+                            "Tests verify classification runs off main isolate (via mock verification)",
+                            "All tests pass"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: PDF extraction test file covers all edge cases in one test suite — parallelizable with implementation refactor via expected API contract"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: PDF refactoring and its test file — implementation and verification parallelizable since tests can be written against expected API contract"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: PDF extraction has unique FFI constraint (pdfrx on main isolate) absent from EPUB/text processing — requires different concurrency strategy"
+                },
+                {
+                  "id": "F1.3.2.2",
+                  "title": "EPUB Extraction Cleanup",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Refactoring existing EPUB code"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.2.2.1",
+                      "title": "Stabilize EPUB parsing pipeline",
+                      "tasks": [
+                        {
+                          "id": "T1.3.2.2.1.1",
+                          "title": "Refactor epub_extractor.dart for chapter detection and progress reporting",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "EPUB parsing refactoring"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.2.2.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-concurrency"
+                          ],
+                          "files_in_scope": [
+                            "lib/services/epub_extractor.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/services/epub_extractor.dart",
+                          "acceptance_criteria": [
+                            "EPUB extraction detects chapter boundaries and reports them as sections",
+                            "Progress reporting via stream (0-100%)",
+                            "HTML stripping runs in Isolate.run()",
+                            "Handles malformed EPUB gracefully (informative error, no crash)",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: epub_extractor.dart refactoring adds chapter detection and progress to one existing file — mirrors PDF refactor pattern in different extractor"
+                        },
+                        {
+                          "id": "T1.3.2.2.1.2",
+                          "title": "Add unit tests for EPUB extraction",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.2.2.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps"
+                          ],
+                          "files_in_scope": [
+                            "test/services/epub_extractor_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/services/epub_extractor_test.dart",
+                          "acceptance_criteria": [
+                            "Tests cover: valid EPUB, EPUB with no chapters, malformed EPUB",
+                            "Tests verify chapter boundary detection",
+                            "All tests pass"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: EPUB extraction test file covers edge cases in one test suite — parallelizable with implementation refactor"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: EPUB refactoring and its test file — mirrors PDF story pattern, implementation and verification parallelizable"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: EPUB parsing uses dart_epub_viewer with HTML-stripping pipeline — different library, processing model, and chapter-detection logic from PDF or plain text"
+                },
+                {
+                  "id": "F1.3.2.3",
+                  "title": "Plain Text and HTML Normalisation",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Content normalisation pipeline"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.2.3.1",
+                      "title": "Normalise plain text, Markdown, and HTML content to reading tokens",
+                      "tasks": [
+                        {
+                          "id": "T1.3.2.3.1.1",
+                          "title": "Create content normaliser that strips HTML/Markdown to plain reading tokens",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Content processing pipeline"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-handling-concurrency"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/services/content_normaliser.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/services/content_normaliser.dart",
+                          "acceptance_criteria": [
+                            "ContentNormaliser accepts raw text, Markdown, and HTML input",
+                            "Output is a List<String> of reading-ready word tokens",
+                            "HTML tags stripped; Markdown formatting stripped",
+                            "Paragraph boundaries preserved as section markers",
+                            "Processing runs in Isolate.run() for inputs >10KB",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: content normaliser is one new Dart file with HTML/Markdown stripping logic — greenfield single-file creation with no merge risk"
+                        },
+                        {
+                          "id": "T1.3.2.3.1.2",
+                          "title": "Add unit tests for content normaliser",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation"
+                          },
+                          "depends_on": [
+                            "T1.3.2.3.1.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-testing-apps"
+                          ],
+                          "files_in_scope": [
+                            "test/features/content/services/content_normaliser_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/features/content/services/content_normaliser_test.dart",
+                          "acceptance_criteria": [
+                            "Tests cover: plain text, Markdown with headings/lists/emphasis, HTML with divs/spans/links",
+                            "Tests verify paragraph boundary preservation",
+                            "Tests verify large input (>10KB) processes without blocking main isolate",
+                            "All tests pass"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: normaliser test file depends on implementation API being defined — sequential dependency on T1.3.2.3.1.1 output"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: normaliser implementation then tests — test file depends on implementation API being defined (sequential)"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: plain text/HTML/Markdown normalisation is a greenfield service — unlike PDF/EPUB cleanup which refactors existing code with known edge cases"
+                }
+              ],
+              "granularity_rationale": "Epic scope: content pipeline cleanup spans three extraction formats (PDF, EPUB, text/HTML) with shared isolate concurrency patterns — sequenced after E1.3.1 so content routing is established"
+            },
+            {
+              "id": "E1.3.3",
+              "title": "Clipboard and File Picker",
+              "description": "Clipboard auto-detect on foreground, local file picker for PDF/EPUB/TXT",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Content ingestion feature coordination"
+              },
+              "depends_on": [
+                "E1.2.3"
+              ],
+              "parallelizable_with": [
+                "E1.3.1"
+              ],
+              "skills_required": [
+                "riverpod-providers",
+                "flutter-managing-state"
+              ],
+              "guardrails": [
+                "Privacy: clipboard read only with user awareness",
+                "Content stays on device"
+              ],
+              "features": [
+                {
+                  "id": "F1.3.3.1",
+                  "title": "Clipboard Auto-Detect",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Single feature implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.3.1.1",
+                      "title": "Detect readable content on clipboard when app foregrounds",
+                      "tasks": [
+                        {
+                          "id": "T1.3.3.1.1.1",
+                          "title": "Create clipboard detection provider that checks on app lifecycle resume",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Lifecycle-aware provider with platform interaction"
+                          },
+                          "depends_on": [
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.3.1.1.2"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-managing-state"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/clipboard_detect_provider.dart",
+                            "lib/core/clipboard_service.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/providers/clipboard_detect_provider.dart",
+                          "acceptance_criteria": [
+                            "Provider checks clipboard on AppLifecycleState.resumed",
+                            "Shows non-intrusive prompt when readable text detected (>20 words)",
+                            "User can dismiss prompt without importing",
+                            "Does NOT auto-import without user confirmation",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: clipboard detection provider is one file with AppLifecycleState observer — parallelizable with prompt widget due to independent file scope"
+                        },
+                        {
+                          "id": "T1.3.3.1.1.2",
+                          "title": "Create clipboard import confirmation widget",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "UI widget creation"
+                          },
+                          "depends_on": [
+                            "E1.2.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.3.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/widgets/clipboard_prompt.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/widgets/clipboard_prompt.dart",
+                          "acceptance_criteria": [
+                            "Widget shows first ~30 characters of clipboard content as preview",
+                            "Import and Dismiss buttons with touch targets ≥48dp",
+                            "Uses RunThruColors and RunThruTypography tokens",
+                            "Accessible labels on all interactive elements",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: clipboard prompt widget is one UI component file — parallelizable with detection provider, consumes provider via ref.watch"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: lifecycle detection provider and UI confirmation widget — logic layer and presentation layer in separate files enable parallel execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: clipboard detection involves AppLifecycleState observer and platform clipboard API — distinct platform interaction from file system picker in F1.3.3.2"
+                },
+                {
+                  "id": "F1.3.3.2",
+                  "title": "Local File Picker",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "File picker integration"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.3.2.1",
+                      "title": "Pick local files for reading (PDF, EPUB, TXT)",
+                      "tasks": [
+                        {
+                          "id": "T1.3.3.2.1.1",
+                          "title": "Create file picker integration with supported format filtering",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "File picker with format routing"
+                          },
+                          "depends_on": [
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/file_picker_provider.dart",
+                            "lib/features/library/providers/"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/providers/file_picker_provider.dart",
+                          "acceptance_criteria": [
+                            "File picker filters to .pdf, .epub, .txt, .md, .html extensions",
+                            "Selected file routed to appropriate extractor (PDF → pdf_extractor, EPUB → epub_extractor, others → content_normaliser)",
+                            "Imported content appears in library",
+                            "Content stored on-device only",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: file picker provider is one file wiring file_picker package to content routing — single integration point, not decomposable"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: file picker integration is a single provider wiring file_picker package output to content routing — not decomposable further"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: local file picker uses file_picker package with MIME type filtering — different platform bridge and user flow from clipboard detection"
+                }
+              ],
+              "granularity_rationale": "Epic scope: clipboard detection and file picker are independent content-ingestion sources with different platform APIs — parallelizable with E1.3.1 due to zero file overlap"
+            }
+          ],
+          "parallel_clusters": [
+            {
+              "agents": 2,
+              "cluster": [
+                "E1.3.1",
+                "E1.3.3"
+              ],
+              "rationale": "Share sheet and clipboard/file picker are independent content sources with no file overlap"
+            },
+            {
+              "agents": 2,
+              "cluster": [
+                "T1.3.2.1.1.1",
+                "T1.3.2.1.1.2"
+              ],
+              "rationale": "PDF refactor and its tests can be written in parallel"
+            }
+          ],
+          "granularity_rationale": "Milestone boundary: content ingestion is the primary user-acquisition funnel — users cannot experience reading UX without importable content, making this prerequisite to M1.4"
+        },
+        {
+          "id": "M1.4",
+          "title": "Reading Experience Polish",
+          "weeks": "7-10",
+          "model": {
+            "primary": "Opus 4.7",
+            "fallback": "Opus 4.6",
+            "rationale": "Milestone planning for core reading UX"
+          },
+          "epics": [
+            {
+              "id": "E1.4.1",
+              "title": "RSVP UX Polish",
+              "description": "Warm-up ramp 80%→100% over ~10s, tap pause/resume, swipe-left rewind, smooth mode transitions",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Core reading UX requires coordinating animation, gesture, and state"
+              },
+              "depends_on": [
+                "E1.2.3",
+                "E1.2.2"
+              ],
+              "parallelizable_with": [
+                "E1.4.3"
+              ],
+              "skills_required": [
+                "flutter-animating-apps",
+                "flutter-managing-state",
+                "riverpod-providers"
+              ],
+              "guardrails": [
+                "Every animation checks isReducedMotion(context)",
+                "ORP engine is existing — do not rebuild"
+              ],
+              "features": [
+                {
+                  "id": "F1.4.1.1",
+                  "title": "Warm-up Ramp",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Single feature implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.1.1.1",
+                      "title": "Implement gradual WPM warm-up at session start",
+                      "tasks": [
+                        {
+                          "id": "T1.4.1.1.1.1",
+                          "title": "Add warm-up ramp logic to word_timer.dart (80% → 100% over ~10s)",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Timer logic modification"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.4.1.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-animating-apps"
+                          ],
+                          "files_in_scope": [
+                            "lib/core/word_timer.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart"
+                          ],
+                          "verification_command": "flutter test test/core/word_timer_test.dart",
+                          "acceptance_criteria": [
+                            "Session starts at 80% of target WPM",
+                            "WPM ramps linearly to 100% over configurable duration (default 10 seconds)",
+                            "Ramp resets on session restart (double-tap)",
+                            "Ramp can be disabled in settings",
+                            "Existing word_timer_test.dart still passes"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: warm-up ramp adds timing curve calculation to word_timer.dart — modifies one existing file, verifiable by existing test suite plus new tests"
+                        },
+                        {
+                          "id": "T1.4.1.1.1.2",
+                          "title": "Add unit tests for warm-up ramp behavior",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation for timing logic"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.4.1.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps"
+                          ],
+                          "files_in_scope": [
+                            "test/core/word_timer_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/core/word_timer_test.dart",
+                          "acceptance_criteria": [
+                            "Test verifies first word displays at 80% of target WPM interval",
+                            "Test verifies WPM reaches 100% after ramp duration",
+                            "Test verifies ramp reset on restart",
+                            "All tests pass"
+                          ],
+                          "estimated_hours": 1,
+                          "granularity_rationale": "Atomic: warm-up ramp tests extend existing word_timer_test.dart — parallelizable with implementation via behavior contract"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: timer logic implementation and its tests — implementation and test writing parallelizable since test can target expected behavior contract"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: warm-up ramp modifies word_timer.dart timing curve only — isolated from gesture handling code in tap/swipe feature F1.4.1.2"
+                },
+                {
+                  "id": "F1.4.1.2",
+                  "title": "Tap Pause/Resume and Swipe Rewind",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Gesture handling feature"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.1.2.1",
+                      "title": "Polish tap and swipe gestures for reading control",
+                      "tasks": [
+                        {
+                          "id": "T1.4.1.2.1.1",
+                          "title": "Ensure tap pause/resume is responsive with visual feedback",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Gesture UX polish"
+                          },
+                          "depends_on": [
+                            "E1.2.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.4.1.2.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-animating-apps",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/reading_screen.dart",
+                            "lib/core/gesture_classifier.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart"
+                          ],
+                          "verification_command": "dart analyze lib/screens/reading_screen.dart",
+                          "acceptance_criteria": [
+                            "Single tap toggles pause/resume within 100ms response time",
+                            "Visual pause indicator appears (not color-only — uses icon + label)",
+                            "Pause state accessible to screen reader (semantic label 'Paused' / 'Reading')",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: tap pause visual feedback modifies reading_screen.dart — one screen file change adding icon + semantic label for pause state"
+                        },
+                        {
+                          "id": "T1.4.1.2.1.2",
+                          "title": "Implement swipe-left rewind with sentence boundary snapping",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Gesture + state coordination"
+                          },
+                          "depends_on": [
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.4.1.2.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-animating-apps",
+                            "riverpod-providers"
+                          ],
+                          "files_in_scope": [
+                            "lib/core/gesture_classifier.dart",
+                            "lib/core/sentence_resolver.dart",
+                            "lib/core/word_timer.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart"
+                          ],
+                          "verification_command": "dart analyze lib/core/gesture_classifier.dart",
+                          "acceptance_criteria": [
+                            "Swipe-left rewinds to start of current sentence (via sentence_resolver)",
+                            "If already at sentence start, rewinds to previous sentence",
+                            "Swipe threshold uses calibrated value (30% screen width + velocity)",
+                            "Rewind position preserved across pause/resume",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: swipe rewind modifies gesture_classifier.dart and sentence_resolver.dart — tightly coupled files that change together for rewind logic"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: tap pause visual feedback and swipe rewind logic — different gesture types modifying different code paths enable parallel execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: tap pause/resume and swipe rewind modify gesture_classifier.dart — isolated from timer arithmetic in warm-up ramp F1.4.1.1"
+                }
+              ],
+              "granularity_rationale": "Epic scope: RSVP UX polish modifies word timer timing, gesture classifier thresholds, and reading screen rendering — coordinates animation, gesture, and state concerns across 3 core files"
+            },
+            {
+              "id": "E1.4.2",
+              "title": "Multi-Mode Reading",
+              "description": "Sentence mode with highlight + auto-scroll, paragraph mode with auto-advance, seamless switching via gesture",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "New reading modes require coordinated state and UI architecture"
+              },
+              "depends_on": [
+                "E1.2.3",
+                "E1.2.2",
+                "E1.4.1"
+              ],
+              "parallelizable_with": [],
+              "skills_required": [
+                "flutter-animating-apps",
+                "flutter-managing-state",
+                "riverpod-providers",
+                "flutter-building-layouts"
+              ],
+              "guardrails": [
+                "Every animation checks isReducedMotion(context)",
+                "Touch targets ≥48dp on mode switcher"
+              ],
+              "features": [
+                {
+                  "id": "F1.4.2.1",
+                  "title": "Sentence Mode",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "New reading mode implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.2.1.1",
+                      "title": "Implement sentence-at-a-time reading with word highlighting",
+                      "tasks": [
+                        {
+                          "id": "T1.4.2.1.1.1",
+                          "title": "Create sentence mode widget with current-word highlight and auto-scroll",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Complex widget with animation and scroll coordination"
+                          },
+                          "depends_on": [
+                            "E1.4.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-animating-apps",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/reading/widgets/sentence_mode_view.dart",
+                            "lib/core/sentence_resolver.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart"
+                          ],
+                          "verification_command": "dart analyze lib/features/reading/widgets/sentence_mode_view.dart",
+                          "acceptance_criteria": [
+                            "Displays full sentence with current word highlighted (bold + underline, not color-only)",
+                            "Auto-scrolls to keep current word centered when sentence exceeds viewport",
+                            "Highlight animation uses slow-eased transition (≥200ms)",
+                            "Checks isReducedMotion(context) and disables animation if true",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 4,
+                          "granularity_rationale": "Atomic: sentence mode is one new widget file combining highlight, auto-scroll, and animation — 4-hour estimate reflects animation complexity, not decomposable"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: sentence mode widget is one cohesive UI component — highlight, scroll, and animation are tightly coupled within one widget file"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: sentence mode is a new widget with word-level highlighting and auto-scroll — independent rendering model and widget tree from paragraph mode"
+                },
+                {
+                  "id": "F1.4.2.2",
+                  "title": "Paragraph Mode",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "New reading mode implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.2.2.1",
+                      "title": "Implement paragraph-at-a-time reading with auto-advance",
+                      "tasks": [
+                        {
+                          "id": "T1.4.2.2.1.1",
+                          "title": "Create paragraph mode widget with timed auto-advance",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Reading mode with timing logic"
+                          },
+                          "depends_on": [
+                            "E1.4.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-animating-apps",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/reading/widgets/paragraph_mode_view.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart"
+                          ],
+                          "verification_command": "dart analyze lib/features/reading/widgets/paragraph_mode_view.dart",
+                          "acceptance_criteria": [
+                            "Displays full paragraph with comfortable line spacing (≥1.5)",
+                            "Auto-advances to next paragraph after calculated reading time (based on word count and WPM)",
+                            "Progress indicator shows time remaining (not color-only — uses position + label)",
+                            "Tap pauses auto-advance timer",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3.5,
+                          "granularity_rationale": "Atomic: paragraph mode is one new widget file combining timed advance, progress indicator, and line spacing — independent rendering model from sentence mode"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: paragraph mode widget is one cohesive UI component — timer, progress, and layout are tightly coupled within one widget file"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: paragraph mode has timed auto-advance logic absent from sentence mode — requires different timer, progress indicator, and line-spacing strategy"
+                },
+                {
+                  "id": "F1.4.2.3",
+                  "title": "Mode Switching",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Gesture-based mode switching"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.2.3.1",
+                      "title": "Seamless switching between RSVP, sentence, and paragraph modes",
+                      "tasks": [
+                        {
+                          "id": "T1.4.2.3.1.1",
+                          "title": "Create mode switcher provider and gesture handler",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "State coordination across modes"
+                          },
+                          "depends_on": [
+                            "T1.4.2.1.1.1",
+                            "T1.4.2.2.1.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-animating-apps"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/reading/providers/reading_mode_provider.dart",
+                            "lib/features/reading/widgets/mode_switcher.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/reading/providers/reading_mode_provider.dart",
+                          "acceptance_criteria": [
+                            "ReadingModeProvider tracks current mode (rsvp, sentence, paragraph)",
+                            "Mode switch preserves current position in text",
+                            "Transition between modes uses crossfade animation (respects reduced motion)",
+                            "Mode switcher touch target ≥48dp",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: mode switcher combines one provider file and one widget file — tightly coupled pair that must be implemented together to avoid orphan state"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: mode switcher combines one provider and one widget in tight coordination — splitting would create circular dependency"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: mode switching is a coordination layer that depends on both sentence and paragraph mode views existing — cannot implement until F1.4.2.1 and F1.4.2.2 complete"
+                }
+              ],
+              "granularity_rationale": "Epic scope: multi-mode reading introduces two new widget trees (sentence view, paragraph view) plus mode-switching state — depends on E1.4.1 establishing gesture and timer patterns"
+            },
+            {
+              "id": "E1.4.3",
+              "title": "Accessibility Foundations",
+              "description": "Adaptive letter/word spacing, reading ruler/focus line, no color-only signals, shape/label/position fallbacks",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Accessibility infrastructure touches multiple screens"
+              },
+              "depends_on": [
+                "E1.2.1",
+                "E1.2.3"
+              ],
+              "parallelizable_with": [
+                "E1.4.1"
+              ],
+              "skills_required": [
+                "flutter-improving-accessibility",
+                "riverpod-providers"
+              ],
+              "guardrails": [
+                "Accessibility features NEVER paywalled",
+                "No color-only signals",
+                "Touch targets ≥44pt/48dp"
+              ],
+              "features": [
+                {
+                  "id": "F1.4.3.1",
+                  "title": "Adaptive Spacing Controls",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Accessibility feature implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.3.1.1",
+                      "title": "User-adjustable letter and word spacing",
+                      "tasks": [
+                        {
+                          "id": "T1.4.3.1.1.1",
+                          "title": "Create adaptive spacing provider and settings UI",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Accessibility control with persistence"
+                          },
+                          "depends_on": [
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.4.3.1.1.2"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/settings/providers/spacing_provider.dart",
+                            "lib/features/settings/widgets/spacing_controls.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/settings/providers/spacing_provider.dart",
+                          "acceptance_criteria": [
+                            "SpacingProvider stores letter spacing (0.0-4.0) and word spacing (0.0-8.0)",
+                            "Settings UI shows slider controls with current value labels",
+                            "Spacing applies to all reading modes (RSVP, sentence, paragraph)",
+                            "Feature is FREE (not behind any paywall check)",
+                            "Persisted across app restarts via SharedPreferences",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: spacing provider is one file with slider state and SharedPreferences persistence — parallelizable with reading ruler overlay"
+                        },
+                        {
+                          "id": "T1.4.3.1.1.2",
+                          "title": "Create reading ruler/focus line overlay",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Overlay widget with accessibility purpose"
+                          },
+                          "depends_on": [
+                            "E1.2.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.4.3.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-improving-accessibility"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/reading/widgets/reading_ruler.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/reading/widgets/reading_ruler.dart",
+                          "acceptance_criteria": [
+                            "Reading ruler overlays a tinted bar above and below current line",
+                            "Ruler position tracks current reading position",
+                            "Ruler can be toggled on/off from reading screen",
+                            "Feature is FREE (not behind any paywall check)",
+                            "Ruler uses semi-transparent overlay (not full opacity — maintains readability)",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: reading ruler is one overlay widget file — parallelizable with spacing provider, consumes spacing values via ref.watch"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: spacing settings provider and reading ruler overlay — independent UI surfaces (settings screen vs reading screen) enable parallel execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: adaptive spacing combines a settings provider (settings screen) with a reading ruler overlay (reading screen) — two distinct UI surfaces with independent file scope"
+                }
+              ],
+              "ethical_blockers": [
+                {
+                  "type": "accessibility",
+                  "rule": "Accessibility features (adaptive letter/word spacing, reading ruler, focus line) are NEVER paywalled — free forever per ethical commitment",
+                  "blocker": true
+                }
+              ],
+              "granularity_rationale": "Epic scope: accessibility foundations span settings providers, reading overlays, and design tokens — parallelizable with E1.4.1 because file scopes do not overlap"
+            },
+            {
+              "id": "E1.4.4",
+              "title": "Artifact Suppression",
+              "description": "Long-press suppression during pause, range select, per-source profiles, auto-detect tables/figures/code",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Content classification system requires isolate strategy"
+              },
+              "depends_on": [
+                "E1.3.2",
+                "E1.2.3"
+              ],
+              "parallelizable_with": [],
+              "skills_required": [
+                "flutter-handling-concurrency",
+                "riverpod-providers"
+              ],
+              "guardrails": [
+                "Classification in Isolate.run()",
+                "No main thread blocking"
+              ],
+              "features": [
+                {
+                  "id": "F1.4.4.1",
+                  "title": "Artifact Detection Engine",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Detection algorithm implementation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.4.1.1",
+                      "title": "Auto-detect tables, figures, and code blocks in content",
+                      "tasks": [
+                        {
+                          "id": "T1.4.4.1.1.1",
+                          "title": "Create artifact classifier that detects non-prose content in Isolate.run()",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Classification algorithm with isolate requirement"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.4.4.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-concurrency"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/services/artifact_classifier.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/services/artifact_classifier.dart",
+                          "acceptance_criteria": [
+                            "ArtifactClassifier identifies tables (tab-separated or pipe-delimited patterns)",
+                            "Identifies code blocks (indentation patterns, common syntax markers)",
+                            "Identifies figure references (Figure X, Fig. X patterns)",
+                            "Classification runs in Isolate.run() — verified by function signature accepting SendPort or returning Future",
+                            "Returns List<ArtifactRegion> with start/end indices and type",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: artifact classifier is one new Dart file with pattern-matching logic wrapped in Isolate.run() — pure function, testable without UI"
+                        },
+                        {
+                          "id": "T1.4.4.1.1.2",
+                          "title": "Add unit tests for artifact classification",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation for classification"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.4.4.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps"
+                          ],
+                          "files_in_scope": [
+                            "test/features/content/services/artifact_classifier_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/features/content/services/artifact_classifier_test.dart",
+                          "acceptance_criteria": [
+                            "Tests cover: text with tables, text with code blocks, text with figure refs, mixed content",
+                            "Tests verify correct region boundaries (±2 characters tolerance)",
+                            "All tests pass"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: classifier test file covers table/code/figure detection patterns — parallelizable with implementation via expected classification contract"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: artifact classifier implementation and its test file — implementation and verification parallelizable"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: artifact detection is pure classification logic running in Isolate.run() — no UI dependency, testable in complete isolation from suppression overlay"
+                },
+                {
+                  "id": "F1.4.4.2",
+                  "title": "Suppression UI",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "UI for artifact suppression"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.4.4.2.1",
+                      "title": "Long-press suppression and range selection during pause",
+                      "tasks": [
+                        {
+                          "id": "T1.4.4.2.1.1",
+                          "title": "Create long-press gesture handler for manual artifact suppression",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Gesture + state coordination"
+                          },
+                          "depends_on": [
+                            "T1.4.4.1.1.1",
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "riverpod-providers"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/reading/widgets/suppression_overlay.dart",
+                            "lib/features/reading/providers/suppression_provider.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/reading/widgets/suppression_overlay.dart",
+                          "acceptance_criteria": [
+                            "Long-press during pause activates suppression mode",
+                            "User can select word range to suppress",
+                            "Suppressed regions shown with strikethrough + muted opacity (not color-only)",
+                            "Suppression persisted per-document",
+                            "Touch targets ≥48dp on selection handles",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3.5,
+                          "granularity_rationale": "Atomic: suppression overlay combines gesture handler and visual feedback in one widget — tightly coupled long-press + range-select interaction, not decomposable"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: suppression overlay is one gesture-driven widget — long-press, range select, and visual feedback are tightly coupled in one component"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: suppression UI requires gesture handling (long-press, range select) and overlay rendering — depends on classification engine output format from F1.4.4.1"
+                }
+              ],
+              "granularity_rationale": "Epic scope: artifact suppression combines an isolate-based classification engine with a gesture-driven suppression UI overlay — depends on E1.3.2 content pipeline for standardized input format"
+            }
+          ],
+          "parallel_clusters": [
+            {
+              "agents": 2,
+              "cluster": [
+                "E1.4.1",
+                "E1.4.3"
+              ],
+              "rationale": "RSVP polish and accessibility foundations touch different files and can proceed in parallel"
+            },
+            {
+              "agents": 2,
+              "cluster": [
+                "T1.4.1.1.1.1",
+                "T1.4.1.1.1.2"
+              ],
+              "rationale": "Warm-up implementation and tests can be written in parallel"
+            }
+          ],
+          "granularity_rationale": "Milestone boundary: reading experience polish layers on top of M1.2 design system and M1.3 content pipeline — cannot start without styled ConsumerWidget screens and importable content"
+        },
+        {
+          "id": "M1.5",
+          "title": "Launch Readiness",
+          "weeks": "10-12",
+          "model": {
+            "primary": "Opus 4.7",
+            "fallback": "Opus 4.6",
+            "rationale": "Launch milestone requires coordinating store presence with feature completeness"
+          },
+          "epics": [
+            {
+              "id": "E1.5.1",
+              "title": "Stats + Analytics Foundation",
+              "description": "Session time, words read, sessions completed; on-device only",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Analytics architecture spanning multiple features"
+              },
+              "depends_on": [
+                "E1.2.3"
+              ],
+              "parallelizable_with": [
+                "E1.5.2"
+              ],
+              "skills_required": [
+                "riverpod-providers",
+                "flutter-working-with-databases"
+              ],
+              "guardrails": [
+                "Privacy: all analytics on-device only",
+                "No cloud upload without per-session opt-in"
+              ],
+              "features": [
+                {
+                  "id": "F1.5.1.1",
+                  "title": "Session Tracking Provider",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Provider with persistence"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.5.1.1.1",
+                      "title": "Track reading session metrics on-device",
+                      "tasks": [
+                        {
+                          "id": "T1.5.1.1.1.1",
+                          "title": "Create session stats provider with Isar persistence",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Provider + database integration"
+                          },
+                          "depends_on": [
+                            "E1.2.3"
+                          ],
+                          "parallelizable_with": [
+                            "T1.5.1.1.1.2"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-working-with-databases"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/stats/providers/session_stats_provider.dart",
+                            "lib/features/stats/models/reading_session.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/stats/",
+                          "acceptance_criteria": [
+                            "SessionStatsProvider tracks: session duration, words read, WPM average, completion percentage",
+                            "ReadingSession model stored in Isar with timestamp and document reference",
+                            "Data stored on-device only — no network calls",
+                            "Provider auto-disposes when reading screen is left",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: session stats provider with Isar ReadingSession model is one provider + one model file — tightly coupled data layer pair changing together"
+                        },
+                        {
+                          "id": "T1.5.1.1.1.2",
+                          "title": "Create analytics dashboard widget for stats screen",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "UI widget with data display"
+                          },
+                          "depends_on": [
+                            "E1.2.1",
+                            "E1.2.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.5.1.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-building-layouts",
+                            "flutter-improving-accessibility",
+                            "riverpod-consumers"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/stats/widgets/stats_dashboard.dart",
+                            "lib/screens/analytics_screen.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/stats/widgets/stats_dashboard.dart",
+                          "acceptance_criteria": [
+                            "Dashboard shows: total sessions, total words read, average session duration, streak count",
+                            "All data indicators use shape/label/position (not color-only)",
+                            "Uses RunThruColors and RunThruTypography tokens",
+                            "Touch targets ≥48dp on any interactive stat elements",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: stats dashboard widget is one file rendering aggregated session data — parallelizable with provider creation via agreed data model"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: Isar stats provider (data layer) and dashboard widget (presentation) — independent layers enable parallel execution"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: session tracking combines Isar persistence (data layer model + provider) with dashboard widget (presentation layer) — both co-located in features/stats/"
+                }
+              ],
+              "ethical_blockers": [
+                {
+                  "type": "privacy",
+                  "rule": "All analytics data stored on-device only — no cloud upload without explicit per-session opt-in",
+                  "blocker": true
+                }
+              ],
+              "granularity_rationale": "Epic scope: stats foundation requires coordinated Isar schema design, Riverpod provider, and dashboard widget across the new features/stats/ directory"
+            },
+            {
+              "id": "E1.5.2",
+              "title": "App Store Presence",
+              "description": "Screenshots, description, ASO, privacy policy, TestFlight/Play Store internal testing",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Store presence coordination across platforms"
+              },
+              "depends_on": [
+                "E1.1.1",
+                "E1.2.2"
+              ],
+              "parallelizable_with": [
+                "E1.5.1"
+              ],
+              "skills_required": [],
+              "guardrails": [
+                "No ableist language in descriptions",
+                "Privacy policy must reflect on-device-only data",
+                "No dark patterns in store listing"
+              ],
+              "ethical_blockers": [
+                {
+                  "type": "monetization",
+                  "rule": "Accessibility features NEVER paywalled",
+                  "blocker": true
+                },
+                {
+                  "type": "language",
+                  "rule": "No ableist language in store listing or screenshots",
+                  "blocker": true
+                }
+              ],
+              "features": [
+                {
+                  "id": "F1.5.2.1",
+                  "title": "Store Listing Content",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Content creation"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.5.2.1.1",
+                      "title": "Create store listing assets and metadata",
+                      "tasks": [
+                        {
+                          "id": "T1.5.2.1.1.1",
+                          "title": "Write App Store and Play Store descriptions with ASO keywords",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Copywriting with ASO constraints"
+                          },
+                          "depends_on": [
+                            "E1.1.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.5.2.1.1.2"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "doc/store-listing/app_store_description.md",
+                            "doc/store-listing/play_store_description.md"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -f doc/store-listing/app_store_description.md",
+                          "acceptance_criteria": [
+                            "App Store description ≤4000 characters with keyword density for 'paced reading', 'ADHD reading', 'focus reading'",
+                            "Play Store short description ≤80 characters",
+                            "Play Store full description ≤4000 characters",
+                            "Zero ableist language (no 'suffering from', 'overcoming disability', 'normal reading')",
+                            "Positioning as completion app, not speed-reading app",
+                            "No manipulative urgency language"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: store descriptions are one copywriting deliverable per platform — parallelizable with privacy policy, no code dependency"
+                        },
+                        {
+                          "id": "T1.5.2.1.1.2",
+                          "title": "Create privacy policy documenting on-device-only data handling",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Legal document creation"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.5.2.1.1.1"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "doc/legal/privacy_policy.md"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "test -f doc/legal/privacy_policy.md",
+                          "acceptance_criteria": [
+                            "Privacy policy states all reading content stays on device",
+                            "Explicitly states no cloud upload without per-session opt-in",
+                            "Lists what data is collected (analytics on-device only)",
+                            "Complies with GDPR and CCPA minimum requirements",
+                            "Written in plain language (no legal jargon without explanation)"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: privacy policy is one legal document reflecting on-device-only data handling — parallelizable with store descriptions"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: store descriptions and privacy policy — independent documents with no shared content enable parallel writing"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: store listing content is copywriting and legal documentation — no code changes, distinct from Fastlane CI/CD configuration in F1.5.2.2"
+                },
+                {
+                  "id": "F1.5.2.2",
+                  "title": "Internal Testing Setup",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Distribution channel setup"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.5.2.2.1",
+                      "title": "Configure TestFlight and Play Store internal testing tracks",
+                      "tasks": [
+                        {
+                          "id": "T1.5.2.2.1.1",
+                          "title": "Configure Play Store internal testing track via Fastlane",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "CI/CD distribution configuration"
+                          },
+                          "depends_on": [
+                            "E1.1.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.5.2.2.1.2"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "android/fastlane/Fastfile",
+                            "android/fastlane/Appfile"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "grep 'internal' android/fastlane/Fastfile",
+                          "acceptance_criteria": [
+                            "Fastlane has 'internal' lane that uploads to Play Store internal testing track",
+                            "Lane uses supply action with track: 'internal'",
+                            "No signing secrets hardcoded (uses environment variables)"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: Play Store Fastlane internal lane is one config addition to android/fastlane/Fastfile — parallelizable with iOS TestFlight config"
+                        },
+                        {
+                          "id": "T1.5.2.2.1.2",
+                          "title": "Configure TestFlight upload via Fastlane",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "iOS distribution configuration"
+                          },
+                          "depends_on": [
+                            "E1.1.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.5.2.2.1.1"
+                          ],
+                          "skills_required": [],
+                          "files_in_scope": [
+                            "ios/fastlane/Fastfile",
+                            "ios/fastlane/Appfile"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "grep -i 'testflight' ios/fastlane/Fastfile",
+                          "acceptance_criteria": [
+                            "Fastlane has 'beta' lane that uploads to TestFlight",
+                            "Lane uses pilot action",
+                            "No signing secrets hardcoded (uses environment variables)"
+                          ],
+                          "estimated_hours": 1.5,
+                          "granularity_rationale": "Atomic: TestFlight Fastlane beta lane is one config addition to ios/fastlane/Fastfile — parallelizable with Android Play Store config"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: Play Store and TestFlight Fastlane configs — platform-independent lane definitions enable parallel configuration"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: internal testing setup modifies Fastlane lane definitions for iOS and Android — platform-specific distribution pipeline configs"
+                }
+              ],
+              "granularity_rationale": "Epic scope: app store presence spans platform-specific Fastlane configs, legal/privacy documents, and marketing copy — parallelizable with E1.5.1 due to zero file overlap"
+            }
+          ],
+          "parallel_clusters": [
+            {
+              "agents": 2,
+              "cluster": [
+                "E1.5.1",
+                "E1.5.2"
+              ],
+              "rationale": "Stats foundation and store presence have no file overlap"
+            },
+            {
+              "agents": 2,
+              "cluster": [
+                "T1.5.2.2.1.1",
+                "T1.5.2.2.1.2"
+              ],
+              "rationale": "Android and iOS Fastlane configs are independent"
+            }
+          ],
+          "granularity_rationale": "Milestone boundary: launch readiness is the final validation gate — store listing requires feature-complete app for screenshots, and stats require completed reading sessions to measure"
+        }
+      ],
+      "granularity_rationale": "Release boundary: MVP establishes core product for App Store submission — complete reading experience, content ingestion pipeline, and store presence required before market validation"
+    },
+    {
+      "id": "R2",
+      "title": "Confluence Marketplace App",
+      "weeks": "20-30",
+      "model": {
+        "primary": "Opus 4.7",
+        "fallback": "Opus 4.6",
+        "rationale": "Release-level strategic planning"
+      },
+      "skill_gaps": [
+        {
+          "skill": "Atlassian Forge development",
+          "status": "not_available",
+          "action": "Acquire skill before planning begins. Research Forge CLI, manifest.yml, custom UI with React, Confluence REST APIs."
+        }
+      ],
+      "epics": [
+        {
+          "id": "E2.1",
+          "title": "Forge App Shell",
+          "features": [
+            "Forge CLI project scaffold",
+            "manifest.yml configuration",
+            "Custom UI module with React",
+            "Development tunnel setup",
+            "App registration on developer.atlassian.com"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Forge App Shell not decomposed below epic until Atlassian Forge skill gap is resolved and Release 1 ships"
+        },
+        {
+          "id": "E2.2",
+          "title": "Content Extraction Pipeline",
+          "features": [
+            "Confluence page body extraction via REST API",
+            "ADF (Atlassian Document Format) to plain text converter",
+            "Macro content handling",
+            "Attachment PDF extraction",
+            "Section chunking for long pages"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Content Extraction Pipeline not decomposed — requires Forge app shell (E2.1) and Confluence REST API knowledge"
+        },
+        {
+          "id": "E2.3",
+          "title": "Flutter Web Build",
+          "features": [
+            "Flutter web compilation target",
+            "Forge Custom UI iframe embedding",
+            "Message passing between Forge and Flutter",
+            "Responsive layout for Confluence panel widths"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Flutter Web Build not decomposed — requires understanding Forge Custom UI iframe constraints"
+        },
+        {
+          "id": "E2.4",
+          "title": "Progressive Depth for Confluence",
+          "features": [
+            "Page summary generation (on-device)",
+            "Key-points extraction",
+            "Full-text paced reading mode",
+            "Depth level selector UI"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Progressive Depth not decomposed — depends on content extraction pipeline (E2.2) establishing input format"
+        },
+        {
+          "id": "E2.5",
+          "title": "Team Analytics",
+          "features": [
+            "Per-user reading completion tracking",
+            "Team reading heatmap",
+            "Admin dashboard",
+            "Privacy-respecting aggregation (no individual content exposure)"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Team Analytics not decomposed — requires Forge storage API and privacy-preserving aggregation design"
+        },
+        {
+          "id": "E2.6",
+          "title": "Marketplace Listing",
+          "features": [
+            "Marketplace app description and screenshots",
+            "Security self-assessment",
+            "Data residency documentation",
+            "Pricing tier definition (accessibility features free)"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Marketplace Listing not decomposed — gated on Atlassian security self-assessment requirements"
+        }
+      ],
+      "granularity_rationale": "Release boundary: Confluence Marketplace App targets a different platform (Atlassian Forge/web) requiring skill acquisition (Forge CLI, React custom UI) not yet available"
+    },
+    {
+      "id": "R3",
+      "title": "Social Sources + Daily Habit",
+      "weeks": "14-18",
+      "model": {
+        "primary": "Opus 4.7",
+        "fallback": "Opus 4.6",
+        "rationale": "Release-level strategic planning"
+      },
+      "epics": [
+        {
+          "id": "E3.1",
+          "title": "Social Integration Infrastructure",
+          "features": [
+            "OAuth2 flow for social platforms",
+            "Rate limiting and backoff",
+            "Content fetching abstraction layer",
+            "On-device content caching"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Social Integration Infrastructure not decomposed — OAuth2 flow patterns determined during Release 1 completion"
+        },
+        {
+          "id": "E3.2",
+          "title": "Reddit Integration",
+          "features": [
+            "Reddit OAuth2 authentication",
+            "Subreddit feed fetching",
+            "Post + top comments extraction",
+            "Thread flattening to reading tokens"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Reddit Integration not decomposed — depends on social infrastructure (E3.1) establishing auth patterns"
+        },
+        {
+          "id": "E3.3",
+          "title": "Fediverse Integration (Bluesky, Mastodon, Lemmy)",
+          "features": [
+            "AT Protocol client for Bluesky",
+            "ActivityPub client for Mastodon",
+            "Lemmy API client",
+            "Unified feed normalisation"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Fediverse Integration not decomposed — three protocol clients (AT Protocol, ActivityPub, Lemmy) require separate research"
+        },
+        {
+          "id": "E3.4",
+          "title": "Reading Queue",
+          "features": [
+            "Queue management UI",
+            "Priority ordering",
+            "Auto-queue from social feeds",
+            "Queue persistence with Isar"
+          ],
+          "granularity_rationale": "Epic-level placeholder: Reading Queue not decomposed — depends on social integrations providing content to enqueue"
+        },
+        {
+          "id": "E3.5",
+          "title": "RSS/Atom Feeds",
+          "features": [
+            "RSS 2.0 and Atom parser",
+            "Feed discovery from URLs",
+            "Article full-text extraction",
+            "Feed refresh scheduling"
+          ],
+          "granularity_rationale": "Epic-level placeholder: RSS/Atom Feeds not decomposed — parsing library selection deferred until Release 3 planning"
+        }
+      ],
+      "granularity_rationale": "Release boundary: social integrations introduce network I/O, OAuth flows, and third-party API dependencies deferred until on-device reading experience is validated in market"
+    }
+  ]
+}

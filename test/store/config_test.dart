@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/store/models.dart';
 
 void main() {
   group('AppConfig', () {

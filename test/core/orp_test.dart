@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/orp.dart';
+import 'package:runthru/core/orp.dart';
 
 void main() {
   group('orpIndex (center letter)', () {

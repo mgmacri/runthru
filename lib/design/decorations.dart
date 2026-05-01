@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/tokens.dart';
+import 'package:runthru/design/tokens.dart';
 
-enum SpeedyBoySurface { stage, shell }
+enum RunThruSurface { stage, shell }
 
-enum SpeedyBoyShadowSize { small, standard, large }
+enum RunThruShadowSize { small, standard, large }
 
-class SpeedyBoyDecorations {
-  SpeedyBoyDecorations._();
+class RunThruDecorations {
+  RunThruDecorations._();
 
-  static const Map<SpeedyBoyShadowSize, ({double offset, double blur})>
+  static const Map<RunThruShadowSize, ({double offset, double blur})>
       _shadowSpecs = {
-    SpeedyBoyShadowSize.small: (offset: 4, blur: 8),
-    SpeedyBoyShadowSize.standard: (offset: 6, blur: 12),
-    SpeedyBoyShadowSize.large: (offset: 10, blur: 20),
+    RunThruShadowSize.small: (offset: 4, blur: 8),
+    RunThruShadowSize.standard: (offset: 6, blur: 12),
+    RunThruShadowSize.large: (offset: 10, blur: 20),
   };
 
   static BoxDecoration raisedDecoration(
-    SpeedyBoySurface surface, {
-    SpeedyBoyShadowSize size = SpeedyBoyShadowSize.standard,
+    RunThruSurface surface, {
+    RunThruShadowSize size = RunThruShadowSize.standard,
     double borderRadius = 16,
   }) {
     final spec = _shadowSpecs[size]!;
@@ -26,14 +26,14 @@ class SpeedyBoyDecorations {
     final Color dark;
 
     switch (surface) {
-      case SpeedyBoySurface.stage:
-        base = SpeedyBoyTokens.stageBase;
-        light = SpeedyBoyTokens.stageLightShadow;
-        dark = SpeedyBoyTokens.stageDarkShadow;
-      case SpeedyBoySurface.shell:
-        base = SpeedyBoyTokens.shellBase;
-        light = SpeedyBoyTokens.shellLightShadow;
-        dark = SpeedyBoyTokens.shellDarkShadow;
+      case RunThruSurface.stage:
+        base = RunThruTokens.stageBase;
+        light = RunThruTokens.stageLightShadow;
+        dark = RunThruTokens.stageDarkShadow;
+      case RunThruSurface.shell:
+        base = RunThruTokens.shellBase;
+        light = RunThruTokens.shellLightShadow;
+        dark = RunThruTokens.shellDarkShadow;
     }
 
     return BoxDecoration(
@@ -55,8 +55,8 @@ class SpeedyBoyDecorations {
   }
 
   static BoxDecoration insetDecoration(
-    SpeedyBoySurface surface, {
-    SpeedyBoyShadowSize size = SpeedyBoyShadowSize.standard,
+    RunThruSurface surface, {
+    RunThruShadowSize size = RunThruShadowSize.standard,
     double borderRadius = 16,
   }) {
     final spec = _shadowSpecs[size]!;
@@ -65,14 +65,14 @@ class SpeedyBoyDecorations {
     final Color dark;
 
     switch (surface) {
-      case SpeedyBoySurface.stage:
-        base = SpeedyBoyTokens.stageBase;
-        light = SpeedyBoyTokens.stageLightShadow;
-        dark = SpeedyBoyTokens.stageDarkShadow;
-      case SpeedyBoySurface.shell:
-        base = SpeedyBoyTokens.shellBase;
-        light = SpeedyBoyTokens.shellLightShadow;
-        dark = SpeedyBoyTokens.shellDarkShadow;
+      case RunThruSurface.stage:
+        base = RunThruTokens.stageBase;
+        light = RunThruTokens.stageLightShadow;
+        dark = RunThruTokens.stageDarkShadow;
+      case RunThruSurface.shell:
+        base = RunThruTokens.shellBase;
+        light = RunThruTokens.shellLightShadow;
+        dark = RunThruTokens.shellDarkShadow;
     }
 
     // Inset: reversed shadow directions
@@ -94,10 +94,10 @@ class SpeedyBoyDecorations {
     );
   }
 
-  static BoxDecoration pillDecoration(SpeedyBoySurface surface) {
+  static BoxDecoration pillDecoration(RunThruSurface surface) {
     return raisedDecoration(
       surface,
-      size: SpeedyBoyShadowSize.small,
+      size: RunThruShadowSize.small,
       borderRadius: 999,
     );
   }

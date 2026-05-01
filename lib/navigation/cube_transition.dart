@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// A-010 cube rotation page transition.
 /// Falls back to instant transition when reduce-motion is active.
@@ -14,8 +14,8 @@ Page<void> cubeTransitionPage({
   return CustomTransitionPage<void>(
     key: key,
     child: child,
-    transitionDuration: SpeedyBoyAnimations.cubeRotateDuration,
-    reverseTransitionDuration: SpeedyBoyAnimations.cubeRotateDuration,
+    transitionDuration: RunThruAnimations.cubeRotateDuration,
+    reverseTransitionDuration: RunThruAnimations.cubeRotateDuration,
     transitionsBuilder: (
       BuildContext context,
       Animation<double> animation,
@@ -27,7 +27,7 @@ Page<void> cubeTransitionPage({
 
       final curved = CurvedAnimation(
         parent: animation,
-        curve: SpeedyBoyAnimations.cubeRotateCurve,
+        curve: RunThruAnimations.cubeRotateCurve,
       );
 
       return ListenableBuilder(

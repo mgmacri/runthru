@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/three_d/glyph_measurer.dart';
-import 'package:speedy_boy/three_d/text_painter_pool.dart';
-import 'package:speedy_boy/three_d/word_painter.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/three_d/glyph_measurer.dart';
+import 'package:runthru/three_d/text_painter_pool.dart';
+import 'package:runthru/three_d/word_painter.dart';
 
 /// 3D extruded word display widget with A-001 breathe animation.
 class WordDisplay3D extends StatefulWidget {
@@ -36,11 +36,11 @@ class _WordDisplay3DState extends State<WordDisplay3D>
     GlyphMeasurer.instance.initialize();
     _controller = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.wordAdvanceDuration,
+      duration: RunThruAnimations.wordAdvanceDuration,
     );
     _animation = CurvedAnimation(
       parent: _controller,
-      curve: SpeedyBoyAnimations.wordAdvanceCurve,
+      curve: RunThruAnimations.wordAdvanceCurve,
     );
   }
 

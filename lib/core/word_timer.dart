@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// State for the word timer.
 class WordTimerState {
@@ -67,7 +67,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     // P18 Grade C — silently rewind on resume from pause (not first play)
     if (_wasPaused && _hasPlayedOnce) {
       final rewindTarget =
-          (state.currentIndex - SpeedyBoyTiming.autoRewindWords).clamp(
+          (state.currentIndex - RunThruTiming.autoRewindWords).clamp(
             0,
             state.totalWords - 1,
           );

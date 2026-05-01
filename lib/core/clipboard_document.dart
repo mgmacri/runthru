@@ -1,4 +1,4 @@
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/services/models.dart';
 
 /// Model for clipboard-sourced documents (Rule 28 — ephemeral, session-only).
 ///

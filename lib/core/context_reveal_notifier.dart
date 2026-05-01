@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
+import 'package:runthru/core/context_reveal_state.dart';
 
 /// Riverpod notifier for ContextReveal state management.
 ///

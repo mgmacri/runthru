@@ -4,8 +4,8 @@ import 'package:flutter/widgets.dart';
 
 /// 3D animation transform factories for CustomPainter consumption.
 /// Each returns a function: (double t) → Matrix4.
-class SpeedyBoyAnimations3D {
-  SpeedyBoyAnimations3D._();
+class RunThruAnimations3D {
+  RunThruAnimations3D._();
 
   /// A-001: Word advance breathe — slight z-scale pulse.
   static Matrix4 Function(double t) wordAdvanceBreathe({

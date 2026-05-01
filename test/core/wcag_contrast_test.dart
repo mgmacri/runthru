@@ -1,8 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/wcag_contrast.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/core/wcag_contrast.dart';
+import 'package:runthru/design/design.dart';
 
 void main() {
   group('WcagContrast', () {
@@ -22,16 +22,16 @@ void main() {
 
     test('stageText on stageBase exceeds 7:1', () {
       final ratio = WcagContrast.contrastRatio(
-        SpeedyBoyTokens.stageText,
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.stageText,
+        RunThruTokens.stageBase,
       );
       expect(ratio, greaterThanOrEqualTo(7.0));
     });
 
     test('stageAnchor on stageBase exceeds 3:1', () {
       final ratio = WcagContrast.contrastRatio(
-        SpeedyBoyTokens.stageAnchor,
-        SpeedyBoyTokens.stageBase,
+        RunThruTokens.stageAnchor,
+        RunThruTokens.stageBase,
       );
       expect(ratio, greaterThanOrEqualTo(3.0));
     });

@@ -4,8 +4,8 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:path_provider/path_provider.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/section_store.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/section_store.dart';
 
 /// One-time migration from the old flat-JSON pdf_cache to section-based storage.
 ///

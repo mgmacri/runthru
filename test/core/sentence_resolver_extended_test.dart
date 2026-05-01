@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/sentence_resolver.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/store/models.dart';
+import 'package:runthru/core/sentence_resolver.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/store/models.dart';
 
 void main() {
   group('resumeIndex', () {

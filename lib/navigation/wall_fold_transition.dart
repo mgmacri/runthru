@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Page transition where the reading room's 4 walls fold outward
 /// (left, right, top fold first; bottom + back wall fold last),
@@ -50,7 +50,7 @@ Page<void> libraryTransitionPage({
   return CustomTransitionPage<void>(
     key: key,
     child: child,
-    transitionDuration: SpeedyBoyAnimations.cubeRotateDuration,
+    transitionDuration: RunThruAnimations.cubeRotateDuration,
     reverseTransitionDuration: const Duration(milliseconds: 850),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       if (isReducedMotion(context)) return child;
@@ -58,7 +58,7 @@ Page<void> libraryTransitionPage({
       // Primary animation: this page entering/leaving
       final curved = CurvedAnimation(
         parent: animation,
-        curve: SpeedyBoyAnimations.cubeRotateCurve,
+        curve: RunThruAnimations.cubeRotateCurve,
       );
 
       Widget result = FadeTransition(opacity: curved, child: child);
@@ -146,8 +146,8 @@ class _WallFoldOut extends StatelessWidget {
                 alignment: Alignment.bottomCenter,
                 angle: bottomT * maxAngle,
                 axisDirection: Axis.horizontal,
-                color: SpeedyBoyTokens.cubeBottomWall,
-                backWallColor: SpeedyBoyTokens.cubeBackWall,
+                color: RunThruTokens.cubeBottomWall,
+                backWallColor: RunThruTokens.cubeBackWall,
               ),
             ),
 
@@ -161,7 +161,7 @@ class _WallFoldOut extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 angle: leftT * maxAngle,
                 axisDirection: Axis.vertical,
-                color: SpeedyBoyTokens.cubeLeftWall,
+                color: RunThruTokens.cubeLeftWall,
               ),
             ),
 
@@ -176,7 +176,7 @@ class _WallFoldOut extends StatelessWidget {
                 angle: rightT * maxAngle,
                 axisDirection: Axis.vertical,
                 invertAngle: true,
-                color: SpeedyBoyTokens.cubeRightWall,
+                color: RunThruTokens.cubeRightWall,
               ),
             ),
 
@@ -191,7 +191,7 @@ class _WallFoldOut extends StatelessWidget {
                 angle: topT * maxAngle,
                 axisDirection: Axis.horizontal,
                 invertAngle: true,
-                color: SpeedyBoyTokens.cubeTopWall,
+                color: RunThruTokens.cubeTopWall,
               ),
             ),
           ],

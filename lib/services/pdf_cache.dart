@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:path_provider/path_provider.dart';
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/services/models.dart';
 
 /// Caches extracted PDF documents to local JSON files.
 /// Uses LRU eviction to stay under [maxCacheBytes] (default 50 MB).

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
+import 'package:runthru/design/design.dart';
 
 /// Font-scale slider for Settings screen.
 ///
@@ -31,15 +31,15 @@ class _FontSizeSliderState extends State<FontSizeSlider> {
       children: [
         Text(
           '${(_displayValue * 100).round()}%',
-          style: SpeedyBoyTypography.badge,
+          style: RunThruTypography.badge,
         ),
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderThemeData(
-            activeTrackColor: SpeedyBoyTokens.shellAccent,
-            inactiveTrackColor: SpeedyBoyTokens.shellDarkShadow,
-            thumbColor: SpeedyBoyTokens.shellTextPrimary,
-            overlayColor: SpeedyBoyTokens.shellAccent.withAlpha(51),
+            activeTrackColor: RunThruTokens.shellAccent,
+            inactiveTrackColor: RunThruTokens.shellDarkShadow,
+            thumbColor: RunThruTokens.shellTextPrimary,
+            overlayColor: RunThruTokens.shellAccent.withAlpha(51),
             thumbShape: const RoundSliderThumbShape(
               enabledThumbRadius: 12,
             ),

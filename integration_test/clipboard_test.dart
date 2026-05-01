@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/clipboard_document.dart';
-import 'package:speedy_boy/core/clipboard_service.dart';
-import 'package:speedy_boy/core/context_reveal_notifier.dart';
-import 'package:speedy_boy/core/context_reveal_state.dart';
-import 'package:speedy_boy/core/word_timer.dart';
+import 'package:runthru/core/clipboard_document.dart';
+import 'package:runthru/core/clipboard_service.dart';
+import 'package:runthru/core/context_reveal_notifier.dart';
+import 'package:runthru/core/context_reveal_state.dart';
+import 'package:runthru/core/word_timer.dart';
 
 /// TASK-131 — Integration test: clipboard reading flow.
 ///

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/widgets/water_ripple_painter.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/widgets/water_ripple_painter.dart';
 
 /// Reusable neumorphic water-ripple loading overlay.
 ///
@@ -11,7 +11,7 @@ import 'package:speedy_boy/widgets/water_ripple_painter.dart';
 /// ```dart
 /// NeumorphicRippleLoading(
 ///   isLoading: isProcessing,
-///   surface: SpeedyBoySurface.shell,
+///   surface: RunThruSurface.shell,
 ///   child: MyWidget(),
 /// )
 /// ```
@@ -20,14 +20,14 @@ class NeumorphicRippleLoading extends StatefulWidget {
     super.key,
     required this.child,
     required this.isLoading,
-    this.surface = SpeedyBoySurface.shell,
+    this.surface = RunThruSurface.shell,
     this.epicenter,
     this.borderRadius = 16.0,
   });
 
   final Widget child;
   final bool isLoading;
-  final SpeedyBoySurface surface;
+  final RunThruSurface surface;
   final Offset? epicenter;
   final double borderRadius;
 
@@ -46,7 +46,7 @@ class _NeumorphicRippleLoadingState extends State<NeumorphicRippleLoading>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: SpeedyBoyAnimations.waterRippleDuration,
+      duration: RunThruAnimations.waterRippleDuration,
     );
 
     if (widget.isLoading) {
@@ -96,12 +96,12 @@ class _NeumorphicRippleLoadingState extends State<NeumorphicRippleLoading>
             Positioned.fill(
               child: AnimatedOpacity(
                 opacity: widget.isLoading ? 0.15 : 0.0,
-                duration: SpeedyBoyAnimations.processingPulseDuration,
+                duration: RunThruAnimations.processingPulseDuration,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: widget.surface == SpeedyBoySurface.shell
-                        ? SpeedyBoyTokens.shellDarkShadow
-                        : SpeedyBoyTokens.stageDarkShadow,
+                    color: widget.surface == RunThruSurface.shell
+                        ? RunThruTokens.shellDarkShadow
+                        : RunThruTokens.stageDarkShadow,
                     borderRadius:
                         BorderRadius.circular(widget.borderRadius),
                   ),

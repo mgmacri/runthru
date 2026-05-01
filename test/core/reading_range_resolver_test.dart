@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/core/reading_range_resolver.dart';
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/core/reading_range_resolver.dart';
+import 'package:runthru/services/models.dart';
 
 void main() {
   group('resolveAndValidateRange', () {

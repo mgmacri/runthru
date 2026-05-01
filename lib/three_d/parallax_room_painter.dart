@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/three_d/off_axis_projection.dart';
+import 'package:runthru/three_d/off_axis_projection.dart';
 
 /// CustomPainter rendering a static 3D marble box interior using off-axis
 /// projection.

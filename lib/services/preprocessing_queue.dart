@@ -3,14 +3,14 @@ import 'dart:collection';
 import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/core/logger.dart';
-import 'package:speedy_boy/services/device_capability.dart';
-import 'package:speedy_boy/services/epub_extractor.dart';
-import 'package:speedy_boy/services/folder_scanner.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/notification_service.dart';
-import 'package:speedy_boy/services/pdf_cache.dart';
-import 'package:speedy_boy/services/pdf_extractor.dart';
+import 'package:runthru/core/logger.dart';
+import 'package:runthru/services/device_capability.dart';
+import 'package:runthru/services/epub_extractor.dart';
+import 'package:runthru/services/folder_scanner.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/notification_service.dart';
+import 'package:runthru/services/pdf_cache.dart';
+import 'package:runthru/services/pdf_extractor.dart';
 
 /// Hyper-parallel PDF preprocessing queue with adaptive worker pool,
 /// progressive extraction (preview → full), and priority preemption.

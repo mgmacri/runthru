@@ -1,10 +1,10 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/analytics_service.dart';
-import 'package:speedy_boy/store/analytics_models.dart';
-import 'package:speedy_boy/widgets/neumorphic_card.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/services/analytics_service.dart';
+import 'package:runthru/store/analytics_models.dart';
+import 'package:runthru/widgets/neumorphic_card.dart';
 
 /// Screen displaying reading analytics: WPM chart, stats cards, streak.
 class AnalyticsScreen extends ConsumerStatefulWidget {
@@ -38,24 +38,24 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: SpeedyBoyTokens.shellBase,
+      backgroundColor: RunThruTokens.shellBase,
       appBar: AppBar(
-        backgroundColor: SpeedyBoyTokens.shellBase,
+        backgroundColor: RunThruTokens.shellBase,
         elevation: 0,
         title: const Text(
           'Reading Analytics',
-          style: SpeedyBoyTypography.title,
+          style: RunThruTypography.title,
         ),
         iconTheme: const IconThemeData(
-          color: SpeedyBoyTokens.shellTextPrimary,
+          color: RunThruTokens.shellTextPrimary,
         ),
       ),
       body: _loading
           ? Center(
               child: Text(
                 'Loading...',
-                style: SpeedyBoyTypography.body.copyWith(
-                  color: SpeedyBoyTokens.shellTextSecondary,
+                style: RunThruTypography.body.copyWith(
+                  color: RunThruTokens.shellTextSecondary,
                 ),
               ),
             )
@@ -76,19 +76,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               Icon(
                 Icons.auto_graph,
                 size: 48,
-                color: SpeedyBoyTokens.shellTextSecondary.withAlpha(120),
+                color: RunThruTokens.shellTextSecondary.withAlpha(120),
               ),
               const SizedBox(height: 16),
               const Text(
                 'No reading sessions yet',
-                style: SpeedyBoyTypography.title,
+                style: RunThruTypography.title,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 'Start reading a PDF to see your analytics here.',
-                style: SpeedyBoyTypography.body.copyWith(
-                  color: SpeedyBoyTokens.shellTextSecondary,
+                style: RunThruTypography.body.copyWith(
+                  color: RunThruTokens.shellTextSecondary,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -104,19 +104,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         // ── WPM Over Time Chart ──
         if (stats.wpmHistory.isNotEmpty)
           NeumorphicCard(
-            surface: SpeedyBoySurface.shell,
+            surface: RunThruSurface.shell,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'WPM Over Time',
-                  style: SpeedyBoyTypography.title,
+                  style: RunThruTypography.title,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Last 30 days',
-                  style: SpeedyBoyTypography.caption.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.caption.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -150,7 +150,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                   label: 'Streak',
                   value: stats.streak.toString(),
                   icon: Icons.local_fire_department,
-                  iconColor: SpeedyBoyTokens.shellError,
+                  iconColor: RunThruTokens.shellError,
                 ),
               ),
             ],
@@ -159,7 +159,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
 
         // ── Average WPM Card ──
         NeumorphicCard(
-          surface: SpeedyBoySurface.shell,
+          surface: RunThruSurface.shell,
           child: Row(
             children: [
               Expanded(
@@ -168,13 +168,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                   children: [
                     const Text(
                       'Average WPM',
-                      style: SpeedyBoyTypography.title,
+                      style: RunThruTypography.title,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Weighted by words read per session',
-                      style: SpeedyBoyTypography.caption.copyWith(
-                        color: SpeedyBoyTokens.shellTextSecondary,
+                      style: RunThruTypography.caption.copyWith(
+                        color: RunThruTokens.shellTextSecondary,
                       ),
                     ),
                   ],
@@ -182,8 +182,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               ),
               Text(
                 stats.avgWpm.round().toString(),
-                style: SpeedyBoyTypography.display.copyWith(
-                  color: SpeedyBoyTokens.shellAccent,
+                style: RunThruTypography.display.copyWith(
+                  color: RunThruTokens.shellAccent,
                 ),
               ),
             ],
@@ -220,8 +220,8 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NeumorphicCard(
-      surface: SpeedyBoySurface.shell,
-      size: SpeedyBoyShadowSize.small,
+      surface: RunThruSurface.shell,
+      size: RunThruShadowSize.small,
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: Column(
@@ -237,7 +237,7 @@ class _StatCard extends StatelessWidget {
               Flexible(
                 child: Text(
                   value,
-                  style: SpeedyBoyTypography.badge,
+                  style: RunThruTypography.badge,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -246,7 +246,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label,
-            style: SpeedyBoyTypography.caption,
+            style: RunThruTypography.caption,
           ),
         ],
       ),
@@ -298,7 +298,7 @@ class _WpmChart extends StatelessWidget {
           drawVerticalLine: false,
           horizontalInterval: ((yMax - yMin) / 4).clamp(1, double.infinity),
           getDrawingHorizontalLine: (_) => const FlLine(
-            color: SpeedyBoyTokens.shellDarkShadow,
+            color: RunThruTokens.shellDarkShadow,
             strokeWidth: 0.5,
           ),
         ),
@@ -320,7 +320,7 @@ class _WpmChart extends StatelessWidget {
                   axisSide: meta.axisSide,
                   child: Text(
                     '${date.month}/${date.day}',
-                    style: SpeedyBoyTypography.caption.copyWith(fontSize: 10),
+                    style: RunThruTypography.caption.copyWith(fontSize: 10),
                   ),
                 );
               },
@@ -335,7 +335,7 @@ class _WpmChart extends StatelessWidget {
                   axisSide: meta.axisSide,
                   child: Text(
                     value.toInt().toString(),
-                    style: SpeedyBoyTypography.caption.copyWith(fontSize: 10),
+                    style: RunThruTypography.caption.copyWith(fontSize: 10),
                   ),
                 );
               },
@@ -348,32 +348,32 @@ class _WpmChart extends StatelessWidget {
             spots: spots,
             isCurved: true,
             curveSmoothness: 0.3,
-            color: SpeedyBoyTokens.shellAccent,
+            color: RunThruTokens.shellAccent,
             barWidth: 2.5,
             isStrokeCapRound: true,
             dotData: FlDotData(
               show: true,
               getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
                 radius: 3,
-                color: SpeedyBoyTokens.shellAccent,
+                color: RunThruTokens.shellAccent,
                 strokeWidth: 1.5,
-                strokeColor: SpeedyBoyTokens.shellBase,
+                strokeColor: RunThruTokens.shellBase,
               ),
             ),
             belowBarData: BarAreaData(
               show: true,
-              color: SpeedyBoyTokens.shellAccent.withAlpha(30),
+              color: RunThruTokens.shellAccent.withAlpha(30),
             ),
           ),
         ],
         lineTouchData: LineTouchData(
           touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => SpeedyBoyTokens.shellTextPrimary,
+            getTooltipColor: (_) => RunThruTokens.shellTextPrimary,
             getTooltipItems: (spots) => spots.map((spot) {
               return LineTooltipItem(
                 '${spot.y.round()} WPM',
-                SpeedyBoyTypography.caption.copyWith(
-                  color: SpeedyBoyTokens.shellBase,
+                RunThruTypography.caption.copyWith(
+                  color: RunThruTokens.shellBase,
                   fontWeight: FontWeight.w600,
                 ),
               );

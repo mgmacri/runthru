@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:speedy_boy/store/config.dart';
+import 'package:runthru/store/config.dart';
 
 /// Hint IDs for onboarding gestures (Rule 27).
 ///

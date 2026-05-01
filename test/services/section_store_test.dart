@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speedy_boy/services/models.dart';
-import 'package:speedy_boy/services/section_store.dart';
+import 'package:runthru/services/models.dart';
+import 'package:runthru/services/section_store.dart';
 
 void main() {
   group('SectionStore', () {

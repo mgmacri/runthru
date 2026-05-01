@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:speedy_boy/design/design.dart';
-import 'package:speedy_boy/services/models.dart';
+import 'package:runthru/design/design.dart';
+import 'package:runthru/services/models.dart';
 
 /// Modal bottom sheet for setting a reading range (start/end page + word).
 ///
@@ -126,19 +126,19 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
         top: 24,
         bottom: MediaQuery.paddingOf(context).bottom + 24,
       ),
-      decoration: SpeedyBoyDecorations.raisedDecoration(
-        SpeedyBoySurface.shell,
+      decoration: RunThruDecorations.raisedDecoration(
+        RunThruSurface.shell,
         borderRadius: 24,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Reading Range', style: SpeedyBoyTypography.title),
+          const Text('Reading Range', style: RunThruTypography.title),
           const SizedBox(height: 16),
 
           // ── START section ──
-          const Text('START', style: SpeedyBoyTypography.caption),
+          const Text('START', style: RunThruTypography.caption),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -164,7 +164,7 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
           const SizedBox(height: 16),
 
           // ── END section ──
-          const Text('END', style: SpeedyBoyTypography.caption),
+          const Text('END', style: RunThruTypography.caption),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -193,8 +193,8 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
             const SizedBox(height: 8),
             Text(
               _errorText!,
-              style: SpeedyBoyTypography.caption.copyWith(
-                color: SpeedyBoyTokens.shellError,
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellError,
               ),
             ),
           ],
@@ -211,8 +211,8 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
                 },
                 child: Text(
                   'Clear Range',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                 ),
               ),
@@ -221,8 +221,8 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text(
                   'Cancel',
-                  style: SpeedyBoyTypography.body.copyWith(
-                    color: SpeedyBoyTokens.shellTextSecondary,
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellTextSecondary,
                   ),
                 ),
               ),
@@ -232,15 +232,15 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: SpeedyBoyDecorations.raisedDecoration(
-                    SpeedyBoySurface.shell,
-                    size: SpeedyBoyShadowSize.small,
+                  decoration: RunThruDecorations.raisedDecoration(
+                    RunThruSurface.shell,
+                    size: RunThruShadowSize.small,
                     borderRadius: 12,
                   ),
                   child: Text(
                     'Set Range',
-                    style: SpeedyBoyTypography.body.copyWith(
-                      color: SpeedyBoyTokens.shellAccent,
+                    style: RunThruTypography.body.copyWith(
+                      color: RunThruTokens.shellAccent,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -272,20 +272,20 @@ class _InsetTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: SpeedyBoyDecorations.insetDecoration(
-        SpeedyBoySurface.shell,
-        size: SpeedyBoyShadowSize.small,
+      decoration: RunThruDecorations.insetDecoration(
+        RunThruSurface.shell,
+        size: RunThruShadowSize.small,
         borderRadius: 10,
       ),
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
-        style: SpeedyBoyTypography.body,
+        style: RunThruTypography.body,
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: label,
-          hintStyle: SpeedyBoyTypography.caption,
+          hintStyle: RunThruTypography.caption,
           isDense: true,
           contentPadding: EdgeInsets.zero,
         ),
