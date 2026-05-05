@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.speedyboy" "\0"
-            VALUE "FileDescription", "speedy_boy" "\0"
+            VALUE "CompanyName", "com.runthru" "\0"
+            VALUE "FileDescription", "RunThru" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "speedy_boy" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.speedyboy. All rights reserved." "\0"
-            VALUE "OriginalFilename", "speedy_boy.exe" "\0"
-            VALUE "ProductName", "speedy_boy" "\0"
+            VALUE "InternalName", "runthru" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.runthru. All rights reserved." "\0"
+            VALUE "OriginalFilename", "runthru.exe" "\0"
+            VALUE "ProductName", "RunThru" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

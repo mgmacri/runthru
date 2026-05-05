@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/features/content/models/shared_content.dart';
+import 'package:runthru/features/content/services/content_normaliser.dart';
 import 'package:runthru/services/epub_extractor.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/pdf_extractor.dart';
@@ -110,6 +110,9 @@ class ShareIntent extends _$ShareIntent {
         final content = SharedContent.fromMap(map);
         await ingest(content);
         return null;
+      case 'onReadClipboard':
+        await _readClipboardAndIngest();
+        return null;
       default:
         return null;
     }
@@ -157,18 +160,39 @@ class ShareIntent extends _$ShareIntent {
     state = const ShareIntentState.idle();
   }
 
+  /// Reads text from the system clipboard and ingests it for immediate reading.
+  ///
+  /// Triggered by the "Read Clipboard" app shortcut. If the clipboard is empty
+  /// or has no text, transitions to error state.
+  Future<void> _readClipboardAndIngest() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text?.trim();
+      if (text == null || text.isEmpty) {
+        state = const ShareIntentState.error(
+          message: 'Clipboard is empty. Copy some text first.',
+        );
+        return;
+      }
+      final content = SharedContent.text(text, title: 'Clipboard');
+      await ingest(content);
+    } on Exception catch (e) {
+      state = ShareIntentState.error(message: e.toString());
+    }
+  }
+
   Future<ExtractedDocument> _extractContent(SharedContent content) async {
     switch (content.type) {
       case SharedContentType.text:
-        final doc = ClipboardDocument.fromClipboardText(content.data);
-        return doc.document;
+        // LLM apps (ChatGPT, Claude, Gemini) share as text/plain but
+        // content is typically markdown-formatted. Detect and route.
+        final contentType = _looksLikeMarkdown(content.data)
+            ? ContentType.markdown
+            : ContentType.plainText;
+        return ContentNormaliser.normalise(content.data, contentType);
 
       case SharedContentType.htmlText:
-        // Strip HTML and process as text for now.
-        // Will be replaced by ContentNormaliser in E1.3.2.
-        final stripped = _basicHtmlStrip(content.data);
-        final doc = ClipboardDocument.fromClipboardText(stripped);
-        return doc.document;
+        return ContentNormaliser.normalise(content.data, ContentType.html);
 
       case SharedContentType.pdfFile:
         return extractPdfInIsolate(content.data);
@@ -177,36 +201,111 @@ class ShareIntent extends _$ShareIntent {
         return extractEpubInIsolate(content.data);
 
       case SharedContentType.url:
-        // URL fetching will be added when dio integration is wired.
-        // For now, treat the URL as text content.
-        final doc = ClipboardDocument.fromClipboardText(content.data);
-        return doc.document;
+        return _fetchAndExtractUrl(content.data);
     }
   }
 
-  /// Basic HTML tag stripping for share intent HTML content.
-  /// A more robust version lives in ContentNormaliser (E1.3.2).
-  static String _basicHtmlStrip(String html) {
-    var text = html;
-    // Remove script and style blocks.
-    text = text.replaceAll(RegExp(r'<style[^>]*>[\s\S]*?</style>'), '');
-    text = text.replaceAll(RegExp(r'<script[^>]*>[\s\S]*?</script>'), '');
-    // Replace block elements with newlines.
-    text = text.replaceAll(RegExp(r'<br\s*/?>'), '\n');
-    text = text.replaceAll(RegExp(r'</(p|div|h[1-6]|li)>'), '\n');
-    // Strip remaining tags.
-    text = text.replaceAll(RegExp(r'<[^>]+>'), ' ');
-    // Decode common entities.
-    text = text
-        .replaceAll('&amp;', '&')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&nbsp;', ' ');
-    // Collapse whitespace.
-    text = text.replaceAll(RegExp(r'[ \t]+'), ' ');
-    text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
-    return text.trim();
+  /// Known LLM/chat domains that share links instead of text content.
+  ///
+  /// These sites require authentication to view shared conversations,
+  /// so fetching the URL returns a login page, not the actual content.
+  static const _llmDomains = [
+    'chatgpt.com',
+    'chat.openai.com',
+    'claude.ai',
+    'gemini.google.com',
+    'bard.google.com',
+    'copilot.microsoft.com',
+    'poe.com',
+    'perplexity.ai',
+    'you.com',
+    'pi.ai',
+  ];
+
+  /// Fetches a URL and extracts readable content from the HTML response.
+  ///
+  /// Detects known LLM domains that share links instead of content and
+  /// shows a helpful error. For other URLs, fetches HTML and normalises it.
+  /// Follows redirects (up to 5). Times out after 15 seconds.
+  Future<ExtractedDocument> _fetchAndExtractUrl(String url) async {
+    // Check for known LLM domains — they share links, not content.
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      final host = uri.host.toLowerCase();
+      for (final domain in _llmDomains) {
+        if (host == domain || host.endsWith('.$domain')) {
+          throw Exception(
+            'This app shared a link to the conversation, not the text. '
+            'To read in RunThru:\n'
+            '1. Tap the Copy button on the response\n'
+            '2. Open RunThru and paste from clipboard',
+          );
+        }
+      }
+    }
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
+    try {
+      final request = await client.getUrl(Uri.parse(url));
+      // Identify as a browser so sites return full HTML, not API responses.
+      request.headers.set(
+        HttpHeaders.userAgentHeader,
+        'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
+      );
+      request.headers.set(HttpHeaders.acceptHeader, 'text/html, */*');
+      request.followRedirects = true;
+      request.maxRedirects = 5;
+
+      final response = await request.close();
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Could not fetch the shared link (HTTP ${response.statusCode}). '
+          'Try copying the text and pasting it in RunThru instead.',
+        );
+      }
+
+      final body = await response.transform(utf8.decoder).join();
+      if (body.trim().isEmpty) {
+        throw Exception(
+          'The shared link returned no content. '
+          'Try copying the text and pasting it in RunThru instead.',
+        );
+      }
+
+      return ContentNormaliser.normalise(body, ContentType.html);
+    } on SocketException {
+      throw Exception(
+        'No internet connection. '
+        'Copy the text and paste it in RunThru instead.',
+      );
+    } on HttpException {
+      throw Exception(
+        'Could not fetch the shared link. '
+        'Try copying the text and pasting it in RunThru instead.',
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Heuristic: does this text look like markdown?
+  ///
+  /// Checks for common markdown indicators that plain prose wouldn't have.
+  /// Conservative — only triggers on clear markdown signals.
+  static bool _looksLikeMarkdown(String text) {
+    // Check first 2000 chars to avoid scanning huge documents.
+    final sample = text.length > 2000 ? text.substring(0, 2000) : text;
+
+    var signals = 0;
+    if (RegExp(r'^#{1,6}\s', multiLine: true).hasMatch(sample)) signals++;
+    if (sample.contains('```')) signals++;
+    if (RegExp(r'\*\*[^*]+\*\*').hasMatch(sample)) signals++;
+    if (RegExp(r'^\s*[-*+]\s', multiLine: true).hasMatch(sample)) signals++;
+    if (RegExp(r'\[.+\]\(.+\)').hasMatch(sample)) signals++;
+
+    // Two or more signals → treat as markdown.
+    return signals >= 2;
   }
 }

@@ -12,7 +12,9 @@ flutter_test + mocktail for testing. GitHub Actions CI. Fastlane signing.
 ## What Is Built (Do Not Rebuild)
 
 ORP pacing engine (competitive core), 3D neumorphic cube viewport, ContextReveal (2-state),
-gesture system (calibrated swipes, WPM dial, hints), text/clipboard import, PDF/EPUB extraction (beta).
+gesture system (calibrated swipes, WPM dial, hints), text/clipboard import, PDF/EPUB extraction (beta),
+universal share sheet (Android intent + iOS Share Extension), content pipeline (ContentNormaliser),
+per-word adaptive pacing (RSVP Nano port).
 
 ## Architecture
 

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="read_clipboard"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_clipboard"
+        android:shortcutShortLabel="@string/shortcut_read_clipboard_short"
+        android:shortcutLongLabel="@string/shortcut_read_clipboard_long">
+        <intent
+            android:action="com.runthru.READ_CLIPBOARD"
+            android:targetPackage="com.runthru.app"
+            android:targetClass="com.runthru.app.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

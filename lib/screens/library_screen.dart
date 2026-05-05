@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/clipboard_service.dart';
 import 'package:runthru/core/hint_controller.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/file_picker_provider.dart';
+import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
+import 'package:runthru/features/content/widgets/clipboard_prompt.dart';
+import 'package:runthru/features/content/widgets/instapaper_bookmark_list.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
@@ -34,6 +38,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final config = ref.watch(configProvider);
     final queue = ref.read(preprocessingQueueProvider.notifier);
     final filePickerState = ref.watch(filePickerNotifierProvider);
+
+    // Listen for Instapaper article import state changes
+    ref.listen<ArticleImportState>(instapaperArticleImportProvider, (
+      previous,
+      next,
+    ) {
+      if (next is ArticleImportDone) {
+        ref.read(instapaperArticleImportProvider.notifier).clear();
+        context.push(
+          '/read-instapaper',
+          extra: {'document': next.document, 'title': next.title},
+        );
+      } else if (next is ArticleImportError) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(next.message)));
+      }
+    });
 
     return Scaffold(
       backgroundColor: RunThruTokens.shellBase,
@@ -146,6 +168,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                       ),
                     ),
                   ),
+
+                // ── Clipboard Auto-Detect Prompt ──
+                ClipboardPrompt(
+                  onImport: (ClipboardDocument doc) {
+                    context.push('/read-clipboard', extra: doc);
+                  },
+                ),
+
+                // ── Instapaper Section ──
+                const SizedBox(height: 16),
+                InstapaperSection(
+                  onBookmarkTap: (bookmark) {
+                    ref
+                        .read(instapaperArticleImportProvider.notifier)
+                        .importArticle(bookmark);
+                  },
+                ),
 
                 // ── PDF List ──
                 Expanded(
@@ -283,7 +322,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     AsyncValue<dynamic> config,
   ) {
     if (pdfList.isEmpty) {
-      return Center(
+      return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(

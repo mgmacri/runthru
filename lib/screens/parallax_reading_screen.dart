@@ -270,6 +270,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: 0);
+    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
@@ -337,6 +338,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         _wordNotifier.value = _words[startIndex.clamp(0, _words.length - 1)];
         final timer = ref.read(wordTimerProvider.notifier);
         timer.loadDocument(_words.length, startIndex: startIndex);
+        timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
         timer.setWpm(config.defaultWpm);
 
         if (_isRangeComplete) {
@@ -370,6 +372,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
+    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
@@ -519,6 +522,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _wordNotifier.value = _words.first;
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: 0);
+    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
     timer.play();
@@ -1206,8 +1210,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                   const Positioned.fill(
                                     child: IgnorePointer(
                                       child: ColoredBox(
-                                        color:
-                                            RunThruTokens.stagePauseOverlay,
+                                        color: RunThruTokens.stagePauseOverlay,
                                       ),
                                     ),
                                   ),
@@ -1282,8 +1285,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                 if (_showReadingGoalOnboarding)
                                   Positioned.fill(
                                     child: ColoredBox(
-                                      color: RunThruTokens.shellBase
-                                          .withAlpha(230),
+                                      color: RunThruTokens.shellBase.withAlpha(
+                                        230,
+                                      ),
                                       child: Center(
                                         child: SingleChildScrollView(
                                           padding: const EdgeInsets.symmetric(
@@ -1426,8 +1430,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                       !crState.isActive)
                                     const Positioned.fill(
                                       child: ColoredBox(
-                                        color:
-                                            RunThruTokens.stagePauseOverlay,
+                                        color: RunThruTokens.stagePauseOverlay,
                                       ),
                                     ),
                                   // Shared overlays

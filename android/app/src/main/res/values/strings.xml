@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_read_clipboard_short">Read Clipboard</string>
+    <string name="shortcut_read_clipboard_long">Read clipboard text in RunThru</string>
+</resources>

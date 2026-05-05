@@ -9,6 +9,7 @@ import 'package:runthru/screens/home_shell.dart';
 import 'package:runthru/screens/parallax_reading_screen.dart';
 import 'package:runthru/screens/range_picker_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
+import 'package:runthru/services/models.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
@@ -70,6 +71,27 @@ final appRouter = GoRouter(
           child: ParallaxReadingScreen(
             filePath: 'clipboard://${clipboardDoc?.title ?? 'clipboard'}',
             clipboardDocument: clipboardDoc,
+          ),
+        );
+      },
+    ),
+    // Instapaper article reading route; document + title via extra map
+    GoRoute(
+      path: '/read-instapaper',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, Object?>?;
+        final document = extra?['document'] as ExtractedDocument?;
+        final title = extra?['title'] as String? ?? 'Instapaper Article';
+        return wallFoldTransitionPage(
+          key: state.pageKey,
+          child: ParallaxReadingScreen(
+            filePath: 'instapaper://$title',
+            clipboardDocument: ClipboardDocument(
+              title: title,
+              fullText: '',
+              document: document!,
+              pastedAt: DateTime.now(),
+            ),
           ),
         );
       },

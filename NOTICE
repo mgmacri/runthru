@@ -1,0 +1,4 @@
+RSVP Nano (https://github.com/ionutdecebal/rsvpnano) — MIT License
+  The per-word pacing algorithm in lib/features/reading/pacing/ derives its
+  tier thresholds, bonus percentages, and abbreviation heuristics from RSVP
+  Nano's ReadingLoop.cpp. Reimplemented in Dart.

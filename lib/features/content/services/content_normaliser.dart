@@ -114,6 +114,38 @@ class ContentNormaliser {
   static String _stripMarkdown(String text) {
     var result = text;
 
+    // Remove fenced code blocks: ```lang\n...\n``` → removed entirely.
+    // Must run before inline code stripping to avoid partial backtick matches.
+    result = result.replaceAll(
+      RegExp(r'```[^\n]*\n[\s\S]*?```', multiLine: true),
+      '',
+    );
+
+    // Remove indented code blocks: blank line followed by 4+ space-indented lines.
+    result = result.replaceAll(
+      RegExp(r'(?<=\n\n)([ \t]{4,}[^\n]+\n?)+', multiLine: true),
+      '',
+    );
+
+    // Remove markdown tables: lines starting/ending with pipes, including
+    // header separator.
+    result = result.replaceAll(
+      RegExp(
+        r'^\|[^\n]+\|[ \t]*\n(\|[-:\s|]+\|\n)?(\|[^\n]+\|[ \t]*\n?)*',
+        multiLine: true,
+      ),
+      '',
+    );
+
+    // Remove footnote definitions: [^id]: text at line start.
+    result = result.replaceAll(
+      RegExp(r'^\[\^[^\]]+\]:[ \t]+[^\n]+$', multiLine: true),
+      '',
+    );
+
+    // Remove footnote references: [^id] inline.
+    result = result.replaceAll(RegExp(r'\[\^[^\]]+\]'), '');
+
     // Remove images: ![alt](url) → alt
     result = result.replaceAllMapped(
       RegExp(r'!\[([^\]]*)\]\([^)]+\)'),
@@ -152,7 +184,7 @@ class ContentNormaliser {
 
     // Remove bold+italic (***text*** / ___text___).
     result = result.replaceAllMapped(
-      RegExp(r'\*{3}(.+?)\*{3}'),
+      RegExp(r'(?<!\\)\*{3}(.+?)(?<!\\)\*{3}'),
       (m) => m.group(1)!,
     );
     result = result.replaceAllMapped(
@@ -162,7 +194,7 @@ class ContentNormaliser {
 
     // Remove bold (**text** / __text__).
     result = result.replaceAllMapped(
-      RegExp(r'\*{2}(.+?)\*{2}'),
+      RegExp(r'(?<!\\)\*{2}(.+?)(?<!\\)\*{2}'),
       (m) => m.group(1)!,
     );
     result = result.replaceAllMapped(
@@ -172,7 +204,7 @@ class ContentNormaliser {
 
     // Remove italic (*text* / _text_).
     result = result.replaceAllMapped(
-      RegExp(r'\*(\S[^*]*\S|\S)\*'),
+      RegExp(r'(?<!\\)\*(\S[^*]*\S|\S)(?<!\\)\*'),
       (m) => m.group(1)!,
     );
     result = result.replaceAllMapped(
@@ -195,6 +227,12 @@ class ContentNormaliser {
     // Remove ordered list markers.
     result = result.replaceAllMapped(
       RegExp(r'^[\s]*\d+\.\s+(.+)$', multiLine: true),
+      (m) => m.group(1)!,
+    );
+
+    // Remove markdown escape backslashes: \* → *, \[ → [, etc.
+    result = result.replaceAllMapped(
+      RegExp(r'\\([\\`*_\{\}\[\]()#+\-.!|~])'),
       (m) => m.group(1)!,
     );
 

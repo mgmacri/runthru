@@ -40,6 +40,14 @@ void main() {
       await tester.pumpWidget(_harness(const AppConfig(hasPremium: true)));
       await tester.pumpAndSettle();
 
+      // Scroll to the 3D Room Mode section (it's below the fold in ListView)
+      await tester.scrollUntilVisible(
+        find.text('3D Room Mode'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
       // All 4 segments visible
       expect(find.text('None'), findsOneWidget);
       expect(find.text('Off'), findsOneWidget);
@@ -59,7 +67,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Scroll to make the parallax selector visible
-      await tester.ensureVisible(find.text('Full'));
+      await tester.scrollUntilVisible(
+        find.text('Full'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
 
       // Tap "Full"
@@ -92,7 +104,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Scroll to make the parallax selector visible
-      await tester.ensureVisible(find.text('Subtle'));
+      await tester.scrollUntilVisible(
+        find.text('Subtle'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
 
       // Verify Semantics labels and hints for selected segment

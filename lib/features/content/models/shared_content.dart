@@ -22,6 +22,15 @@ enum SharedContentType {
   htmlText,
 }
 
+/// The action to perform with shared content.
+enum ShareAction {
+  /// Open the reading screen immediately (RSVP pacing).
+  readNow,
+
+  /// Import to the library for later reading.
+  import_,
+}
+
 /// Immutable model for content shared into the app.
 ///
 /// Created by the share intent handler or file picker, then routed through
@@ -34,6 +43,7 @@ class SharedContent {
     this.title,
     this.mimeType,
     this.receivedAt,
+    this.action = ShareAction.readNow,
   });
 
   /// Creates a [SharedContent] for plain text.
@@ -89,6 +99,9 @@ class SharedContent {
       receivedAt: map['receivedAt'] != null
           ? DateTime.tryParse(map['receivedAt'] as String)
           : null,
+      action: (map['action'] as String?) == 'import'
+          ? ShareAction.import_
+          : ShareAction.readNow,
     );
   }
 
@@ -107,6 +120,9 @@ class SharedContent {
   /// When this content was received. Null uses [DateTime.now] on access.
   final DateTime? receivedAt;
 
+  /// The action to perform: read immediately or import for later.
+  final ShareAction action;
+
   /// Convenience: timestamp of receipt.
   DateTime get timestamp => receivedAt ?? DateTime.now();
 
@@ -117,5 +133,6 @@ class SharedContent {
     if (title != null) 'title': title,
     if (mimeType != null) 'mimeType': mimeType,
     'receivedAt': (receivedAt ?? DateTime.now()).toIso8601String(),
+    'action': action == ShareAction.import_ ? 'import' : 'readNow',
   };
 }

@@ -7,7 +7,7 @@ part of 'file_picker_provider.dart';
 // **************************************************************************
 
 String _$filePickerNotifierHash() =>
-    r'e47b47bda8346e9fea78832a6ca6837ecd8b901e';
+    r'6a6b9eda51b9fc3aa2eeac41a476e69f90fe6f78';
 
 /// Manages file picking and content extraction.
 ///

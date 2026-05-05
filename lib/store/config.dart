@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/store/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _configKey = 'runthru_config';
 
@@ -155,6 +156,15 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
       _synchronized(() async {
         final config = state.valueOrNull ?? const AppConfig();
         final updated = config.copyWith(hasSeenReadingGoalOnboarding: seen);
+        state = AsyncData<AppConfig>(updated);
+        await _persist(updated);
+      });
+
+  /// Updates the per-word adaptive pacing configuration.
+  Future<void> updatePacingConfig(PacingConfig pacingConfig) =>
+      _synchronized(() async {
+        final config = state.valueOrNull ?? const AppConfig();
+        final updated = config.copyWith(pacingConfig: pacingConfig);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
       });

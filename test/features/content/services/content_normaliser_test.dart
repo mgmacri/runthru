@@ -291,4 +291,238 @@ void main() {
       expect(doc.totalWords, greaterThan(0));
     });
   });
+
+  group('ContentNormaliser — LLM markdown patterns', () {
+    test('strips fenced code block with language tag', () async {
+      const input =
+          'Here is a solution:\n\n```python\ndef calculate():\n    return 42\n```\n\nUse it wisely.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('solution'));
+      expect(allText, contains('wisely'));
+      expect(allText, isNot(contains('```')));
+      expect(allText, isNot(contains('def')));
+      expect(allText, isNot(contains('calculate')));
+      expect(allText, isNot(contains('return')));
+      expect(allText, isNot(contains('python')));
+    });
+
+    test('strips fenced code block without language tag', () async {
+      const input =
+          'Before code.\n\n```\nsome raw code\nmore code\n```\n\nAfter code.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('Before'));
+      expect(allText, contains('After'));
+      expect(allText, isNot(contains('```')));
+      expect(allText, isNot(contains('raw')));
+    });
+
+    test('strips multi-line fenced code block', () async {
+      final codeLines = List.generate(15, (i) => '    line_$i = $i;');
+      final input =
+          'Intro text.\n\n```javascript\n${codeLines.join('\n')}\n```\n\nConclusion here.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('Intro'));
+      expect(allText, contains('Conclusion'));
+      expect(allText, isNot(contains('line_')));
+      expect(allText, isNot(contains('javascript')));
+    });
+
+    test('strips markdown table', () async {
+      const input = '''Summary of results:
+
+| Model | Accuracy | Speed |
+|-------|----------|-------|
+| GPT-4 | 92% | Fast |
+| Claude | 95% | Medium |
+| Gemini | 90% | Fast |
+
+The best model is Claude.''';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('Summary'));
+      expect(allText, contains('Claude')); // in prose sentence, not table
+      expect(allText, isNot(contains('|')));
+      expect(allText, isNot(contains('---')));
+      expect(allText, isNot(contains('92%')));
+    });
+
+    test('strips indented code block after blank line', () async {
+      const input =
+          'See this example:\n\n    const x = 42;\n    console.log(x);\n\nThat prints 42.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('example'));
+      expect(allText, contains('prints'));
+      expect(allText, isNot(contains('const')));
+      expect(allText, isNot(contains('console')));
+    });
+
+    test('removes escape backslashes', () async {
+      const input = r'This is \*not italic\* and \[not a link\].';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('*not'));
+      expect(allText, isNot(contains(r'\*')));
+      expect(allText, isNot(contains(r'\[')));
+    });
+
+    test('strips footnote markers and definitions', () async {
+      const input =
+          'RSVP improves comprehension[^1] significantly.\n\n[^1]: According to Smith et al., 2023.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('comprehension'));
+      expect(allText, isNot(contains('[^1]')));
+      expect(allText, isNot(contains('Smith')));
+    });
+
+    test('real-world ChatGPT response produces clean tokens', () async {
+      const input = '''# How to Sort a List in Python
+
+There are several ways to sort a list:
+
+## Using sorted()
+
+The `sorted()` function returns a new sorted list:
+
+```python
+numbers = [3, 1, 4, 1, 5, 9]
+result = sorted(numbers)
+print(result)  # [1, 1, 3, 4, 5, 9]
+```
+
+## Using .sort()
+
+The `.sort()` method sorts **in place**:
+
+```python
+numbers = [3, 1, 4, 1, 5, 9]
+numbers.sort()
+```
+
+## Performance Comparison
+
+| Method | Time Complexity | In-Place |
+|--------|----------------|----------|
+| sorted() | O(n log n) | No |
+| .sort() | O(n log n) | Yes |
+
+Both methods use **Timsort** under the hood[^1].
+
+[^1]: Timsort was invented by Tim Peters in 2002.''';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      // Prose survives
+      expect(allText, contains('Sort'));
+      expect(allText, contains('several'));
+      expect(allText, contains('sorted()')); // inline code becomes text
+      expect(allText, contains('Timsort'));
+      // Code and tables removed
+      expect(allText, isNot(contains('```')));
+      expect(allText, isNot(contains('numbers')));
+      expect(allText, isNot(contains('print(')));
+      expect(allText, isNot(contains('|')));
+      expect(allText, isNot(contains('O(n')));
+      expect(allText, isNot(contains('[^1]')));
+    });
+
+    test('real-world Claude response with mixed formatting', () async {
+      const input =
+          "Here's what you need to know about **async/await** in Dart:\n\n"
+          '1. Mark functions with `async`\n'
+          '2. Use `await` before futures\n'
+          '3. Handle errors with `try`/`catch`\n\n'
+          '```dart\n'
+          'Future<String> fetchData() async {\n'
+          '  try {\n'
+          "    final response = await http.get(Uri.parse('https://api.example.com'));\n"
+          '    return response.body;\n'
+          '  } catch (e) {\n'
+          "    return 'Error: \$e';\n"
+          '  }\n'
+          '}\n'
+          '```\n\n'
+          '> **Note**: Always handle errors in production code.\n\n'
+          'The key takeaway is that ~~callbacks are obsolete~~ async/await is cleaner.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      // Prose and inline formatting cleaned
+      expect(allText, contains('async/await'));
+      expect(allText, contains('Dart'));
+      expect(allText, contains('takeaway'));
+      expect(allText, contains('cleaner'));
+      // Code block removed
+      expect(allText, isNot(contains('fetchData')));
+      expect(allText, isNot(contains('http.get')));
+      expect(allText, isNot(contains('```')));
+      // Formatting markers stripped
+      expect(allText, isNot(contains('**')));
+      expect(allText, isNot(contains('~~')));
+    });
+
+    test('existing markdown tests still pass — headings', () async {
+      const input = '# Heading One\n\n## Heading Two\n\nBody text here.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('Heading'));
+      expect(allText, isNot(contains('#')));
+    });
+
+    test('existing markdown tests still pass — bold and links', () async {
+      const input = 'This is **bold** and visit [Google](https://google.com).';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+
+      final allText = doc.allWords.join(' ');
+      expect(allText, contains('bold'));
+      expect(allText, contains('Google'));
+      expect(allText, isNot(contains('**')));
+      expect(allText, isNot(contains('https://')));
+    });
+  });
 }

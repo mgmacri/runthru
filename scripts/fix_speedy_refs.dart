@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 
 /// Replaces direct "Speedy Boy" references in the backlog with

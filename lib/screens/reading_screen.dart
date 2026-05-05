@@ -126,6 +126,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
         final timer = ref.read(wordTimerProvider.notifier);
         timer.loadDocument(_words.length, startIndex: startIndex);
+        timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
         timer.setWpm(config.defaultWpm);
         if (_isRangeComplete) {
           timer.pause();
@@ -147,6 +148,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     final startIndex = bookmark != null ? resumeIndex(bookmark, doc) : 0;
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
+    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
@@ -171,6 +173,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: 0);
+    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
     timer.play();

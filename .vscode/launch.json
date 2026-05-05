@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "RunThru (MuMu)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "127.0.0.1:7555",
+      "args": ["--no-enable-impeller"],
+      "toolArgs": [
+        "--dart-define=INSTAPAPER_CONSUMER_KEY=${env:instapaper-consumer-key}",
+        "--dart-define=INSTAPAPER_CONSUMER_SECRET=${env:instapaper-consumer-secret}"
+      ]
+    },
+    {
+      "name": "RunThru (MuMu) — Profile",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "127.0.0.1:7555",
+      "flutterMode": "profile",
+      "args": ["--no-enable-impeller"]
+    },
+    {
+      "name": "RunThru (MuMu) — Release",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "127.0.0.1:7555",
+      "flutterMode": "release",
+      "args": ["--no-enable-impeller"]
+    }
+  ]
+}

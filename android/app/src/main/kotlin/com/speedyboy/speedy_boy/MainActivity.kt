@@ -68,31 +68,86 @@ class MainActivity : FlutterActivity() {
         when (intent.action) {
             Intent.ACTION_SEND -> handleActionSend(intent)
             Intent.ACTION_VIEW -> handleActionView(intent)
+            "com.runthru.READ_CLIPBOARD" -> handleReadClipboard()
+        }
+    }
+
+    /**
+     * Handles the "Read Clipboard" app shortcut.
+     * Sends a signal to Dart to read from clipboard and go straight to reading.
+     */
+    private fun handleReadClipboard() {
+        shareChannel?.invokeMethod("onReadClipboard", null)
+    }
+
+    /**
+     * Determines the share action from the activity-alias component.
+     * ".ReadNowActivity" → "readNow", ".ImportToLibraryActivity" → "import".
+     * Falls back to "readNow" if component is unrecognized.
+     */
+    private fun resolveShareAction(intent: Intent): String {
+        val className = intent.component?.shortClassName ?: return "readNow"
+        return when {
+            className.contains("ImportToLibrary") -> "import"
+            else -> "readNow"
         }
     }
 
     private fun handleActionSend(intent: Intent) {
         val mimeType = intent.type ?: return
+        val action = resolveShareAction(intent)
 
         when {
             mimeType.startsWith("text/") -> {
-                val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
-                val type = if (mimeType == "text/html") "htmlText" else "text"
-                shareChannel?.invokeMethod("onSharedContent", mapOf(
-                    "type" to type,
-                    "data" to text,
-                    "mimeType" to mimeType
-                ))
+                // Prefer EXTRA_HTML_TEXT — many apps (ChatGPT, Claude, etc.)
+                // include rich content here while EXTRA_TEXT gets just a URL.
+                val htmlText = intent.getStringExtra(Intent.EXTRA_HTML_TEXT)
+                val plainText = intent.getStringExtra(Intent.EXTRA_TEXT)
+
+                if (!htmlText.isNullOrBlank()) {
+                    // Rich HTML content available — use it.
+                    shareChannel?.invokeMethod("onSharedContent", mapOf(
+                        "type" to "htmlText",
+                        "data" to htmlText,
+                        "mimeType" to "text/html",
+                        "action" to action
+                    ))
+                } else if (!plainText.isNullOrBlank()) {
+                    // Check if plain text is just a URL.
+                    val trimmed = plainText.trim()
+                    val isUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+                    val type = if (isUrl) "url" else "text"
+                    shareChannel?.invokeMethod("onSharedContent", mapOf(
+                        "type" to type,
+                        "data" to trimmed,
+                        "mimeType" to mimeType,
+                        "action" to action
+                    ))
+                }
             }
             mimeType == "application/pdf" || mimeType == "application/epub+zip" -> {
                 val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return
-                copySharedFileAndForward(uri, mimeType)
+                copySharedFileAndForward(uri, mimeType, action)
             }
         }
     }
 
     private fun handleActionView(intent: Intent) {
         val uri = intent.data ?: return
+
+        if (uri.scheme == "runthru") {
+            // Custom scheme: runthru://read?text=<encoded text>
+            val text = uri.getQueryParameter("text")
+            if (!text.isNullOrBlank()) {
+                shareChannel?.invokeMethod("onSharedContent", mapOf(
+                    "type" to "text",
+                    "data" to text,
+                    "mimeType" to "text/plain"
+                ))
+                return
+            }
+        }
+
         val url = uri.toString()
         shareChannel?.invokeMethod("onSharedContent", mapOf(
             "type" to "url",
@@ -105,7 +160,7 @@ class MainActivity : FlutterActivity() {
      * the private path to Dart. This ensures we don't hold URI permissions
      * indefinitely (security best practice).
      */
-    private fun copySharedFileAndForward(uri: Uri, mimeType: String) {
+    private fun copySharedFileAndForward(uri: Uri, mimeType: String, action: String) {
         Thread {
             try {
                 val inputStream = contentResolver.openInputStream(uri) ?: return@Thread
@@ -130,7 +185,8 @@ class MainActivity : FlutterActivity() {
                         "type" to type,
                         "data" to destFile.absolutePath,
                         "title" to fileName,
-                        "mimeType" to mimeType
+                        "mimeType" to mimeType,
+                        "action" to action
                     ))
                 }
             } catch (e: Exception) {

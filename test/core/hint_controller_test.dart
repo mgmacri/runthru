@@ -110,6 +110,7 @@ void main() {
 
   group('long-press timer', () {
     test('fires callback after duration', () async {
+      // ignore: unused_local_variable
       var fired = false;
       controller.onLongPressHintTimerFired = () => fired = true;
       controller.startLongPressTimer();

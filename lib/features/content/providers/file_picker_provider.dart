@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:runthru/core/clipboard_document.dart';
+import 'package:runthru/features/content/services/content_normaliser.dart';
 import 'package:runthru/services/epub_extractor.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/pdf_extractor.dart';
@@ -162,13 +162,14 @@ class FilePickerNotifier extends _$FilePickerNotifier {
       case 'epub':
         return extractEpubInIsolate(filePath);
       case 'txt':
+        final txtContent = await File(filePath).readAsString();
+        return ContentNormaliser.normalise(txtContent, ContentType.plainText);
       case 'md':
+        final mdContent = await File(filePath).readAsString();
+        return ContentNormaliser.normalise(mdContent, ContentType.markdown);
       case 'html':
-        // Read file content and process as text.
-        // Will be replaced by ContentNormaliser in E1.3.2.
-        final content = await File(filePath).readAsString();
-        final doc = ClipboardDocument.fromClipboardText(content);
-        return doc.document;
+        final htmlContent = await File(filePath).readAsString();
+        return ContentNormaliser.normalise(htmlContent, ContentType.html);
       default:
         throw UnsupportedError('Unsupported file format: $extension');
     }

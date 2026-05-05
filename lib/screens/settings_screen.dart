@@ -12,6 +12,7 @@ import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
 import 'package:runthru/core/wcag_contrast.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/settings/widgets/pacing_panel.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
@@ -395,10 +396,7 @@ class SettingsScreen extends ConsumerWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Debug Logs',
-                        style: RunThruTypography.title,
-                      ),
+                      const Text('Debug Logs', style: RunThruTypography.title),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -519,6 +517,9 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
 
+          // ── Word Pacing ──
+          const PacingPanel(),
+
           // ── PDF Folder ──
           NeumorphicCard(
             surface: RunThruSurface.shell,
@@ -607,46 +608,45 @@ class SettingsScreen extends ConsumerWidget {
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: List.generate(
-                      RunThruTokens.anchorColors.length,
-                      (i) {
-                        final color = RunThruTokens.anchorColors[i];
-                        final selected = config.anchorColorIndex == i;
-                        return GestureDetector(
-                          onTap: () => notifier.setAnchorColorIndex(i),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: selected
-                                  ? Border.all(
-                                      color: RunThruTokens.shellTextPrimary,
-                                      width: 3,
-                                    )
-                                  : null,
-                              boxShadow: selected
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withAlpha(120),
-                                        blurRadius: 8,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: selected
-                                ? const Icon(
-                                    Icons.check,
+                    children: List.generate(RunThruTokens.anchorColors.length, (
+                      i,
+                    ) {
+                      final color = RunThruTokens.anchorColors[i];
+                      final selected = config.anchorColorIndex == i;
+                      return GestureDetector(
+                        onTap: () => notifier.setAnchorColorIndex(i),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: selected
+                                ? Border.all(
                                     color: RunThruTokens.shellTextPrimary,
-                                    size: 20,
+                                    width: 3,
                                   )
                                 : null,
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                      color: color.withAlpha(120),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
                           ),
-                        );
-                      },
-                    ),
+                          child: selected
+                              ? const Icon(
+                                  Icons.check,
+                                  color: RunThruTokens.shellTextPrimary,
+                                  size: 20,
+                                )
+                              : null,
+                        ),
+                      );
+                    }),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -680,8 +680,7 @@ class SettingsScreen extends ConsumerWidget {
                                         .anchorColorIndex
                                         .clamp(
                                           0,
-                                          RunThruTokens.anchorColors.length -
-                                              1,
+                                          RunThruTokens.anchorColors.length - 1,
                                         )],
                               ),
                             ),
@@ -699,10 +698,7 @@ class SettingsScreen extends ConsumerWidget {
                     builder: (context) {
                       final anchorColor =
                           RunThruTokens.anchorColors[config.anchorColorIndex
-                              .clamp(
-                                0,
-                                RunThruTokens.anchorColors.length - 1,
-                              )];
+                              .clamp(0, RunThruTokens.anchorColors.length - 1)];
                       final ratio = WcagContrast.contrastRatio(
                         anchorColor,
                         RunThruTokens.stageBase,

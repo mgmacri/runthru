@@ -1,7 +1,8 @@
 {
   "$schema": "https://runthru.app/schemas/backlog.v1.json",
   "project": "RunThru",
-  "generated": "2026-04-30",
+  "generated": "2026-05-02",
+  "last_updated": "2026-05-03",
   "generator": "agile-backlog-architect",
   "existing_capabilities": [
     "ORP Pacing Engine (competitive core — do not rebuild)",
@@ -43,6 +44,7 @@
         {
           "id": "M1.1",
           "title": "Identity and Infrastructure",
+          "status": "complete",
           "weeks": "1-2",
           "model": {
             "primary": "Opus 4.7",
@@ -53,6 +55,7 @@
             {
               "id": "E1.1.1",
               "title": "Rebrand",
+              "status": "complete",
               "description": "Rename app to RunThru, update icons, store listing prep, remove all legacy app name references",
               "model": {
                 "primary": "Opus 4.6",
@@ -276,6 +279,7 @@
             {
               "id": "E1.1.2",
               "title": "CI/CD Foundation",
+              "status": "complete",
               "description": "GitHub Actions lint+test pipeline, Fastlane signing scaffolding, release build verification",
               "model": {
                 "primary": "Opus 4.6",
@@ -425,6 +429,7 @@
         {
           "id": "M1.2",
           "title": "Calming UI + Design System",
+          "status": "complete",
           "weeks": "2-6",
           "model": {
             "primary": "Opus 4.7",
@@ -435,6 +440,7 @@
             {
               "id": "E1.2.1",
               "title": "Design System",
+              "status": "complete",
               "description": "Warm grays, soft creams, muted sage/slate; Atkinson Hyperlegible default, OpenDyslexic option; CVD-safe blue+orange; 3-4 themes (Light Warm, Dark, Sepia, High Contrast); Flutter ThemeData tokens",
               "model": {
                 "primary": "Opus 4.6",
@@ -708,6 +714,7 @@
             {
               "id": "E1.2.2",
               "title": "Calming UI Application",
+              "status": "complete",
               "description": "Apply design system to all screens; generous whitespace, rounded geometry, slow-eased transitions; text fades softly; CVD simulator pass",
               "model": {
                 "primary": "Opus 4.6",
@@ -984,6 +991,7 @@
             {
               "id": "E1.2.3",
               "title": "Riverpod State Migration",
+              "status": "complete",
               "description": "Migrate existing StatefulWidget screens to ConsumerWidget; establish provider architecture. FOUNDATIONAL — other epics depend on it.",
               "model": {
                 "primary": "Opus 4.6",
@@ -1233,8 +1241,262 @@
           "granularity_rationale": "Milestone boundary: design system tokens and Riverpod provider architecture are consumed by every downstream screen epic — 8 epics declare dependency on M1.2 outputs"
         },
         {
+          "id": "M1.2.5",
+          "title": "Pacing Engine — Best of Both Worlds",
+          "status": "complete",
+          "status_detail": "All features complete: algorithm port, WordTimer integration with warm-up ramp, and Pacing Settings UI with three independent scale sliders.",
+          "completed_date": "2026-04-30",
+          "weeks": "5",
+          "priority": "P0-TOP",
+          "priority_rationale": "Inserted ahead of M1.3 at user request. Comparison against ionutdecebal/rsvpnano (ESP32 RSVP reader, 561 stars) revealed our uniform-interval timer is materially worse for comprehension than their per-word duration model. Their pacing algorithm is orthogonal to rendering — we can absorb it without touching ORP, 3D viewport, ContextReveal, or gestures. Highest-ROI single change available before launch.",
+          "model": {
+            "primary": "Opus 4.7",
+            "fallback": "Opus 4.6",
+            "rationale": "Milestone-level planning that touches the competitive core (word_timer.dart) — needs strategic reasoning to avoid regressing existing pacing behavior"
+          },
+          "competitive_analysis": {
+            "source": "https://github.com/ionutdecebal/rsvpnano (src/reader/ReadingLoop.cpp, test/test_pacing/test_main.cpp)",
+            "license": "MIT — algorithm/constants may be reimplemented in Dart with attribution",
+            "their_strength": "Per-word duration model: base interval (60000/WPM) + length bonus (tiered, with compound-joiner and tech-connector detection) + complexity bonus (syllable groups, all-caps, mixed alphanumeric) + punctuation pause (comma/dash/semicolon/period/exclamation/ellipsis with abbreviation suppression). Each category independently user-scalable 25-200%. 30+ host-side unit tests.",
+            "our_strength": "Rendering, accessibility, A/B-testable display modes (preserved)",
+            "integration_strategy": "DONE — WordTimerNotifier._scheduleNext() now calls durationForWord() for per-word intervals. PacingConfig persisted in AppConfig. Warm-up ramp (80%→100% over 10s) also implemented during this milestone. Rendering, gestures, ContextReveal, ORP, and 3D parallax were not touched."
+          },
+          "epics": [
+            {
+              "id": "E1.2.5.1",
+              "title": "Per-Word Adaptive Pacing",
+              "status": "complete",
+              "status_detail": "All features complete: algorithm port, WordTimer integration, and Pacing Settings UI.",
+              "description": "Replace the uniform 60000/WPM interval in WordTimerNotifier with a per-word duration function modeled on RSVP Nano's pacing algorithm. Adds length, complexity, and punctuation bonuses to each word's display time, with independent user-scalable multipliers and abbreviation-aware sentence pause suppression. Preserves all existing rendering, A/B test conditions, drift correction, and auto-rewind behavior.",
+              "model": {
+                "primary": "Opus 4.6",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Touches the competitive core (word_timer.dart) — must coordinate algorithm port, settings UI, persistence, and test coverage without regressing existing OrpCondition A/B test infrastructure"
+              },
+              "depends_on": ["E1.2.3"],
+              "parallelizable_with": [],
+              "skills_required": [
+                "flutter-managing-state",
+                "riverpod-providers",
+                "flutter-testing-apps"
+              ],
+              "guardrails": [
+                "Do NOT modify lib/core/orp.dart, lib/three_d/, ContextReveal, or gesture system",
+                "Pacing engine is pure Dart — no platform channels, no isolates required (algorithm is microsecond-scale)",
+                "Existing OrpCondition A/B test wiring must continue to work unchanged",
+                "Drift correction and auto-rewind-on-resume behavior must be preserved",
+                "All public symbols dartdoc'd",
+                "Settings UI uses RunThruColors and RunThruTextStyles tokens — no raw Color/TextStyle",
+                "Per-category scale sliders default to 100% (zero behavior change for existing users until they opt in)",
+                "Reduced-motion users still get pacing variation (this is timing, not animation — accessibility win, not loss)"
+              ],
+              "ethical_blockers": [
+                {
+                  "type": "accessibility",
+                  "rule": "Per-word pacing improves comprehension for ADHD/neurodivergent readers — this is an accessibility feature and is NEVER paywalled per project ethical commitment",
+                  "blocker": true
+                },
+                {
+                  "type": "attribution",
+                  "rule": "RSVP Nano is MIT-licensed. Add attribution comment in word_duration.dart and an entry to NOTICE/THIRD_PARTY.md noting algorithm constants are derived from ionutdecebal/rsvpnano.",
+                  "blocker": true
+                }
+              ],
+              "features": [
+                {
+                  "id": "F1.2.5.1.1",
+                  "title": "Word Duration Algorithm Port",
+                  "status": "complete",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Algorithm port from C++ to Dart — mechanical translation guided by reference test suite"
+                  },
+                  "tasks": [
+                    {
+                      "id": "T1.2.5.1.1.1.1",
+                      "title": "Create lib/features/reading/pacing/word_duration.dart",
+                      "status": "complete",
+                      "files_in_scope": [
+                        "lib/features/reading/pacing/word_duration.dart",
+                        "lib/features/reading/pacing/pacing_config.dart"
+                      ],
+                      "what_to_do": [
+                        "Define `PacingConfig` immutable class with: longWordDelayMs (default 200), complexWordDelayMs (default 200), punctuationDelayMs (default 200), longWordScalePercent (25-200, default 100), complexWordScalePercent (25-200, default 100), punctuationScalePercent (25-200, default 100). copyWith + ==/hashCode.",
+                        "Implement `int durationForWord(String word, {required String? nextWord, required int baseIntervalMs, required PacingConfig config})` returning total ms.",
+                        "Length bonus: tiered per-character percentages above 6/10/14 readable chars; compound-joiner detection ('-' between word chars → +14%); tech-connector detection ('_', '/', '.' in tokens like 'U.S.' or 'foo_bar') → +8% beyond joiners; long-compound bonus when readable >= 10 with joiner. Cap at 170%.",
+                        "Complexity bonus: approximate syllable groups via vowel-group counting with silent-e adjustment ('-le'/'-ye' suffixes preserved); >2 groups → +10% per extra group, capped; all-caps token (uppercase==letterCount, letterCount>0) → +14%; mixed letter+digit → +15%; dense tech connectors → additional bonus. Cap at complexity max.",
+                        "Punctuation pause: trailing-rhythm character switch — ',' → +45%, ';'/':' → +80%, '-' → +60%, '.' → +135% (suppressed if abbreviation detected), '!'/'?' → +150%, ellipsis '...' → +110%. Abbreviation detection: known list ('Mr.','Mrs.','Dr.','U.S.','etc.','i.e.','e.g.', etc.), dotted initialism (interleaved letters and dots), short-word-period heuristic (readable<=4 AND nextWord starts lowercase). Strip trailing closing quotes/parens before classifying.",
+                        "Apply scale percentages: bonusMs = (bonusPercent * scalePercent / 100) * delayMs / 100. Sum length/complexity/punctuation bonus ms, add to baseIntervalMs.",
+                        "All helpers are private top-level functions. Public surface: PacingConfig, durationForWord, defaultPacingConfig.",
+                        "Add file-level dartdoc citing https://github.com/ionutdecebal/rsvpnano (MIT) as source of algorithm constants and tier thresholds.",
+                        "Pure Dart — zero Flutter imports, zero platform channels."
+                      ],
+                      "verification_command": "dart analyze lib/features/reading/pacing/",
+                      "acceptance_criteria": [
+                        "PacingConfig is immutable with copyWith, ==, hashCode",
+                        "All scale fields clamp to [25, 200]; all delay fields clamp to [0, 1000]",
+                        "durationForWord is pure (no side effects, deterministic)",
+                        "File-level dartdoc cites RSVP Nano (MIT) attribution",
+                        "Zero analysis issues"
+                      ]
+                    },
+                    {
+                      "id": "T1.2.5.1.1.1.2",
+                      "title": "Port RSVP Nano test suite to Dart",
+                      "status": "complete",
+                      "files_in_scope": [
+                        "test/features/reading/pacing/word_duration_test.dart"
+                      ],
+                      "parallelizable_with": ["T1.2.5.1.1.1.1"],
+                      "what_to_do": [
+                        "Translate every assertion in https://raw.githubusercontent.com/ionutdecebal/rsvpnano/main/test/test_pacing/test_main.cpp into Dart group/test blocks.",
+                        "Cover groups: WPM clamping (skipped — handled by WordTimerNotifier), no-bonus baseline ('a' → 200ms at 300 WPM), comma/sentence/strong-sentence/clause/dash/ellipsis pauses, sentence-pause preserved with closing quote/paren, abbreviation suppression (Mr., U.S., short-word-period before lowercase), accented/extended-Latin lowercase suppresses pause but uppercase does not, length bonus (strength → 224ms, information → 318ms), compound bonus (well-known → 264ms), all-caps complexity (NASA → 228ms), pacing scale halved (punctuation 50% → 334ms), pacing scale floor (longWord 0% → 206ms via 25% clamp).",
+                        "Each test asserts exact ms equality — these are the contract.",
+                        "Use `const baseInterval = 200; // 300 WPM` as the standard baseline for readability."
+                      ],
+                      "verification_command": "flutter test test/features/reading/pacing/word_duration_test.dart",
+                      "acceptance_criteria": [
+                        "All 30+ test cases from RSVP Nano's test_main.cpp ported",
+                        "Every test passes against the Dart implementation",
+                        "Zero new failures vs. baseline (264/20/4)"
+                      ]
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: pure-algorithm port + its test suite is one cohesive unit — tests can be written in parallel against the documented C++ contract before Dart impl lands"
+                },
+                {
+                  "id": "F1.2.5.1.2",
+                  "title": "WordTimer Integration",
+                  "status": "complete",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Integration into existing notifier — preserve drift correction, auto-rewind, A/B test wiring"
+                  },
+                  "tasks": [
+                    {
+                      "id": "T1.2.5.1.2.1.1",
+                      "title": "Wire word_duration into WordTimerNotifier",
+                      "status": "complete",
+                      "files_in_scope": [
+                        "lib/core/word_timer.dart",
+                        "lib/store/config.dart",
+                        "lib/store/models.dart"
+                      ],
+                      "what_to_do": [
+                        "Add `PacingConfig pacingConfig` field to WordTimerState (default: defaultPacingConfig). Add to copyWith.",
+                        "Add list-of-words context to WordTimerNotifier so durationForWord can see nextWord. Currently notifier only tracks index — extend constructor or setter to accept the full word stream from the reading screen (or expose a callback `String? Function(int index) wordAt`).",
+                        "In `_scheduleNext()`, replace `state.intervalMs` usage with: `final base = state.intervalMs; final word = wordAt(state.currentIndex); final next = wordAt(state.currentIndex + 1); final interval = durationForWord(word, nextWord: next, baseIntervalMs: base, config: state.pacingConfig);` — apply existing drift correction on top of `interval` (not `base`).",
+                        "Persist PacingConfig via existing ConfigNotifier (lib/store/config.dart). Add JSON serialization. Migration: missing keys default to 100% scale / 200ms delay (preserves existing behavior).",
+                        "OrpCondition A/B test wiring untouched — pacing is orthogonal to anchor styling.",
+                        "Auto-rewind 3 words on resume: unchanged."
+                      ],
+                      "verification_command": "dart analyze lib/core/word_timer.dart lib/store/",
+                      "acceptance_criteria": [
+                        "Existing word_timer_test.dart and orp_condition_test.dart still pass",
+                        "When PacingConfig is at defaults (100%/200ms), behavior matches old uniform interval (regression test required)",
+                        "Drift correction applies to the per-word interval, not the base",
+                        "PacingConfig round-trips through SharedPreferences/Isar without loss",
+                        "Zero analysis issues"
+                      ]
+                    },
+                    {
+                      "id": "T1.2.5.1.2.1.2",
+                      "title": "Add integration test: paragraph pacing",
+                      "status": "complete",
+                      "files_in_scope": [
+                        "test/core/word_timer_pacing_test.dart"
+                      ],
+                      "what_to_do": [
+                        "Test: feed a known paragraph ('The quick brown fox jumps over the lazy dog. NASA launched information about U.S. policy, well-known and verified.') at 300 WPM with default config. Assert total elapsed ms within ±2% of sum(durationForWord) for each word.",
+                        "Test: per-category scale at 0% (clamps to 25%) reduces pause durations by exactly 75% for affected category only — other categories unaffected.",
+                        "Test: WordTimerState.copyWith(pacingConfig: ...) propagates without resetting currentIndex or isPlaying."
+                      ],
+                      "verification_command": "flutter test test/core/word_timer_pacing_test.dart",
+                      "acceptance_criteria": [
+                        "Three tests pass",
+                        "No new failures in baseline"
+                      ]
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: integration into the live notifier requires careful coordination with persistence and existing A/B test infrastructure — separate from the pure-algorithm port"
+                },
+                {
+                  "id": "F1.2.5.1.3",
+                  "title": "Pacing Settings UI",
+                  "status": "complete",
+                  "status_detail": "PacingPanel with three sliders (25-200%), live preview, reset button, and accessible info sheet. All design tokens used. Touch targets >=48dp.",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Settings screen extension using existing design system tokens"
+                  },
+                  "tasks": [
+                    {
+                      "id": "T1.2.5.1.3.1.1",
+                      "title": "Add Word Pacing settings panel",
+                      "status": "complete",
+                      "status_detail": "PacingPanel widget created at lib/features/settings/widgets/pacing_panel.dart with three scale sliders, live preview, reset button, and info sheet. Wired into settings_screen.dart.",
+                      "files_in_scope": [
+                        "lib/features/settings/widgets/pacing_panel.dart",
+                        "lib/screens/settings_screen.dart"
+                      ],
+                      "what_to_do": [
+                        "Create `PacingPanel` ConsumerWidget showing three sliders (Long words, Complexity, Punctuation), each 25-200%, default 100%, with current % displayed and a numeric label fallback (no color-only signal).",
+                        "Add 'Reset pacing' button that restores all three to 100%.",
+                        "Add a live preview row at top: a fixed sample paragraph rendered with current pacing settings via a tiny in-page playback (or a static computed-total-ms readout: 'Sample paragraph: 4.2s at 300 WPM').",
+                        "Wire to ConfigNotifier so changes persist immediately.",
+                        "Use RunThruColors and RunThruTextStyles tokens. Touch targets ≥48dp. Slider thumbs labeled. Semantics widgets on every interactive element.",
+                        "Add an 'About pacing' info button that opens a sheet explaining: 'Long words, complex words, and punctuation get extra time. Set each to 0% (treated as 25% minimum) to nearly disable, or 200% to emphasize. This is not speed-reading — it's giving every word the time it deserves.' — frames it accessibly, no ableist language."
+                      ],
+                      "verification_command": "dart analyze lib/features/settings/widgets/pacing_panel.dart lib/screens/settings_screen.dart",
+                      "acceptance_criteria": [
+                        "Three sliders for length/complexity/punctuation scales (25-200%)",
+                        "Reset button restores defaults",
+                        "Settings persist via ConfigNotifier",
+                        "All tokens from design system (no raw Color/TextStyle/BoxDecoration)",
+                        "Touch targets ≥48dp",
+                        "Screen-reader accessible (Semantics on sliders + buttons)",
+                        "Info copy avoids ableist language and dark patterns",
+                        "Zero analysis issues"
+                      ]
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: settings UI is pure widget work using established design tokens — independent of algorithm and integration concerns"
+                }
+              ],
+              "parallel_clusters": [
+                {
+                  "agents": 2,
+                  "cluster": ["T1.2.5.1.1.1.1", "T1.2.5.1.1.1.2"],
+                  "rationale": "Algorithm port and its ported test suite can be written in parallel — tests are derived from the public C++ contract, not the in-progress Dart impl"
+                }
+              ],
+              "granularity_rationale": "Epic scope: per-word adaptive pacing requires a pure-algorithm port (F1.2.5.1.1), integration into the live word timer notifier preserving drift/rewind/A-B-test behavior (F1.2.5.1.2), and a settings UI for the three independent scale knobs (F1.2.5.1.3) — three concerns, three features, sequenced because integration depends on the algorithm and settings UI depends on the persisted config"
+            }
+          ],
+          "parallel_clusters": [],
+          "skills_to_load": [
+            "flutter-managing-state",
+            "riverpod-providers",
+            "flutter-testing-apps"
+          ],
+          "completion_criteria": [
+            "Test-Path lib/features/reading/pacing/word_duration.dart",
+            "Test-Path lib/features/reading/pacing/pacing_config.dart",
+            "Test-Path test/features/reading/pacing/word_duration_test.dart",
+            "Test-Path test/core/word_timer_pacing_test.dart",
+            "Test-Path lib/features/settings/widgets/pacing_panel.dart",
+            "dart analyze lib/ → zero issues",
+            "flutter test → no new failures vs baseline (264/20/4)",
+            "All 30+ ported RSVP Nano pacing assertions pass",
+            "NOTICE or THIRD_PARTY.md updated with RSVP Nano attribution"
+          ],
+          "granularity_rationale": "Milestone boundary: pacing engine improvement is a single high-ROI epic with three tightly-coupled features (algorithm, integration, UI) — does not warrant being split across multiple milestones, but is foundational enough to interrupt M1.3 because launching MVP with a uniform-interval timer when a peer-validated alternative exists is a missed competitive moat"
+        },
+        {
           "id": "M1.3",
           "title": "Content Ingestion",
+          "status": "complete",
+          "status_detail": "E1.3.1-E1.3.3 complete. E1.3.4 deferred. E1.3.5 Instapaper Integration queued as next active work.",
           "weeks": "5-9",
           "model": {
             "primary": "Opus 4.7",
@@ -1245,6 +1507,7 @@
             {
               "id": "E1.3.1",
               "title": "Universal Share Sheet",
+              "status": "complete",
               "description": "iOS Share Extension + Android Intent receiver — HIGHEST PRIORITY content source",
               "model": {
                 "primary": "Opus 4.6",
@@ -1309,6 +1572,7 @@
                         {
                           "id": "T1.3.1.1.1.2",
                           "title": "Create Dart-side intent handler provider to receive and route shared content",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Provider creation with platform channel handling"
@@ -1360,6 +1624,7 @@
                         {
                           "id": "T1.3.1.2.1.1",
                           "title": "Create Share Extension target in Xcode project with app group",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "iOS extension setup requires Xcode project understanding"
@@ -1388,6 +1653,7 @@
                         {
                           "id": "T1.3.1.2.1.2",
                           "title": "Create Dart-side handler to read content from iOS app group on launch",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Cross-platform content routing"
@@ -1427,6 +1693,8 @@
             {
               "id": "E1.3.2",
               "title": "Content Pipeline Cleanup",
+              "status": "complete",
+              "status_detail": "All features complete. PDF tests, EPUB tests, ContentNormaliser service+tests done, and ContentNormaliser is wired into both file_picker_provider and share_intent_provider.",
               "description": "PDF cleanup with pdfrx, EPUB cleanup, plain text/Markdown/HTML normalisation; beta label OK",
               "model": {
                 "primary": "Opus 4.6",
@@ -1449,6 +1717,7 @@
                 {
                   "id": "F1.3.2.1",
                   "title": "PDF Extraction Cleanup",
+                  "status": "complete",
                   "model": {
                     "primary": "Sonnet 4.6",
                     "rationale": "Refactoring existing PDF code"
@@ -1461,6 +1730,7 @@
                         {
                           "id": "T1.3.2.1.1.1",
                           "title": "Refactor pdf_extractor.dart to handle edge cases and add progress reporting",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Refactoring complex existing code"
@@ -1493,6 +1763,7 @@
                         {
                           "id": "T1.3.2.1.1.2",
                           "title": "Add unit tests for PDF extraction edge cases",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Test creation for complex extraction logic"
@@ -1527,6 +1798,7 @@
                 {
                   "id": "F1.3.2.2",
                   "title": "EPUB Extraction Cleanup",
+                  "status": "complete",
                   "model": {
                     "primary": "Sonnet 4.6",
                     "rationale": "Refactoring existing EPUB code"
@@ -1539,6 +1811,7 @@
                         {
                           "id": "T1.3.2.2.1.1",
                           "title": "Refactor epub_extractor.dart for chapter detection and progress reporting",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "EPUB parsing refactoring"
@@ -1568,6 +1841,7 @@
                         {
                           "id": "T1.3.2.2.1.2",
                           "title": "Add unit tests for EPUB extraction",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Test creation"
@@ -1601,6 +1875,8 @@
                 {
                   "id": "F1.3.2.3",
                   "title": "Plain Text and HTML Normalisation",
+                  "status": "complete",
+                  "status_detail": "ContentNormaliser service, tests, and wiring all verified complete in codebase.",
                   "model": {
                     "primary": "Sonnet 4.6",
                     "rationale": "Content normalisation pipeline"
@@ -1613,6 +1889,7 @@
                         {
                           "id": "T1.3.2.3.1.1",
                           "title": "Create content normaliser that strips HTML/Markdown to plain reading tokens",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Content processing pipeline"
@@ -1641,6 +1918,7 @@
                         {
                           "id": "T1.3.2.3.1.2",
                           "title": "Add unit tests for content normaliser",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Test creation"
@@ -1665,9 +1943,41 @@
                           ],
                           "estimated_hours": 1.5,
                           "granularity_rationale": "Atomic: normaliser test file depends on implementation API being defined — sequential dependency on T1.3.2.3.1.1 output"
+                        },
+                        {
+                          "id": "T1.3.2.3.1.3",
+                          "title": "Wire ContentNormaliser into file_picker_provider and share_intent_provider",
+                          "status": "complete",
+                          "status_detail": "Both providers import and call ContentNormaliser.normalise() for .txt, .md, .html (file_picker) and plainText/html (share_intent).",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Integration wiring — replace fallback parsing with normaliser"
+                          },
+                          "depends_on": [
+                            "T1.3.2.3.1.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/file_picker_provider.dart",
+                            "lib/features/content/providers/share_intent_provider.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "dart analyze lib/features/content/providers/ && flutter test test/features/content/",
+                          "acceptance_criteria": [
+                            "file_picker_provider uses ContentNormaliser.normalise() for .txt, .md, .html files instead of ClipboardDocument.fromClipboardText() fallback",
+                            "share_intent_provider uses ContentNormaliser.normalise() for HTML share intents instead of _basicHtmlStrip()",
+                            "Both TODO comments referencing E1.3.2 are resolved",
+                            "Existing content ingestion tests still pass",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: replace two fallback code paths (~10 lines each) in two provider files with calls to the now-existing ContentNormaliser — the last wiring step to close E1.3.2"
                         }
                       ],
-                      "granularity_rationale": "Story groups 2 tasks: normaliser implementation then tests — test file depends on implementation API being defined (sequential)"
+                      "granularity_rationale": "Story groups 3 tasks: normaliser implementation, tests, then integration wiring into providers — sequential dependency chain"
                     }
                   ],
                   "granularity_rationale": "Feature split: plain text/HTML/Markdown normalisation is a greenfield service — unlike PDF/EPUB cleanup which refactors existing code with known edge cases"
@@ -1678,6 +1988,7 @@
             {
               "id": "E1.3.3",
               "title": "Clipboard and File Picker",
+              "status": "complete",
               "description": "Clipboard auto-detect on foreground, local file picker for PDF/EPUB/TXT",
               "model": {
                 "primary": "Opus 4.6",
@@ -1702,6 +2013,7 @@
                 {
                   "id": "F1.3.3.1",
                   "title": "Clipboard Auto-Detect",
+                  "status": "complete",
                   "model": {
                     "primary": "Sonnet 4.6",
                     "rationale": "Single feature implementation"
@@ -1714,6 +2026,7 @@
                         {
                           "id": "T1.3.3.1.1.1",
                           "title": "Create clipboard detection provider that checks on app lifecycle resume",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Lifecycle-aware provider with platform interaction"
@@ -1747,6 +2060,7 @@
                         {
                           "id": "T1.3.3.1.1.2",
                           "title": "Create clipboard import confirmation widget",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "UI widget creation"
@@ -1785,6 +2099,7 @@
                 {
                   "id": "F1.3.3.2",
                   "title": "Local File Picker",
+                  "status": "complete",
                   "model": {
                     "primary": "Sonnet 4.6",
                     "rationale": "File picker integration"
@@ -1797,6 +2112,7 @@
                         {
                           "id": "T1.3.3.2.1.1",
                           "title": "Create file picker integration with supported format filtering",
+                          "status": "complete",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "File picker with format routing"
@@ -1832,6 +2148,573 @@
                 }
               ],
               "granularity_rationale": "Epic scope: clipboard detection and file picker are independent content-ingestion sources with different platform APIs — parallelizable with E1.3.1 due to zero file overlap"
+            },
+            {
+              "id": "E1.3.4",
+              "title": "LLM Content Optimization",
+              "status": "deferred",
+              "status_detail": "Deferred — prioritised Instapaper integration (E1.3.5) over LLM-specific stripping. Can be picked up post-MVP.",
+              "description": "Harden ContentNormaliser for LLM chat responses (ChatGPT, Claude, Gemini) — strip fenced code blocks, tables, escape sequences — and add direct-to-reading navigation when content arrives via share intent",
+              "model": {
+                "primary": "Sonnet 4.6",
+                "rationale": "Targeted content pipeline enhancements — no cross-cutting coordination needed"
+              },
+              "depends_on": [
+                "E1.3.1",
+                "E1.3.2"
+              ],
+              "parallelizable_with": [],
+              "skills_required": [
+                "flutter-handling-concurrency",
+                "riverpod-providers",
+                "flutter-implementing-navigation-and-routing"
+              ],
+              "guardrails": [
+                "Privacy: no content uploaded to cloud",
+                "Reading content stays on device",
+                "No ableist language in UI copy"
+              ],
+              "features": [
+                {
+                  "id": "F1.3.4.1",
+                  "title": "Markdown Code Block and Table Stripping",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Regex-based content processing enhancement"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.4.1.1",
+                      "title": "Strip fenced code blocks, tables, and escape sequences from markdown content",
+                      "tasks": [
+                        {
+                          "id": "T1.3.4.1.1.1",
+                          "title": "Add fenced code block, indented code block, table, and escape sequence stripping to _stripMarkdown",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Regex additions to existing content normaliser"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.4.1.1.2"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-concurrency"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/services/content_normaliser.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/services/content_normaliser.dart",
+                          "acceptance_criteria": [
+                            "Fenced code blocks (```lang ... ```) are stripped entirely from output",
+                            "Indented code blocks (4+ leading spaces after a blank line) are stripped entirely",
+                            "Markdown tables (|---|---| patterns with pipe-delimited rows) are stripped entirely",
+                            "Escape sequences (\\*, \\[, \\]) have backslash removed, character preserved",
+                            "Footnote markers ([^1]) and definitions ([^1]: text) are stripped",
+                            "Existing markdown stripping (headings, bold, italic, links, lists, blockquotes) unchanged",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: regex additions to existing _stripMarkdown method in one file — all patterns are independent of each other but share ordering constraints within the method"
+                        },
+                        {
+                          "id": "T1.3.4.1.1.2",
+                          "title": "Add unit tests for LLM-specific markdown patterns",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation against known LLM output patterns"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.4.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps"
+                          ],
+                          "files_in_scope": [
+                            "test/features/content/services/content_normaliser_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/features/content/services/content_normaliser_test.dart",
+                          "acceptance_criteria": [
+                            "Test: fenced code block with language tag produces zero code words in output",
+                            "Test: fenced code block without language tag is stripped",
+                            "Test: multi-line fenced code block (10+ lines of Python/JS) fully removed",
+                            "Test: markdown table with 3+ columns and 5+ rows fully removed",
+                            "Test: indented code block after blank line is removed",
+                            "Test: escaped characters (\\*, \\[, \\]) produce unescaped character",
+                            "Test: real-world ChatGPT response with mixed prose+code produces only prose words",
+                            "Test: real-world Claude response with markdown formatting produces clean reading tokens",
+                            "Test: existing markdown tests still pass (no regressions)",
+                            "All tests pass"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: test file extends existing content_normaliser_test.dart with new group for LLM patterns — parallelizable with implementation via expected contract"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups 2 tasks: normaliser enhancement and its tests — parallelizable since tests can be written against expected regex behavior contract"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: markdown stripping enhancements are pure Dart regex work in one file — isolated from navigation/routing changes in F1.3.4.2"
+                },
+                {
+                  "id": "F1.3.4.2",
+                  "title": "Direct-to-Reading on Share Intent",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Navigation and provider wiring"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.4.2.1",
+                      "title": "Navigate directly to reading screen when content arrives via share intent",
+                      "tasks": [
+                        {
+                          "id": "T1.3.4.2.1.1",
+                          "title": "Wire ShareIntentProvider done state to auto-navigate to reading screen via go_router",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Provider listener + navigation wiring"
+                          },
+                          "depends_on": [
+                            "E1.3.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.4.1.1.1",
+                            "T1.3.4.1.1.2"
+                          ],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-implementing-navigation-and-routing"
+                          ],
+                          "files_in_scope": [
+                            "lib/app.dart",
+                            "lib/navigation/app_router.dart",
+                            "lib/features/content/providers/share_intent_provider.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/",
+                            "android/",
+                            "ios/"
+                          ],
+                          "verification_command": "dart analyze lib/app.dart lib/navigation/ lib/features/content/providers/share_intent_provider.dart",
+                          "acceptance_criteria": [
+                            "When ShareIntentProvider transitions to ShareIntentDone, app navigates to reading screen with the extracted document",
+                            "Navigation uses go_router (no Navigator.push)",
+                            "If app is cold-started via share intent, reading screen appears after extraction completes",
+                            "If app is already open, reading screen replaces current route",
+                            "Back navigation from share-initiated reading returns to library (not previous app)",
+                            "ShareIntentProvider state is cleared after navigation",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: wiring ref.listen on ShareIntentProvider to trigger go_router navigation — touches 2-3 files but is one logical integration point"
+                        }
+                      ],
+                      "granularity_rationale": "Single-task story: direct-to-reading navigation is one integration point between provider state and router — not decomposable further"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: navigation wiring is Flutter/Riverpod/go_router work — isolated from pure Dart regex work in F1.3.4.1"
+                }
+              ],
+              "granularity_rationale": "Epic scope: LLM content optimization combines content quality (markdown stripping) with UX flow (direct-to-reading) — both are needed for the LLM share use case to feel complete, but touch different file sets"
+            },
+            {
+              "id": "E1.3.5",
+              "title": "Instapaper Integration",
+              "status": "not_started",
+              "description": "OAuth xAuth login to Instapaper, fetch saved bookmarks list, import article text (HTML) through ContentNormaliser for paced reading",
+              "model": {
+                "primary": "Sonnet 4.6",
+                "rationale": "API integration with existing content pipeline — single-scope feature work"
+              },
+              "depends_on": [
+                "E1.3.2"
+              ],
+              "parallelizable_with": [],
+              "skills_required": [
+                "riverpod-providers",
+                "riverpod-consumers",
+                "flutter-handling-http-and-json",
+                "flutter-managing-state",
+                "flutter-building-layouts"
+              ],
+              "guardrails": [
+                "OAuth tokens in secure storage only (flutter_secure_storage). Never log credentials.",
+                "No silent network calls. User confirms before any fetch.",
+                "Privacy: article content stays on device after fetch. No re-upload.",
+                "No ableist language in UI copy"
+              ],
+              "features": [
+                {
+                  "id": "F1.3.5.1",
+                  "title": "Instapaper Authentication",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "OAuth xAuth flow is a single integration concern"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.5.1.1",
+                      "title": "Authenticate with Instapaper via xAuth and persist tokens securely",
+                      "tasks": [
+                        {
+                          "id": "T1.3.5.1.1.1",
+                          "title": "Create Instapaper API client with OAuth 1.0a xAuth",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "HTTP client with OAuth signing"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.5.1.1.3"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-http-and-json"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/services/instapaper_client.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/services/instapaper_client.dart",
+                          "acceptance_criteria": [
+                            "InstapaperClient class with dio-based HTTP transport",
+                            "xAuth authentication via /api/1.1/oauth/access_token",
+                            "OAuth 1.0a request signing (HMAC-SHA1) on all API calls",
+                            "Token pair (oauth_token, oauth_token_secret) returned on success",
+                            "Typed error responses for invalid credentials and rate limiting",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: HTTP client with OAuth signing is one class — all methods share the same signing logic"
+                        },
+                        {
+                          "id": "T1.3.5.1.1.2",
+                          "title": "Create Instapaper auth provider with secure token persistence",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Riverpod provider with secure storage"
+                          },
+                          "depends_on": [
+                            "T1.3.5.1.1.1"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-managing-state"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/instapaper_auth_provider.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/providers/instapaper_auth_provider.dart",
+                          "acceptance_criteria": [
+                            "@riverpod annotated AsyncNotifier for auth state (unauthenticated/authenticated/error)",
+                            "Tokens persisted via flutter_secure_storage — never in SharedPreferences",
+                            "login(username, password) method triggers xAuth and stores tokens",
+                            "logout() clears tokens from secure storage and resets state",
+                            "On app start, checks for existing tokens and restores session",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: auth provider is one Riverpod notifier wrapping InstapaperClient login + flutter_secure_storage — single responsibility"
+                        },
+                        {
+                          "id": "T1.3.5.1.1.3",
+                          "title": "Add unit tests for Instapaper auth flow",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation for auth flow"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.5.1.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps",
+                            "riverpod-testing"
+                          ],
+                          "files_in_scope": [
+                            "test/features/content/services/instapaper_client_test.dart",
+                            "test/features/content/providers/instapaper_auth_provider_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/features/content/services/instapaper_client_test.dart test/features/content/providers/instapaper_auth_provider_test.dart",
+                          "acceptance_criteria": [
+                            "Test: successful xAuth returns token pair",
+                            "Test: invalid credentials return typed error",
+                            "Test: rate limiting returns typed error",
+                            "Test: OAuth signature generation matches known test vectors",
+                            "Test: auth provider transitions unauthenticated → authenticated on login",
+                            "Test: auth provider clears tokens on logout",
+                            "Test: auth provider restores session from secure storage on init",
+                            "All tests pass with mocked HTTP responses (mocktail)"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: test file parallels implementation — can be written against contract before client exists"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups auth client, provider, and tests — client and tests are parallelizable; provider depends on client"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: authentication is isolated from data fetching — different API endpoints, different security concerns"
+                },
+                {
+                  "id": "F1.3.5.2",
+                  "title": "Bookmark List Fetching",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "API data fetching with Riverpod async provider"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.5.2.1",
+                      "title": "Fetch and display saved Instapaper bookmarks in library",
+                      "tasks": [
+                        {
+                          "id": "T1.3.5.2.1.1",
+                          "title": "Add bookmarks/list endpoint to InstapaperClient",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "API endpoint addition to existing client"
+                          },
+                          "depends_on": [
+                            "T1.3.5.1.1.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.5.2.1.3"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-http-and-json"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/services/instapaper_client.dart",
+                            "lib/features/content/models/instapaper_bookmark.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/services/instapaper_client.dart lib/features/content/models/instapaper_bookmark.dart",
+                          "acceptance_criteria": [
+                            "InstapaperBookmark model class with id, title, url, description, progress fields",
+                            "getBookmarks({limit, folderId}) method on InstapaperClient",
+                            "Paginates via have_id parameter",
+                            "Returns List<InstapaperBookmark>",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: one endpoint addition plus one model class"
+                        },
+                        {
+                          "id": "T1.3.5.2.1.2",
+                          "title": "Create Instapaper bookmarks provider",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Riverpod async provider for paginated list"
+                          },
+                          "depends_on": [
+                            "T1.3.5.2.1.1",
+                            "T1.3.5.1.1.2"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-managing-state"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/instapaper_bookmarks_provider.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/providers/instapaper_bookmarks_provider.dart",
+                          "acceptance_criteria": [
+                            "@riverpod annotated AsyncNotifier for bookmark list state",
+                            "Fetches bookmarks on init when authenticated",
+                            "Exposes refresh() for pull-to-refresh",
+                            "Returns empty list when not authenticated",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 2,
+                          "granularity_rationale": "Atomic: one provider wrapping one client method"
+                        },
+                        {
+                          "id": "T1.3.5.2.1.3",
+                          "title": "Create Instapaper section in library screen",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Widget integration with existing library screen"
+                          },
+                          "depends_on": [
+                            "T1.3.5.1.1.2"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.5.2.1.1"
+                          ],
+                          "skills_required": [
+                            "riverpod-consumers",
+                            "flutter-building-layouts"
+                          ],
+                          "files_in_scope": [
+                            "lib/screens/library_screen.dart",
+                            "lib/features/content/widgets/instapaper_bookmark_list.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/screens/library_screen.dart lib/features/content/widgets/instapaper_bookmark_list.dart",
+                          "acceptance_criteria": [
+                            "Instapaper section visible in library screen when authenticated",
+                            "Shows login prompt when not authenticated",
+                            "Bookmark list items show title, URL domain, and reading progress",
+                            "Tap on bookmark triggers article import",
+                            "All colors via design tokens, text via typography tokens",
+                            "Touch targets >= 48dp",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: one widget group — bookmark list + library integration"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups API endpoint, provider, and UI — UI and API are parallelizable since UI can stub provider"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: listing bookmarks is read-only API + UI — isolated from article text fetching which involves ContentNormaliser"
+                },
+                {
+                  "id": "F1.3.5.3",
+                  "title": "Article Content Import",
+                  "model": {
+                    "primary": "Sonnet 4.6",
+                    "rationale": "Content pipeline integration reusing existing ContentNormaliser"
+                  },
+                  "stories": [
+                    {
+                      "id": "S1.3.5.3.1",
+                      "title": "Fetch article HTML and normalise for paced reading",
+                      "tasks": [
+                        {
+                          "id": "T1.3.5.3.1.1",
+                          "title": "Add bookmarks/get_text endpoint to InstapaperClient",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Single API endpoint addition"
+                          },
+                          "depends_on": [
+                            "T1.3.5.1.1.1"
+                          ],
+                          "parallelizable_with": [
+                            "T1.3.5.3.1.3"
+                          ],
+                          "skills_required": [
+                            "flutter-handling-http-and-json"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/services/instapaper_client.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/services/instapaper_client.dart",
+                          "acceptance_criteria": [
+                            "getBookmarkText(bookmarkId) method returns HTML string",
+                            "Handles 403 (subscription required) with typed error",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 1,
+                          "granularity_rationale": "Atomic: one endpoint returning raw HTML"
+                        },
+                        {
+                          "id": "T1.3.5.3.1.2",
+                          "title": "Wire article text through ContentNormaliser to reading screen",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Integration wiring between Instapaper content and existing reading pipeline"
+                          },
+                          "depends_on": [
+                            "T1.3.5.3.1.1",
+                            "T1.3.5.2.1.2"
+                          ],
+                          "parallelizable_with": [],
+                          "skills_required": [
+                            "riverpod-providers",
+                            "flutter-implementing-navigation-and-routing"
+                          ],
+                          "files_in_scope": [
+                            "lib/features/content/providers/instapaper_bookmarks_provider.dart",
+                            "lib/features/content/services/content_normaliser.dart",
+                            "lib/navigation/app_router.dart"
+                          ],
+                          "files_out_of_scope": [
+                            "lib/core/orp.dart",
+                            "lib/three_d/"
+                          ],
+                          "verification_command": "dart analyze lib/features/content/providers/ lib/navigation/app_router.dart",
+                          "acceptance_criteria": [
+                            "Tapping bookmark fetches article HTML via getBookmarkText()",
+                            "HTML runs through ContentNormaliser.normalise() to produce reading tokens",
+                            "Navigates to reading screen via go_router with normalised document",
+                            "Loading state shown during fetch (not raw CircularProgressIndicator)",
+                            "Error state shown if fetch fails with retry option",
+                            "dart analyze reports zero issues"
+                          ],
+                          "estimated_hours": 3,
+                          "granularity_rationale": "Atomic: wiring fetch → normalise → navigate is one integration flow"
+                        },
+                        {
+                          "id": "T1.3.5.3.1.3",
+                          "title": "Add unit tests for article import pipeline",
+                          "model": {
+                            "primary": "Sonnet 4.6",
+                            "rationale": "Test creation for import flow"
+                          },
+                          "depends_on": [],
+                          "parallelizable_with": [
+                            "T1.3.5.3.1.1"
+                          ],
+                          "skills_required": [
+                            "flutter-testing-apps",
+                            "riverpod-testing"
+                          ],
+                          "files_in_scope": [
+                            "test/features/content/services/instapaper_client_test.dart",
+                            "test/features/content/providers/instapaper_bookmarks_provider_test.dart"
+                          ],
+                          "files_out_of_scope": [],
+                          "verification_command": "flutter test test/features/content/services/instapaper_client_test.dart test/features/content/providers/instapaper_bookmarks_provider_test.dart",
+                          "acceptance_criteria": [
+                            "Test: getBookmarkText returns HTML string for valid bookmark",
+                            "Test: getBookmarkText returns typed error for 403",
+                            "Test: article HTML normalises to clean reading tokens (no tags)",
+                            "Test: bookmark list provider refreshes on pull-to-refresh",
+                            "All tests pass with mocked HTTP responses (mocktail)"
+                          ],
+                          "estimated_hours": 2.5,
+                          "granularity_rationale": "Atomic: test file extends existing client test — can be written against API contract before implementation"
+                        }
+                      ],
+                      "granularity_rationale": "Story groups text endpoint, pipeline wiring, and tests — endpoint and tests are parallelizable"
+                    }
+                  ],
+                  "granularity_rationale": "Feature split: article text import involves ContentNormaliser integration and navigation — different concern from listing bookmarks"
+                }
+              ],
+              "granularity_rationale": "Epic scope: Instapaper integration is a complete content-source pipeline (auth → list → import) with three natural feature boundaries and clear API contract"
             }
           ],
           "parallel_clusters": [
@@ -1893,6 +2776,7 @@
                 {
                   "id": "F1.4.1.1",
                   "title": "Warm-up Ramp",
+                  "status": "complete",
                   "model": {
                     "primary": "Sonnet 4.6",
                     "rationale": "Single feature implementation"
@@ -1905,6 +2789,8 @@
                         {
                           "id": "T1.4.1.1.1.1",
                           "title": "Add warm-up ramp logic to word_timer.dart (80% → 100% over ~10s)",
+                          "status": "complete",
+                          "status_detail": "Implemented during M1.2.5 pacing integration. warmupProgress, isWarmingUp fields, play() init/resume logic, and _scheduleNext() multiplier all present in lib/core/word_timer.dart.",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Timer logic modification"
@@ -1936,6 +2822,8 @@
                         {
                           "id": "T1.4.1.1.1.2",
                           "title": "Add unit tests for warm-up ramp behavior",
+                          "status": "complete",
+                          "status_detail": "test/core/word_timer_warmup_test.dart exists with warmup behavior tests.",
                           "model": {
                             "primary": "Sonnet 4.6",
                             "rationale": "Test creation for timing logic"

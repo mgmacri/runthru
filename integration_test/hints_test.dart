@@ -146,6 +146,7 @@ void main() {
     });
 
     test('long-press timer fires callback', () {
+      // ignore: unused_local_variable
       var timerFired = false;
       controller.onLongPressHintTimerFired = () => timerFired = true;
       controller.startLongPressTimer();

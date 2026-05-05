@@ -34,6 +34,12 @@ import UIKit
         }
         self?.copyPdfsFromSecurityScopedDirectory(sourcePath: sourcePath, destPath: destPath, result: result)
 
+      case "getAppGroupPath":
+        let path = FileManager.default.containerURL(
+          forSecurityApplicationGroupIdentifier: "group.com.mgmacri.runthru"
+        )?.path
+        result(path)
+
       default:
         result(FlutterMethodNotImplemented)
       }

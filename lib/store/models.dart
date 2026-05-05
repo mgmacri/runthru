@@ -1,6 +1,7 @@
 /// Data models for persistent configuration.
 library;
 
+import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/services/models.dart';
 
 // P10 Grade B — parallax intensity controls room distortion level
@@ -77,6 +78,7 @@ class AppConfig {
     this.orpCondition = OrpCondition.orpBoldColor,
     this.shownHints = const {},
     this.hasSeenReadingGoalOnboarding = false,
+    this.pacingConfig = defaultPacingConfig,
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
@@ -118,6 +120,9 @@ class AppConfig {
           const {},
       hasSeenReadingGoalOnboarding:
           json['hasSeenReadingGoalOnboarding'] as bool? ?? false,
+      pacingConfig: json.containsKey('pacingConfig')
+          ? PacingConfig.fromJson(json['pacingConfig'] as Map<String, Object?>)
+          : defaultPacingConfig,
     );
   }
 
@@ -135,6 +140,9 @@ class AppConfig {
   final Set<String> shownHints;
   final bool hasSeenReadingGoalOnboarding;
 
+  /// Per-word adaptive pacing configuration.
+  final PacingConfig pacingConfig;
+
   AppConfig copyWith({
     int? defaultWpm,
     String? pdfFolderPath,
@@ -150,6 +158,7 @@ class AppConfig {
     OrpCondition? orpCondition,
     Set<String>? shownHints,
     bool? hasSeenReadingGoalOnboarding,
+    PacingConfig? pacingConfig,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
@@ -169,6 +178,7 @@ class AppConfig {
       shownHints: shownHints ?? this.shownHints,
       hasSeenReadingGoalOnboarding:
           hasSeenReadingGoalOnboarding ?? this.hasSeenReadingGoalOnboarding,
+      pacingConfig: pacingConfig ?? this.pacingConfig,
     );
   }
 
@@ -185,5 +195,6 @@ class AppConfig {
     'orpCondition': orpCondition.name,
     'shownHints': shownHints.toList(),
     'hasSeenReadingGoalOnboarding': hasSeenReadingGoalOnboarding,
+    'pacingConfig': pacingConfig.toJson(),
   };
 }
