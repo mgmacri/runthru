@@ -6,7 +6,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
@@ -170,11 +169,8 @@ class _BookmarkList extends ConsumerWidget {
     final importState = ref.watch(instapaperArticleImportProvider);
 
     ref.listen(instapaperArticleImportProvider, (prev, next) {
+      // Navigation is handled by LibraryScreen's listener — only clear state here.
       if (next is ArticleImportDone) {
-        context.push(
-          '/read-instapaper',
-          extra: {'document': next.document, 'title': next.title},
-        );
         ref.read(instapaperArticleImportProvider.notifier).clear();
       }
     });

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/screens/analytics_screen.dart';
-import 'package:runthru/screens/discover_screen.dart';
 import 'package:runthru/screens/library_screen.dart';
 import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/services/purchase_service.dart';
@@ -28,7 +27,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab.clamp(0, 3);
+    _currentIndex = widget.initialTab.clamp(0, 2);
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -63,7 +62,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         onPageChanged: _onPageChanged,
         children: const [
           _KeepAlivePage(child: LibraryScreen()),
-          _KeepAlivePage(child: DiscoverScreen()),
           _KeepAlivePage(child: _AnalyticsTab()),
           _KeepAlivePage(child: SettingsScreen()),
         ],
@@ -102,11 +100,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               icon: Icon(Icons.library_books_outlined),
               selectedIcon: Icon(Icons.library_books),
               label: 'Library',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'Discover',
             ),
             NavigationDestination(
               icon: Icon(Icons.auto_graph_outlined),

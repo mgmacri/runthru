@@ -22,6 +22,7 @@ import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/core/wpm_dial_notifier.dart';
 import 'package:runthru/core/wpm_dial_state.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/hooks/bookmark_notifier.dart';
 import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/services/models.dart';
@@ -46,12 +47,22 @@ class ParallaxReadingScreen extends ConsumerStatefulWidget {
     super.key,
     required this.filePath,
     this.clipboardDocument,
+    this.instapaperBookmarkId,
+    this.instapaperInitialProgress = 0.0,
   });
 
   final String filePath;
 
   /// Optional clipboard document (Rule 28 — ephemeral, session-only).
   final ClipboardDocument? clipboardDocument;
+
+  /// Instapaper bookmark ID — when set, reading progress is synced back to
+  /// Instapaper on pause/back and the bookmark is archived on completion.
+  final int? instapaperBookmarkId;
+
+  /// Instapaper’s stored progress (0.0–1.0) at the time the article was opened.
+  /// Used to resume from the correct position and prevent regressing progress.
+  final double instapaperInitialProgress;
 
   @override
   ConsumerState<ParallaxReadingScreen> createState() =>
@@ -116,6 +127,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// Whether this is an ephemeral clipboard reading session (Rule 28).
   bool get _isClipboard => widget.clipboardDocument != null;
+
+  /// Whether this session is reading an Instapaper article.
+  bool get _isInstapaper => widget.instapaperBookmarkId != null;
 
   static bool get _isDesktop {
     if (kIsWeb) return false;
@@ -193,14 +207,52 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _analyticsService.saveSession(session);
   }
 
+  /// Sync current reading position to Instapaper. Optimistic + offline-first:
+  /// updates the local bookmark list immediately and enqueues the op for
+  /// durable retry (see [InstapaperSyncQueue]).
+  void _syncInstapaperProgress() {
+    final bookmarkId = widget.instapaperBookmarkId;
+    if (bookmarkId == null) return;
+    // Only sync if words were actually read this session.
+    if (_sessionWordCount == 0 && _sessionStart != null) {
+      appLog('instapaper', 'sync skipped — no words read this session');
+      return;
+    }
+    final timerState = ref.read(wordTimerProvider);
+    final progress = timerState.progress;
+    appLog(
+      'instapaper',
+      'queue progress bookmarkId=$bookmarkId progress=${progress.toStringAsFixed(3)} wordsRead=$_sessionWordCount',
+    );
+    // Goes through the bookmarks notifier so the library tile updates
+    // optimistically as well as enqueueing the server-side write.
+    ref
+        .read(instapaperBookmarksProvider.notifier)
+        .syncProgress(bookmarkId: bookmarkId, progress: progress);
+  }
+
+  /// Archive the Instapaper bookmark when article is fully read.
+  /// Optimistically removes from the local list and enqueues durably.
+  void _archiveInstapaper() {
+    final bookmarkId = widget.instapaperBookmarkId;
+    if (bookmarkId == null) return;
+    appLog('instapaper', 'queue archive bookmarkId=$bookmarkId');
+    ref
+        .read(instapaperBookmarksProvider.notifier)
+        .archive(bookmarkId: bookmarkId);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _endAnalyticsSession();
-      if (!_isClipboard) {
+      // Persist local bookmark for normal docs and Instapaper articles.
+      // Pure clipboard sessions remain ephemeral (Rule 28).
+      if (!_isClipboard || _isInstapaper) {
         ref.read(bookmarkProvider(widget.filePath).notifier).save();
       }
+      _syncInstapaperProgress();
     } else if (state == AppLifecycleState.resumed) {
       if (ref.read(wordTimerProvider).isPlaying) {
         _sessionStart = DateTime.now();
@@ -265,11 +317,32 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _sliceOffset = 0;
     _readingRange = null;
 
-    _wordNotifier.value = _words.first;
-
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
+
+    // Resume preference for Instapaper: local bookmark (most recent on-device
+    // position) takes priority over the API's coarse 0..1 progress. The local
+    // bookmark is keyed by widget.filePath (stable bookmarkId) and is what we
+    // continually write while reading. Fall back to API progress only when no
+    // local bookmark exists yet.
+    final initialProgress = widget.instapaperInitialProgress;
+    int startIndex = 0;
+    if (_words.isNotEmpty) {
+      final localBookmark = _isInstapaper
+          ? config.bookmarks[widget.filePath]
+          : null;
+      if (localBookmark != null && localBookmark.wordIndex > 0) {
+        startIndex = localBookmark.wordIndex.clamp(0, _words.length - 1);
+      } else if (initialProgress > 0) {
+        startIndex = (initialProgress * _words.length).round().clamp(
+          0,
+          _words.length - 1,
+        );
+      }
+    }
+
+    _wordNotifier.value = _words[startIndex];
     final timer = ref.read(wordTimerProvider.notifier);
-    timer.loadDocument(_words.length, startIndex: 0);
+    timer.loadDocument(_words.length, startIndex: startIndex);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _sessionStart = DateTime.now();
@@ -277,7 +350,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     timer.play();
     appLog(
       'ParallaxReadingScreen',
-      'clipboard timer.play() wpm=${config.defaultWpm}',
+      'clipboard timer.play() wpm=${config.defaultWpm} startIndex=$startIndex initialProgress=$initialProgress',
     );
   }
 
@@ -403,11 +476,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final timer = ref.read(wordTimerProvider.notifier);
     if (ref.read(wordTimerProvider).isPlaying) {
       timer.pause();
-      if (!_isClipboard) {
+      if (!_isClipboard || _isInstapaper) {
         ref.read(bookmarkProvider(widget.filePath).notifier).save();
       }
       _endAnalyticsSession();
-      // P27 — show swipe-lr hint on first pause
+      _syncInstapaperProgress();
       if (!_hasPausedOnce) {
         _hasPausedOnce = true;
         _tryShowHint(HintId.swipeLr);
@@ -552,9 +625,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       _sentenceGapTimer?.cancel();
       _sweepEngine.stop();
     }
-    if (!_isClipboard) {
+    if (!_isClipboard || _isInstapaper) {
       ref.read(bookmarkProvider(widget.filePath).notifier).save();
     }
+    _syncInstapaperProgress();
     ref.read(wordTimerProvider.notifier).pause();
     if (mounted) context.pop();
   }
@@ -1018,8 +1092,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         }
 
         // Save global word index (sliceOffset + slice-local index).
-        // Rule 28 — skip bookmark persist for clipboard documents.
-        if (!_isClipboard) {
+        // Rule 28 — clipboard sessions stay ephemeral, but Instapaper
+        // articles persist locally so reopens resume from the last word
+        // even before the API sync completes.
+        if (!_isClipboard || _isInstapaper) {
           final globalIndex = _sliceOffset + idx;
           ref
               .read(bookmarkProvider(widget.filePath).notifier)
@@ -1029,6 +1105,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         // Detect range completion.
         if (_readingRange != null && !_isRangeComplete && next.isFinished) {
           setState(() => _isRangeComplete = true);
+        }
+
+        // Archive Instapaper bookmark when the full article is finished.
+        if (next.isFinished && _isInstapaper) {
+          _archiveInstapaper();
         }
       }
     });
@@ -1047,458 +1128,477 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     // P20 — watch ContextReveal state for overlay rendering
     final crState = ref.watch(contextRevealProvider);
 
-    return KeyboardListener(
-      focusNode: _focusNode,
-      autofocus: true,
-      onKeyEvent: _handleKeyEvent,
-      child: Listener(
-        onPointerSignal: _handlePointerSignal,
-        child: ColoredBox(
-          color: RunThruTokens.roomBackground,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final fontSize = dynamicFontSize(constraints);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _goBack();
+      },
+      child: KeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: _handleKeyEvent,
+        child: Listener(
+          onPointerSignal: _handlePointerSignal,
+          child: ColoredBox(
+            color: RunThruTokens.roomBackground,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final fontSize = dynamicFontSize(constraints);
 
-              return Listener(
-                // Passive pointer tracking — doesn't compete in the
-                // gesture arena, so onLongPress can still fire.
-                onPointerDown: (e) {
-                  _panStart = e.position;
-                  _panStartTime = DateTime.now();
-                },
-                onPointerMove: (e) => _panLast = e.position,
-                onPointerUp: _handlePointerUp,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: _togglePause,
-                        onDoubleTap: _handleDoubleTap,
-                        onLongPressStart: (details) {
-                          appLog('gestures', 'detected: longPress');
-                          // P27 — user discovered long-press; cancel hint timer
-                          _hintController.cancelLongPressTimer();
-                          _hintController.markShown(HintId.longPress);
-                          ref
-                              .read(wpmDialProvider.notifier)
-                              .show(details.globalPosition, wpm);
-                        },
-                        child: ValueListenableBuilder<String>(
-                          valueListenable: _wordNotifier,
-                          builder: (context, currentWord, _) {
-                            // P7 Grade C — shared overlay stack for all intensity modes
-                            final overlayStack = Stack(
-                              children: [
-                                Positioned(
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  height: 1,
-                                  child: ProgressHairline3D(progress: progress),
-                                ),
-                                if (config.parallaxIntensity !=
-                                        ParallaxIntensity.none &&
-                                    !crState.isActive)
-                                  Positioned.fill(
-                                    child: PauseFog3D(
-                                      isPaused: !isPlaying && _words.isNotEmpty,
-                                      wpm: wpm,
+                return Listener(
+                  // Passive pointer tracking — doesn't compete in the
+                  // gesture arena, so onLongPress can still fire.
+                  onPointerDown: (e) {
+                    _panStart = e.position;
+                    _panStartTime = DateTime.now();
+                  },
+                  onPointerMove: (e) => _panLast = e.position,
+                  onPointerUp: _handlePointerUp,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: _togglePause,
+                          onDoubleTap: _handleDoubleTap,
+                          onLongPressStart: (details) {
+                            appLog('gestures', 'detected: longPress');
+                            // P27 — user discovered long-press; cancel hint timer
+                            _hintController.cancelLongPressTimer();
+                            _hintController.markShown(HintId.longPress);
+                            ref
+                                .read(wpmDialProvider.notifier)
+                                .show(details.globalPosition, wpm);
+                          },
+                          child: ValueListenableBuilder<String>(
+                            valueListenable: _wordNotifier,
+                            builder: (context, currentWord, _) {
+                              // P7 Grade C — shared overlay stack for all intensity modes
+                              final overlayStack = Stack(
+                                children: [
+                                  Positioned(
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    height: 1,
+                                    child: ProgressHairline3D(
+                                      progress: progress,
                                     ),
                                   ),
-                                if (_isRangeComplete && _readingRange != null)
-                                  Positioned.fill(
-                                    child: FinishedRangeOverlay(
-                                      visible: _isRangeComplete,
-                                      startPage: _readingRange!.startPage,
-                                      endPage: _readingRange!.endPage,
-                                      wordCount: _words.length,
-                                      averageWpm: wpm,
-                                      onContinueReading:
-                                          _continueReadingPastRange,
-                                      onSetNewRange: () {
-                                        ref
-                                            .read(
-                                              bookmarkProvider(
-                                                widget.filePath,
-                                              ).notifier,
-                                            )
-                                            .save();
-                                        context.push(
-                                          Uri(
-                                            path: '/range-picker',
-                                            queryParameters: {
-                                              'path': widget.filePath,
-                                            },
-                                          ).toString(),
-                                        );
-                                      },
-                                      onGoToLibrary: () {
-                                        ref
-                                            .read(
-                                              bookmarkProvider(
-                                                widget.filePath,
-                                              ).notifier,
-                                            )
-                                            .save();
-                                        ref
-                                            .read(wordTimerProvider.notifier)
-                                            .pause();
-                                        context.go('/');
-                                      },
-                                    ),
-                                  ),
-                                // ── ContextReveal Overlay ──
-                                // IgnorePointer so back button and long-press
-                                // (WPM dial) pass through — all gestures are
-                                // handled by the parent Listener/GestureDetector.
-                                if (crState.isActive)
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: Semantics(
-                                        liveRegion: true,
-                                        label:
-                                            'Context reveal: ${crState.tier.name} view. '
-                                            '${_contextRevealWords().join(' ')}. '
-                                            'Swipe down to resume reading.',
-                                        child: ContextRevealOverlay(
-                                          tier: crState.tier,
-                                          words: _contextRevealWords(),
-                                          sweepPosition: crState.sweepPosition,
-                                          fontSize: fontSize,
-                                          fontFamily: config.fontFamily,
-                                          isJiggling: crState.isJiggling,
-                                          isSweepPaused: crState.isSweepPaused,
-                                          backgroundColor:
-                                              config.parallaxIntensity ==
-                                                  ParallaxIntensity.none
-                                              ? RunThruTokens.stageBase
-                                              : RunThruTokens.cubeBackWall,
-                                          backgroundOpacity:
-                                              config.parallaxIntensity ==
-                                                  ParallaxIntensity.none
-                                              ? 1.0
-                                              : 0.88,
-                                          onJiggleComplete: () => ref
-                                              .read(
-                                                contextRevealProvider.notifier,
-                                              )
-                                              .clearJiggle(),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                // PauseFog3D in sentence mode — rendered after CR
-                                // overlay so it's visible on top when sweep is paused.
-                                if (crState.isActive &&
-                                    crState.isSweepPaused &&
-                                    config.parallaxIntensity !=
-                                        ParallaxIntensity.none)
-                                  Positioned.fill(
-                                    child: IgnorePointer(
+                                  if (config.parallaxIntensity !=
+                                          ParallaxIntensity.none &&
+                                      !crState.isActive)
+                                    Positioned.fill(
                                       child: PauseFog3D(
-                                        isPaused: crState.isSweepPaused,
+                                        isPaused:
+                                            !isPlaying && _words.isNotEmpty,
                                         wpm: wpm,
                                       ),
                                     ),
-                                  ),
-                                // Simple dimming for 2D sentence-mode pause
-                                if (crState.isActive &&
-                                    crState.isSweepPaused &&
-                                    config.parallaxIntensity ==
-                                        ParallaxIntensity.none)
-                                  const Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: ColoredBox(
-                                        color: RunThruTokens.stagePauseOverlay,
+                                  if (_isRangeComplete && _readingRange != null)
+                                    Positioned.fill(
+                                      child: FinishedRangeOverlay(
+                                        visible: _isRangeComplete,
+                                        startPage: _readingRange!.startPage,
+                                        endPage: _readingRange!.endPage,
+                                        wordCount: _words.length,
+                                        averageWpm: wpm,
+                                        onContinueReading:
+                                            _continueReadingPastRange,
+                                        onSetNewRange: () {
+                                          ref
+                                              .read(
+                                                bookmarkProvider(
+                                                  widget.filePath,
+                                                ).notifier,
+                                              )
+                                              .save();
+                                          context.push(
+                                            Uri(
+                                              path: '/range-picker',
+                                              queryParameters: {
+                                                'path': widget.filePath,
+                                              },
+                                            ).toString(),
+                                          );
+                                        },
+                                        onGoToLibrary: () {
+                                          ref
+                                              .read(
+                                                bookmarkProvider(
+                                                  widget.filePath,
+                                                ).notifier,
+                                              )
+                                              .save();
+                                          ref
+                                              .read(wordTimerProvider.notifier)
+                                              .pause();
+                                          context.go('/');
+                                        },
                                       ),
                                     ),
-                                  ),
-                                // WPM dial — rendered above ContextReveal so it
-                                // remains visible and interactive during sentence view.
-                                // Key preserves State across conditional sibling changes.
-                                Positioned.fill(
-                                  key: const ValueKey('wpm-dial'),
-                                  child: WpmDial3D(
-                                    wpm: dialState.currentWpm,
-                                    visible: dialState.isVisible,
-                                    onWpmChanged: (w) {
-                                      ref
-                                          .read(wpmDialProvider.notifier)
-                                          .updateWpm(w);
-                                      final newWpm = ref
-                                          .read(wpmDialProvider)
-                                          .currentWpm;
-                                      ref
-                                          .read(wordTimerProvider.notifier)
-                                          .setWpm(newWpm);
-                                      _sweepEngine.updateWpm(newWpm);
-                                    },
-                                    onDismissed: () => ref
-                                        .read(wpmDialProvider.notifier)
-                                        .dismiss(),
-                                  ),
-                                ),
-
-                                // ── ContextReveal Onboarding (shown once) ──
-                                if (_showCROnboarding)
+                                  // ── ContextReveal Overlay ──
+                                  // IgnorePointer so back button and long-press
+                                  // (WPM dial) pass through — all gestures are
+                                  // handled by the parent Listener/GestureDetector.
+                                  if (crState.isActive)
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: Semantics(
+                                          liveRegion: true,
+                                          label:
+                                              'Context reveal: ${crState.tier.name} view. '
+                                              '${_contextRevealWords().join(' ')}. '
+                                              'Swipe down to resume reading.',
+                                          child: ContextRevealOverlay(
+                                            tier: crState.tier,
+                                            words: _contextRevealWords(),
+                                            sweepPosition:
+                                                crState.sweepPosition,
+                                            fontSize: fontSize,
+                                            fontFamily: config.fontFamily,
+                                            isJiggling: crState.isJiggling,
+                                            isSweepPaused:
+                                                crState.isSweepPaused,
+                                            backgroundColor:
+                                                config.parallaxIntensity ==
+                                                    ParallaxIntensity.none
+                                                ? RunThruTokens.stageBase
+                                                : RunThruTokens.cubeBackWall,
+                                            backgroundOpacity:
+                                                config.parallaxIntensity ==
+                                                    ParallaxIntensity.none
+                                                ? 1.0
+                                                : 0.88,
+                                            onJiggleComplete: () => ref
+                                                .read(
+                                                  contextRevealProvider
+                                                      .notifier,
+                                                )
+                                                .clearJiggle(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  // PauseFog3D in sentence mode — rendered after CR
+                                  // overlay so it's visible on top when sweep is paused.
+                                  if (crState.isActive &&
+                                      crState.isSweepPaused &&
+                                      config.parallaxIntensity !=
+                                          ParallaxIntensity.none)
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: PauseFog3D(
+                                          isPaused: crState.isSweepPaused,
+                                          wpm: wpm,
+                                        ),
+                                      ),
+                                    ),
+                                  // Simple dimming for 2D sentence-mode pause
+                                  if (crState.isActive &&
+                                      crState.isSweepPaused &&
+                                      config.parallaxIntensity ==
+                                          ParallaxIntensity.none)
+                                    const Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: ColoredBox(
+                                          color:
+                                              RunThruTokens.stagePauseOverlay,
+                                        ),
+                                      ),
+                                    ),
+                                  // WPM dial — rendered above ContextReveal so it
+                                  // remains visible and interactive during sentence view.
+                                  // Key preserves State across conditional sibling changes.
                                   Positioned.fill(
-                                    child: GestureDetector(
-                                      onTap: _dismissCROnboarding,
-                                      child: ColoredBox(
-                                        color: RunThruTokens.stagePauseOverlay
-                                            .withAlpha(230),
-                                        child: Center(
-                                          child: Semantics(
-                                            liveRegion: true,
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 32,
-                                                  ),
-                                              child: Text(
-                                                'Swipe up to see surrounding words.\n'
-                                                'Swipe again for more context.\n'
-                                                'Swipe down to resume.',
-                                                textAlign: TextAlign.center,
-                                                style: RunThruTypography.body
-                                                    .copyWith(
-                                                      color: RunThruTokens
-                                                          .stageText,
+                                    key: const ValueKey('wpm-dial'),
+                                    child: WpmDial3D(
+                                      wpm: dialState.currentWpm,
+                                      visible: dialState.isVisible,
+                                      onWpmChanged: (w) {
+                                        ref
+                                            .read(wpmDialProvider.notifier)
+                                            .updateWpm(w);
+                                        final newWpm = ref
+                                            .read(wpmDialProvider)
+                                            .currentWpm;
+                                        ref
+                                            .read(wordTimerProvider.notifier)
+                                            .setWpm(newWpm);
+                                        _sweepEngine.updateWpm(newWpm);
+                                      },
+                                      onDismissed: () => ref
+                                          .read(wpmDialProvider.notifier)
+                                          .dismiss(),
+                                    ),
+                                  ),
+
+                                  // ── ContextReveal Onboarding (shown once) ──
+                                  if (_showCROnboarding)
+                                    Positioned.fill(
+                                      child: GestureDetector(
+                                        onTap: _dismissCROnboarding,
+                                        child: ColoredBox(
+                                          color: RunThruTokens.stagePauseOverlay
+                                              .withAlpha(230),
+                                          child: Center(
+                                            child: Semantics(
+                                              liveRegion: true,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 32,
                                                     ),
+                                                child: Text(
+                                                  'Swipe up to see surrounding words.\n'
+                                                  'Swipe again for more context.\n'
+                                                  'Swipe down to resume.',
+                                                  textAlign: TextAlign.center,
+                                                  style: RunThruTypography.body
+                                                      .copyWith(
+                                                        color: RunThruTokens
+                                                            .stageText,
+                                                      ),
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                // ── Onboarding Hint Overlay (Rule 27) ──
-                                if (_activeHint != null)
-                                  HintOverlay(
-                                    text: _activeHint!.message,
-                                    position: _activeHint!.position,
-                                    slideFrom: _activeHint!.slideFrom,
-                                    onDismiss: _dismissActiveHint,
-                                  ),
-                                // ── Reading Goal Onboarding (shown once) ──
-                                if (_showReadingGoalOnboarding)
-                                  Positioned.fill(
-                                    child: ColoredBox(
-                                      color: RunThruTokens.shellBase.withAlpha(
-                                        230,
-                                      ),
-                                      child: Center(
-                                        child: SingleChildScrollView(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 40,
-                                          ),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'Choose Your Reading Pace',
-                                                style: RunThruTypography.title
-                                                    .copyWith(
-                                                      color: RunThruTokens
-                                                          .shellTextPrimary,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 16),
-                                              ReadingGoalPresets(
-                                                onSelected: (goal) {
-                                                  ref
-                                                      .read(
-                                                        configProvider.notifier,
-                                                      )
-                                                      .applyReadingGoalPreset(
-                                                        goal,
-                                                      );
-                                                  ref
-                                                      .read(
-                                                        configProvider.notifier,
-                                                      )
-                                                      .setHasSeenReadingGoalOnboarding(
-                                                        true,
-                                                      );
-                                                  setState(() {
-                                                    _showReadingGoalOnboarding =
-                                                        false;
-                                                  });
-                                                  // Begin reading
-                                                  ref
-                                                      .read(
-                                                        wordTimerProvider
-                                                            .notifier,
-                                                      )
-                                                      .play();
-                                                },
-                                              ),
-                                              const SizedBox(height: 12),
-                                              GestureDetector(
-                                                onTap: () {
-                                                  // Skip → default to Comfortable
-                                                  final comfortable =
-                                                      readingGoalConfigs
-                                                          .firstWhere(
-                                                            (c) =>
-                                                                c.preset ==
-                                                                ReadingGoalPreset
-                                                                    .comfortable,
-                                                          );
-                                                  ref
-                                                      .read(
-                                                        configProvider.notifier,
-                                                      )
-                                                      .applyReadingGoalPreset(
-                                                        comfortable,
-                                                      );
-                                                  ref
-                                                      .read(
-                                                        configProvider.notifier,
-                                                      )
-                                                      .setHasSeenReadingGoalOnboarding(
-                                                        true,
-                                                      );
-                                                  setState(() {
-                                                    _showReadingGoalOnboarding =
-                                                        false;
-                                                  });
-                                                  ref
-                                                      .read(
-                                                        wordTimerProvider
-                                                            .notifier,
-                                                      )
-                                                      .play();
-                                                },
-                                                child: Text(
-                                                  'Customize later in Settings',
-                                                  style: RunThruTypography
-                                                      .caption
+                                  // ── Onboarding Hint Overlay (Rule 27) ──
+                                  if (_activeHint != null)
+                                    HintOverlay(
+                                      text: _activeHint!.message,
+                                      position: _activeHint!.position,
+                                      slideFrom: _activeHint!.slideFrom,
+                                      onDismiss: _dismissActiveHint,
+                                    ),
+                                  // ── Reading Goal Onboarding (shown once) ──
+                                  if (_showReadingGoalOnboarding)
+                                    Positioned.fill(
+                                      child: ColoredBox(
+                                        color: RunThruTokens.shellBase
+                                            .withAlpha(230),
+                                        child: Center(
+                                          child: SingleChildScrollView(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 40,
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'Choose Your Reading Pace',
+                                                  style: RunThruTypography.title
                                                       .copyWith(
                                                         color: RunThruTokens
-                                                            .shellAccent,
-                                                        decoration:
-                                                            TextDecoration
-                                                                .underline,
+                                                            .shellTextPrimary,
                                                       ),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 16),
+                                                ReadingGoalPresets(
+                                                  onSelected: (goal) {
+                                                    ref
+                                                        .read(
+                                                          configProvider
+                                                              .notifier,
+                                                        )
+                                                        .applyReadingGoalPreset(
+                                                          goal,
+                                                        );
+                                                    ref
+                                                        .read(
+                                                          configProvider
+                                                              .notifier,
+                                                        )
+                                                        .setHasSeenReadingGoalOnboarding(
+                                                          true,
+                                                        );
+                                                    setState(() {
+                                                      _showReadingGoalOnboarding =
+                                                          false;
+                                                    });
+                                                    // Begin reading
+                                                    ref
+                                                        .read(
+                                                          wordTimerProvider
+                                                              .notifier,
+                                                        )
+                                                        .play();
+                                                  },
+                                                ),
+                                                const SizedBox(height: 12),
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    // Skip → default to Comfortable
+                                                    final comfortable =
+                                                        readingGoalConfigs.firstWhere(
+                                                          (c) =>
+                                                              c.preset ==
+                                                              ReadingGoalPreset
+                                                                  .comfortable,
+                                                        );
+                                                    ref
+                                                        .read(
+                                                          configProvider
+                                                              .notifier,
+                                                        )
+                                                        .applyReadingGoalPreset(
+                                                          comfortable,
+                                                        );
+                                                    ref
+                                                        .read(
+                                                          configProvider
+                                                              .notifier,
+                                                        )
+                                                        .setHasSeenReadingGoalOnboarding(
+                                                          true,
+                                                        );
+                                                    setState(() {
+                                                      _showReadingGoalOnboarding =
+                                                          false;
+                                                    });
+                                                    ref
+                                                        .read(
+                                                          wordTimerProvider
+                                                              .notifier,
+                                                        )
+                                                        .play();
+                                                  },
+                                                  child: Text(
+                                                    'Customize later in Settings',
+                                                    style: RunThruTypography
+                                                        .caption
+                                                        .copyWith(
+                                                          color: RunThruTokens
+                                                              .shellAccent,
+                                                          decoration:
+                                                              TextDecoration
+                                                                  .underline,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
-                            );
-
-                            // P7 Grade C — "None" renders flat 2D, no 3D room geometry
-                            if (config.parallaxIntensity ==
-                                ParallaxIntensity.none) {
-                              return Stack(
-                                children: [
-                                  // Flat stage background
-                                  Positioned.fill(
-                                    child: Container(
-                                      decoration:
-                                          RunThruDecorations.insetDecoration(
-                                            RunThruSurface.stage,
-                                            borderRadius: 0,
-                                          ),
-                                    ),
-                                  ),
-                                  // 2D word painter (hidden during ContextReveal)
-                                  if (currentWord.isNotEmpty &&
-                                      !crState.isActive)
-                                    Positioned.fill(
-                                      child: CustomPaint(
-                                        painter: WordPainter(
-                                          word: currentWord,
-                                          fontSize: fontSize,
-                                          animationValue: 1.0,
-                                          painterPool: _flatPainterPool,
-                                          anchorColor: effectiveAnchorColor,
-                                          fontFamily: config.fontFamily,
-                                        ),
-                                      ),
-                                    ),
-                                  // Simple dimming on pause (no fog) — suppress
-                                  // during CR since CR has its own background.
-                                  if (!isPlaying &&
-                                      _words.isNotEmpty &&
-                                      !crState.isActive)
-                                    const Positioned.fill(
-                                      child: ColoredBox(
-                                        color: RunThruTokens.stagePauseOverlay,
-                                      ),
-                                    ),
-                                  // Shared overlays
-                                  Positioned.fill(child: overlayStack),
                                 ],
                               );
-                            }
 
-                            return ParallaxRoom(
-                              headX: 0,
-                              headY: 0,
-                              // Hide RSVP word during ContextReveal
-                              currentWord: crState.isActive ? '' : currentWord,
-                              fontSize: fontSize,
-                              anchorColor: effectiveAnchorColor,
-                              isPlaying: isPlaying,
-                              fontFamily: config.fontFamily,
-                              wpm: wpm,
-                              intervalMs: (60000 / wpm).round(),
-                              parallaxIntensity: config.parallaxIntensity,
-                              child: overlayStack,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    // Back button — opaque GestureDetector absorbs
-                    // the hit so the translucent GestureDetector behind
-                    // cannot claim the tap for _togglePause.
-                    Positioned(
-                      top: MediaQuery.paddingOf(context).top + 8,
-                      left: 8,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _goBack,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(
-                            Icons.arrow_back,
-                            color: RunThruTokens.stageText,
-                            size: 20,
+                              // P7 Grade C — "None" renders flat 2D, no 3D room geometry
+                              if (config.parallaxIntensity ==
+                                  ParallaxIntensity.none) {
+                                return Stack(
+                                  children: [
+                                    // Flat stage background
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration:
+                                            RunThruDecorations.insetDecoration(
+                                              RunThruSurface.stage,
+                                              borderRadius: 0,
+                                            ),
+                                      ),
+                                    ),
+                                    // 2D word painter (hidden during ContextReveal)
+                                    if (currentWord.isNotEmpty &&
+                                        !crState.isActive)
+                                      Positioned.fill(
+                                        child: CustomPaint(
+                                          painter: WordPainter(
+                                            word: currentWord,
+                                            fontSize: fontSize,
+                                            animationValue: 1.0,
+                                            painterPool: _flatPainterPool,
+                                            anchorColor: effectiveAnchorColor,
+                                            fontFamily: config.fontFamily,
+                                          ),
+                                        ),
+                                      ),
+                                    // Simple dimming on pause (no fog) — suppress
+                                    // during CR since CR has its own background.
+                                    if (!isPlaying &&
+                                        _words.isNotEmpty &&
+                                        !crState.isActive)
+                                      const Positioned.fill(
+                                        child: ColoredBox(
+                                          color:
+                                              RunThruTokens.stagePauseOverlay,
+                                        ),
+                                      ),
+                                    // Shared overlays
+                                    Positioned.fill(child: overlayStack),
+                                  ],
+                                );
+                              }
+
+                              return ParallaxRoom(
+                                headX: 0,
+                                headY: 0,
+                                // Hide RSVP word during ContextReveal
+                                currentWord: crState.isActive
+                                    ? ''
+                                    : currentWord,
+                                fontSize: fontSize,
+                                anchorColor: effectiveAnchorColor,
+                                isPlaying: isPlaying,
+                                fontFamily: config.fontFamily,
+                                wpm: wpm,
+                                intervalMs: (60000 / wpm).round(),
+                                parallaxIntensity: config.parallaxIntensity,
+                                child: overlayStack,
+                              );
+                            },
                           ),
                         ),
                       ),
-                    ),
-                    if (_isDesktop)
+                      // Back button — opaque GestureDetector absorbs
+                      // the hit so the translucent GestureDetector behind
+                      // cannot claim the tap for _togglePause.
                       Positioned(
                         top: MediaQuery.paddingOf(context).top + 8,
-                        right: 8,
+                        left: 8,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: _toggleFullScreen,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
+                          onTap: _goBack,
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
                             child: Icon(
-                              _isFullScreen
-                                  ? Icons.fullscreen_exit
-                                  : Icons.fullscreen,
+                              Icons.arrow_back,
                               color: RunThruTokens.stageText,
                               size: 20,
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
-              );
-            },
+                      if (_isDesktop)
+                        Positioned(
+                          top: MediaQuery.paddingOf(context).top + 8,
+                          right: 8,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _toggleFullScreen,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                _isFullScreen
+                                    ? Icons.fullscreen_exit
+                                    : Icons.fullscreen,
+                                color: RunThruTokens.stageText,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),

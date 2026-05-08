@@ -13,6 +13,7 @@ import 'package:runthru/core/reading_goal_presets.dart';
 import 'package:runthru/core/wcag_contrast.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/settings/widgets/pacing_panel.dart';
+import 'package:runthru/features/settings/widgets/spacing_controls.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
@@ -519,6 +520,9 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Word Pacing ──
           const PacingPanel(),
+
+          // ── Reading Comfort ──
+          const SpacingControls(),
 
           // ── PDF Folder ──
           NeumorphicCard(

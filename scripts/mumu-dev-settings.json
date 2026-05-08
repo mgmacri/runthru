@@ -1,0 +1,20 @@
+{
+  "player_name": "RunThru Dev",
+  "resolution_mode": "phone.1",
+  "resolution_width.custom": "1080.000000",
+  "resolution_height.custom": "2400.000000",
+  "resolution_dpi.custom": "420.000000",
+  "performance_mode": "high",
+  "performance_cpu.custom": "4",
+  "performance_mem.custom": "4.000000",
+  "max_frame_rate": "60",
+  "dynamic_adjust_frame_rate": "false",
+  "app_keptlive": "true",
+  "root_permission": "true",
+  "renderer_mode": "vk",
+  "system_disk_readonly": "false",
+  "quit_confirm": "false",
+  "phone_brand": "Google",
+  "phone_model": "Pixel 7",
+  "phone_miit": "GVU6C"
+}

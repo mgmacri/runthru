@@ -19,4 +19,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release \
+            --dart-define=INSTAPAPER_CONSUMER_KEY="${{ secrets.INSTAPAPER_CONSUMER_KEY }}" \
+            --dart-define=INSTAPAPER_CONSUMER_SECRET="${{ secrets.INSTAPAPER_CONSUMER_SECRET }}"

@@ -102,6 +102,39 @@ emulator -avd flutter_emu -wipe-data
 
 AVD config: `%USERPROFILE%\.android\avd\flutter_emu.avd\config.ini`
 
+#### MuMu Player (Android emulator)
+
+[MuMu Player](https://www.mumuplayer.com/) is a performant Android emulator for Windows useful for testing when AVD is slow or unavailable.
+
+**Connect ADB to MuMu:**
+
+```bash
+adb connect 127.0.0.1:7555
+```
+
+> MuMu Player 12 uses port `16384` by default. Check MuMu's settings → ADB for the correct port.
+
+**Verify connection:**
+
+```bash
+adb devices
+# Should show: 127.0.0.1:7555  device
+```
+
+**Run the app on MuMu:**
+
+```bash
+flutter run -d 127.0.0.1:7555
+```
+
+**Tips:**
+
+- Enable **Root permission** in MuMu settings if you need `adb root` access.
+- Set display resolution to a phone-like size (e.g. 1080×2400) in MuMu's display settings for realistic testing.
+- If `adb connect` fails, ensure MuMu is fully booted and ADB debugging is enabled in MuMu settings.
+- If Flutter can't find the device, run `adb kill-server && adb start-server` then reconnect.
+- Hot reload (`r`) and hot restart (`R`) work normally once connected.
+
 ### iOS
 
 Requires Xcode 15+ and a valid signing identity. Simulator works for debug.

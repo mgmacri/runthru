@@ -78,6 +78,31 @@ class InstapaperBookmark {
   /// Whether the user has started reading this bookmark.
   bool get hasProgress => progress > 0.0;
 
+  /// Returns a copy with the given fields replaced.
+  InstapaperBookmark copyWith({
+    int? bookmarkId,
+    String? url,
+    String? title,
+    String? description,
+    String? hash,
+    double? progress,
+    int? progressTimestamp,
+    int? time,
+    bool? starred,
+    String? privateSource,
+  }) => InstapaperBookmark(
+    bookmarkId: bookmarkId ?? this.bookmarkId,
+    url: url ?? this.url,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    hash: hash ?? this.hash,
+    progress: progress ?? this.progress,
+    progressTimestamp: progressTimestamp ?? this.progressTimestamp,
+    time: time ?? this.time,
+    starred: starred ?? this.starred,
+    privateSource: privateSource ?? this.privateSource,
+  );
+
   /// Serialize to JSON map.
   Map<String, Object?> toJson() => {
     'bookmark_id': bookmarkId,

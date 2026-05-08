@@ -9,8 +9,7 @@
       "deviceId": "127.0.0.1:7555",
       "args": ["--no-enable-impeller"],
       "toolArgs": [
-        "--dart-define=INSTAPAPER_CONSUMER_KEY=${env:instapaper-consumer-key}",
-        "--dart-define=INSTAPAPER_CONSUMER_SECRET=${env:instapaper-consumer-secret}"
+        "--dart-define-from-file=dart_defines/development.json"
       ]
     },
     {

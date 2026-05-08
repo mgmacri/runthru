@@ -194,7 +194,8 @@ class InstapaperClient {
           );
     }
 
-    // Response is a JSON array with user, bookmark, and meta objects.
+    // Response is the standard array format:
+    // [{"type":"meta"}, {"type":"user",...}, {"type":"bookmark",...}, ...]
     final list = jsonDecode(response.body) as List<Object?>;
 
     return list
@@ -230,6 +231,55 @@ class InstapaperClient {
           errorCode: response.statusCode,
           message: 'Failed to fetch article text: HTTP ${response.statusCode}',
         );
+  }
+
+  /// Update reading progress for a bookmark.
+  ///
+  /// [progress] must be 0.0–1.0.
+  /// Throws [InstapaperApiException] on failure.
+  Future<void> updateReadProgress({
+    required int bookmarkId,
+    required double progress,
+  }) async {
+    final timestamp = (DateTime.now().millisecondsSinceEpoch ~/ 1000)
+        .toString();
+    final response = await _signedPost(
+      '/api/1/bookmarks/update_read_progress',
+      body: {
+        'bookmark_id': bookmarkId.toString(),
+        'progress': progress.clamp(0.0, 1.0).toStringAsFixed(4),
+        'progress_timestamp': timestamp,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      final error = _parseError(response);
+      throw error ??
+          InstapaperApiException(
+            errorCode: response.statusCode,
+            message:
+                'Failed to update read progress: HTTP ${response.statusCode}',
+          );
+    }
+  }
+
+  /// Move a bookmark to the archive folder (marks as read).
+  ///
+  /// Throws [InstapaperApiException] on failure.
+  Future<void> archiveBookmark({required int bookmarkId}) async {
+    final response = await _signedPost(
+      '/api/1/bookmarks/archive',
+      body: {'bookmark_id': bookmarkId.toString()},
+    );
+
+    if (response.statusCode != 200) {
+      final error = _parseError(response);
+      throw error ??
+          InstapaperApiException(
+            errorCode: response.statusCode,
+            message: 'Failed to archive bookmark: HTTP ${response.statusCode}',
+          );
+    }
   }
 
   /// Verify current credentials.

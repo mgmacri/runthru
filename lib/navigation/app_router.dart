@@ -58,9 +58,8 @@ final appRouter = GoRouter(
         );
       },
     ),
-    GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=2'),
-    GoRoute(path: '/discover', redirect: (_, __) => '/?tab=1'),
-    GoRoute(path: '/settings', redirect: (_, __) => '/?tab=3'),
+    GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=1'),
+    GoRoute(path: '/settings', redirect: (_, __) => '/?tab=2'),
     // Rule 28 — clipboard reading route; document passed via extra
     GoRoute(
       path: '/read-clipboard',
@@ -82,10 +81,21 @@ final appRouter = GoRouter(
         final extra = state.extra as Map<String, Object?>?;
         final document = extra?['document'] as ExtractedDocument?;
         final title = extra?['title'] as String? ?? 'Instapaper Article';
+        final bookmarkId = extra?['bookmarkId'] as int?;
+        final initialProgress =
+            (extra?['initialProgress'] as num?)?.toDouble() ?? 0.0;
+        // Use the stable Instapaper bookmarkId (not the title) so the local
+        // bookmark key survives title changes from the API and matches across
+        // reopens. Falls back to title only if id is missing (defensive).
+        final filePath = bookmarkId != null
+            ? 'instapaper://$bookmarkId'
+            : 'instapaper://$title';
         return wallFoldTransitionPage(
           key: state.pageKey,
           child: ParallaxReadingScreen(
-            filePath: 'instapaper://$title',
+            filePath: filePath,
+            instapaperBookmarkId: bookmarkId,
+            instapaperInitialProgress: initialProgress,
             clipboardDocument: ClipboardDocument(
               title: title,
               fullText: '',

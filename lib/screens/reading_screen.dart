@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -10,6 +11,14 @@ import 'package:runthru/core/reading_range_resolver.dart';
 import 'package:runthru/core/sentence_resolver.dart';
 import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/services/artifact_classifier.dart';
+import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
+import 'package:runthru/features/reading/providers/suppression_provider.dart';
+import 'package:runthru/features/reading/widgets/mode_switcher.dart';
+import 'package:runthru/features/reading/widgets/paragraph_mode_view.dart';
+import 'package:runthru/features/reading/widgets/reading_ruler.dart';
+import 'package:runthru/features/reading/widgets/sentence_mode_view.dart';
+import 'package:runthru/features/reading/widgets/suppression_overlay.dart';
 import 'package:runthru/hooks/bookmark_notifier.dart';
 import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/services/models.dart';
@@ -87,10 +96,25 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     }
   }
 
+  /// Runs artifact classification in an isolate and updates suppression state.
+  Future<void> _classifyArtifacts(List<String> words) async {
+    final wordsCopy = List<String>.unmodifiable(words);
+    final regions = await Isolate.run(() => classifyArtifacts(wordsCopy));
+    if (mounted) {
+      ref.read(suppressionNotifierProvider.notifier).setRegions(regions);
+    }
+  }
+
   void _loadDocument(ExtractedDocument doc) {
     _fullDoc = doc;
     _allDocWords = doc.allWords;
     if (_allDocWords.isEmpty) return;
+
+    // Clear previous suppression state for the new document.
+    ref.read(suppressionNotifierProvider.notifier).clear();
+
+    // Run artifact classification in isolate (heavy computation off main thread).
+    _classifyArtifacts(_allDocWords);
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
     final bookmark = config.bookmarks[widget.filePath];
@@ -256,6 +280,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
   Widget build(BuildContext context) {
     final timerState = ref.watch(wordTimerProvider);
     final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
+    final readingMode = ref.watch(readingModeNotifierProvider);
 
     final anchorColor =
         RunThruTokens.anchorColors[config.anchorColorIndex.clamp(
@@ -303,6 +328,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                         anchorColor: anchorColor,
                         fontSize: fontSize,
                         config: config,
+                        readingMode: readingMode,
                       ),
                     ),
                   ),
@@ -341,6 +367,11 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                       onPressed: _toggleFullScreen,
                     ),
                   ),
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 8,
+                  right: _isDesktop ? 48 : 8,
+                  child: const ModeSwitcher(),
+                ),
               ],
             );
           },
@@ -382,6 +413,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     required Color anchorColor,
     required double fontSize,
     required AppConfig config,
+    required ReadingMode readingMode,
   }) {
     return Stack(
       children: [
@@ -393,12 +425,59 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
           child: ProgressHairline3D(progress: timerState.progress),
         ),
         Positioned.fill(
-          child: WordDisplay3D(
-            word: currentWord,
-            fontSize: fontSize,
-            anchorColor: anchorColor,
-            fontFamily: config.fontFamily,
+          child: AnimatedSwitcher(
+            duration: isReducedMotion(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 300),
+            child: switch (readingMode) {
+              ReadingMode.rsvp => WordDisplay3D(
+                key: const ValueKey('rsvp'),
+                word: currentWord,
+                fontSize: fontSize,
+                anchorColor: anchorColor,
+                fontFamily: config.fontFamily,
+              ),
+              ReadingMode.sentence => SentenceModeView(
+                key: const ValueKey('sentence'),
+                words: _words,
+                currentIndex: timerState.currentIndex,
+                letterSpacing: config.letterSpacing,
+                wordSpacing: config.wordSpacing,
+                fontFamily: config.fontFamily,
+                fontSize: fontSize,
+              ),
+              ReadingMode.paragraph => ParagraphModeView(
+                key: const ValueKey('paragraph'),
+                words: _words,
+                currentIndex: timerState.currentIndex,
+                letterSpacing: config.letterSpacing,
+                wordSpacing: config.wordSpacing,
+                fontFamily: config.fontFamily,
+                fontSize: fontSize,
+              ),
+            },
           ),
+        ),
+        ReadingRuler(
+          visible: config.readingRulerEnabled,
+          viewportHeight: MediaQuery.sizeOf(context).height,
+        ),
+        // Suppression overlay — shows detected artifacts during pause only.
+        Consumer(
+          builder: (context, ref, _) {
+            final suppression = ref.watch(suppressionNotifierProvider);
+            return SuppressionOverlay(
+              isPaused: !timerState.isPlaying && _words.isNotEmpty,
+              words: _words,
+              regions: suppression.regions,
+              suppressedIndices: suppression.suppressedIndices,
+              onToggleRegion: (region) {
+                ref
+                    .read(suppressionNotifierProvider.notifier)
+                    .toggleRegion(region);
+              },
+            );
+          },
         ),
         Positioned.fill(
           child: PauseFog3D(

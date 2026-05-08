@@ -79,6 +79,9 @@ class AppConfig {
     this.shownHints = const {},
     this.hasSeenReadingGoalOnboarding = false,
     this.pacingConfig = defaultPacingConfig,
+    this.letterSpacing = 0.0,
+    this.wordSpacing = 0.0,
+    this.readingRulerEnabled = false,
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
@@ -123,6 +126,9 @@ class AppConfig {
       pacingConfig: json.containsKey('pacingConfig')
           ? PacingConfig.fromJson(json['pacingConfig'] as Map<String, Object?>)
           : defaultPacingConfig,
+      letterSpacing: (json['letterSpacing'] as num?)?.toDouble() ?? 0.0,
+      wordSpacing: (json['wordSpacing'] as num?)?.toDouble() ?? 0.0,
+      readingRulerEnabled: json['readingRulerEnabled'] as bool? ?? false,
     );
   }
 
@@ -143,6 +149,15 @@ class AppConfig {
   /// Per-word adaptive pacing configuration.
   final PacingConfig pacingConfig;
 
+  /// Letter spacing in logical pixels (0.0–5.0).
+  final double letterSpacing;
+
+  /// Word spacing in logical pixels (0.0–20.0).
+  final double wordSpacing;
+
+  /// Whether the reading ruler overlay is enabled.
+  final bool readingRulerEnabled;
+
   AppConfig copyWith({
     int? defaultWpm,
     String? pdfFolderPath,
@@ -159,6 +174,9 @@ class AppConfig {
     Set<String>? shownHints,
     bool? hasSeenReadingGoalOnboarding,
     PacingConfig? pacingConfig,
+    double? letterSpacing,
+    double? wordSpacing,
+    bool? readingRulerEnabled,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
@@ -179,6 +197,9 @@ class AppConfig {
       hasSeenReadingGoalOnboarding:
           hasSeenReadingGoalOnboarding ?? this.hasSeenReadingGoalOnboarding,
       pacingConfig: pacingConfig ?? this.pacingConfig,
+      letterSpacing: letterSpacing ?? this.letterSpacing,
+      wordSpacing: wordSpacing ?? this.wordSpacing,
+      readingRulerEnabled: readingRulerEnabled ?? this.readingRulerEnabled,
     );
   }
 
@@ -196,5 +217,8 @@ class AppConfig {
     'shownHints': shownHints.toList(),
     'hasSeenReadingGoalOnboarding': hasSeenReadingGoalOnboarding,
     'pacingConfig': pacingConfig.toJson(),
+    'letterSpacing': letterSpacing,
+    'wordSpacing': wordSpacing,
+    'readingRulerEnabled': readingRulerEnabled,
   };
 }

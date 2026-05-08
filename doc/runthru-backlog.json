@@ -2,7 +2,8 @@
   "$schema": "https://runthru.app/schemas/backlog.v1.json",
   "project": "RunThru",
   "generated": "2026-05-02",
-  "last_updated": "2026-05-03",
+  "last_updated": "2026-05-06",
+  "changelog": [{"date": "2026-05-06", "change": "Added M1.6 — Remove Free Bookstore (Project Gutenberg OPDS feature deleted: opds_service.dart, discover_screen.dart, Discover tab from HomeShell, /discover route)"}],
   "generator": "agile-backlog-architect",
   "existing_capabilities": [
     "ORP Pacing Engine (competitive core — do not rebuild)",
@@ -27,7 +28,7 @@
     "Desktop/web targets are stretch goals, not blockers for any release",
     "pdfrx FFI constraint limits PDF page rendering to main isolate; text classification can use Isolate.run()",
     "Solo developer capacity: 20 hours/week, max 3 concurrent agents",
-    "Test baseline: 264 pass, 20 skip, 4 pre-existing failures — do not introduce new failures",
+    "Test baseline: 453 pass, 0 skip, 4 pre-existing failures (async bleed in full-suite runs) — do not introduce new failures",
     "Analysis baseline: dart analyze lib/ must report zero issues"
   ],
   "releases": [
@@ -1496,7 +1497,7 @@
           "id": "M1.3",
           "title": "Content Ingestion",
           "status": "complete",
-          "status_detail": "E1.3.1-E1.3.3 complete. E1.3.4 deferred. E1.3.5 Instapaper Integration queued as next active work.",
+          "status_detail": "E1.3.1-E1.3.3 complete. E1.3.4 deferred. E1.3.5 Instapaper Integration complete (auth, bookmarks, article import all implemented).",
           "weeks": "5-9",
           "model": {
             "primary": "Opus 4.7",
@@ -2327,7 +2328,9 @@
             {
               "id": "E1.3.5",
               "title": "Instapaper Integration",
-              "status": "not_started",
+              "status": "complete",
+              "status_detail": "All 3 features implemented: OAuth xAuth client (instapaper_client.dart), auth state provider with flutter_secure_storage, bookmarks fetching + article import through ContentNormaliser.",
+              "completed_date": "2026-05-06",
               "description": "OAuth xAuth login to Instapaper, fetch saved bookmarks list, import article text (HTML) through ContentNormaliser for paced reading",
               "model": {
                 "primary": "Sonnet 4.6",
@@ -2740,6 +2743,9 @@
         {
           "id": "M1.4",
           "title": "Reading Experience Polish",
+          "status": "complete",
+          "status_detail": "All epics complete. E1.4.1 (warm-up ramp, tap pause/resume, swipe rewind). E1.4.2 (sentence mode, paragraph mode, mode switcher). E1.4.3 (spacing controls in ConfigNotifier, reading ruler). E1.4.4 (artifact classifier + suppression overlay).",
+          "completed_date": "2026-05-06",
           "weeks": "7-10",
           "model": {
             "primary": "Opus 4.7",
@@ -2750,6 +2756,9 @@
             {
               "id": "E1.4.1",
               "title": "RSVP UX Polish",
+              "status": "complete",
+              "status_detail": "Warm-up ramp implemented in word_timer.dart (M1.2.5). Tap pause/resume in reading_screen.dart. Swipe rewind (sentence navigation) in parallax_reading_screen.dart.",
+              "completed_date": "2026-05-06",
               "description": "Warm-up ramp 80%→100% over ~10s, tap pause/resume, swipe-left rewind, smooth mode transitions",
               "model": {
                 "primary": "Opus 4.6",
@@ -2949,6 +2958,9 @@
             {
               "id": "E1.4.2",
               "title": "Multi-Mode Reading",
+              "status": "complete",
+              "status_detail": "All features implemented: sentence_mode_view.dart, paragraph_mode_view.dart, reading_mode_provider.dart, mode_switcher.dart.",
+              "completed_date": "2026-05-06",
               "description": "Sentence mode with highlight + auto-scroll, paragraph mode with auto-advance, seamless switching via gesture",
               "model": {
                 "primary": "Opus 4.6",
@@ -3131,6 +3143,9 @@
             {
               "id": "E1.4.3",
               "title": "Accessibility Foundations",
+              "status": "complete",
+              "status_detail": "Spacing controls (letter + word) in ConfigNotifier with persistence. Reading ruler widget implemented. Spacing controls widget in settings.",
+              "completed_date": "2026-05-06",
               "description": "Adaptive letter/word spacing, reading ruler/focus line, no color-only signals, shape/label/position fallbacks",
               "model": {
                 "primary": "Opus 4.6",
@@ -3252,6 +3267,9 @@
             {
               "id": "E1.4.4",
               "title": "Artifact Suppression",
+              "status": "complete",
+              "status_detail": "Artifact classifier with Isolate.run() implemented + tested. Suppression overlay and provider complete.",
+              "completed_date": "2026-05-06",
               "description": "Long-press suppression during pause, range select, per-source profiles, auto-detect tables/figures/code",
               "model": {
                 "primary": "Opus 4.6",
@@ -3760,6 +3778,127 @@
             }
           ],
           "granularity_rationale": "Milestone boundary: launch readiness is the final validation gate — store listing requires feature-complete app for screenshots, and stats require completed reading sessions to measure"
+        },
+        {
+          "id": "M1.6",
+          "title": "Remove Free Bookstore",
+          "status": "not_started",
+          "weeks": "on-demand",
+          "model": {
+            "primary": "Sonnet 4.6",
+            "fallback": "Haiku 4.5",
+            "rationale": "Mechanical deletion and wiring — no architectural reasoning needed"
+          },
+          "description": "Remove the Project Gutenberg OPDS-based Discover tab entirely. The feature adds network complexity, external API dependency, and a tab slot that dilutes the core library/reading experience. Files: opds_service.dart (deleted), discover_screen.dart (deleted), home_shell.dart (tab count 4→3, remove Discover nav item), app_router.dart (remove /discover redirect, re-index analytics tab=1, settings tab=2).",
+          "guardrails": [
+            "Run dart analyze lib/ after every file change — zero issues required",
+            "Run flutter test after all changes — do not introduce new failures",
+            "No color-only signals rule still applies to revised nav bar (3 tabs must retain shape+label+icon)"
+          ],
+          "epics": [
+            {
+              "id": "E1.6.1",
+              "title": "Delete OPDS Bookstore",
+              "status": "not_started",
+              "description": "Delete all bookstore-related files and remove the Discover tab from the home shell and router.",
+              "model": {
+                "primary": "Haiku 4.5",
+                "fallback": "Sonnet 4.6",
+                "rationale": "Mechanical deletion — no domain reasoning"
+              },
+              "depends_on": [],
+              "parallelizable_with": [],
+              "features": [
+                {
+                  "id": "F1.6.1.1",
+                  "title": "Delete OPDS service and Discover screen",
+                  "status": "not_started",
+                  "description": "Delete lib/services/opds_service.dart and lib/screens/discover_screen.dart. These are the only files implementing the bookstore. The http and xml packages are retained (used by instapaper_client.dart and epub_extractor.dart respectively).",
+                  "model": {
+                    "primary": "Haiku 4.5",
+                    "rationale": "Pure file deletion — no logic"
+                  },
+                  "files_in_scope": [
+                    "lib/services/opds_service.dart",
+                    "lib/screens/discover_screen.dart"
+                  ],
+                  "tasks": [
+                    {
+                      "id": "T1.6.1.1.1",
+                      "title": "Delete opds_service.dart",
+                      "status": "not_started",
+                      "model": {
+                        "primary": "Haiku 4.5",
+                        "rationale": "File deletion"
+                      },
+                      "files_in_scope": ["lib/services/opds_service.dart"],
+                      "verification_command": "dart analyze lib/",
+                      "acceptance_criteria": [
+                        "lib/services/opds_service.dart no longer exists",
+                        "dart analyze lib/ reports zero issues"
+                      ]
+                    },
+                    {
+                      "id": "T1.6.1.1.2",
+                      "title": "Delete discover_screen.dart",
+                      "status": "not_started",
+                      "model": {
+                        "primary": "Haiku 4.5",
+                        "rationale": "File deletion"
+                      },
+                      "files_in_scope": ["lib/screens/discover_screen.dart"],
+                      "verification_command": "dart analyze lib/",
+                      "acceptance_criteria": [
+                        "lib/screens/discover_screen.dart no longer exists",
+                        "dart analyze lib/ reports zero issues"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "F1.6.1.2",
+                  "title": "Remove Discover tab from HomeShell",
+                  "status": "not_started",
+                  "description": "In lib/screens/home_shell.dart: remove the DiscoverScreen import, remove _KeepAlivePage(child: DiscoverScreen()) from the PageView children, update the clamp bound from 3 to 2, remove the Discover NavigationDestination from the nav bar, and fix the doc comment from 'four main tabs' to 'three main tabs'.",
+                  "model": {
+                    "primary": "Haiku 4.5",
+                    "rationale": "Mechanical widget removal"
+                  },
+                  "files_in_scope": ["lib/screens/home_shell.dart"],
+                  "verification_command": "dart analyze lib/",
+                  "acceptance_criteria": [
+                    "No import of discover_screen.dart in home_shell.dart",
+                    "PageView has exactly 3 children: LibraryScreen, _AnalyticsTab, SettingsScreen",
+                    "NavigationBar has exactly 3 destinations: Library (tab 0), Analytics (tab 1), Settings (tab 2)",
+                    "clamp upper bound is 2",
+                    "dart analyze lib/ reports zero issues"
+                  ]
+                },
+                {
+                  "id": "F1.6.1.3",
+                  "title": "Fix router tab redirects",
+                  "status": "not_started",
+                  "description": "In lib/navigation/app_router.dart: remove the GoRoute for /discover, change /analytics redirect to /?tab=1, change /settings redirect to /?tab=2. The / route tab parameter parsing is unchanged.",
+                  "model": {
+                    "primary": "Haiku 4.5",
+                    "rationale": "Mechanical route update"
+                  },
+                  "files_in_scope": ["lib/navigation/app_router.dart"],
+                  "verification_command": "dart analyze lib/ && flutter test",
+                  "acceptance_criteria": [
+                    "No /discover route exists in app_router.dart",
+                    "/analytics redirects to /?tab=1",
+                    "/settings redirects to /?tab=2",
+                    "dart analyze lib/ reports zero issues",
+                    "flutter test passes with no new failures"
+                  ]
+                }
+              ],
+              "granularity_rationale": "Three features map to three distinct files; changes are independent and can be done sequentially in one session"
+            }
+          ],
+          "parallel_clusters": [],
+          "granularity_rationale": "Milestone boundary: bookstore removal is a discrete cleanup with zero external dependencies — ships independently as a single PR"
         }
       ],
       "granularity_rationale": "Release boundary: MVP establishes core product for App Store submission — complete reading experience, content ingestion pipeline, and store presence required before market validation"

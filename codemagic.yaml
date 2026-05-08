@@ -8,6 +8,8 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
+      groups:
+        - instapaper_credentials  # Codemagic env group: INSTAPAPER_CONSUMER_KEY, INSTAPAPER_CONSUMER_SECRET
     scripts:
       # CFBundleVersion must strictly increase for App Store Connect.
       # Never rely on the +N in pubspec.yaml being manually bumped.
@@ -36,7 +38,9 @@ workflows:
         script: |
           flutter build ios \
             --release \
-            --no-codesign
+            --no-codesign \
+            --dart-define=INSTAPAPER_CONSUMER_KEY="$INSTAPAPER_CONSUMER_KEY" \
+            --dart-define=INSTAPAPER_CONSUMER_SECRET="$INSTAPAPER_CONSUMER_SECRET"
       - name: Apply signing profiles (after Flutter migration)
         script: |
           xcode-project use-profiles

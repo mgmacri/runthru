@@ -11,6 +11,27 @@ const _configKey = 'runthru_config';
 
 /// Riverpod AsyncNotifier managing persistent app configuration.
 class ConfigNotifier extends AsyncNotifier<AppConfig> {
+  Future<void> setLetterSpacing(double spacing) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(letterSpacing: spacing.clamp(0.0, 5.0));
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
+  Future<void> setWordSpacing(double spacing) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(wordSpacing: spacing.clamp(0.0, 20.0));
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
+  Future<void> setReadingRulerEnabled(bool enabled) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(readingRulerEnabled: enabled);
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
   /// Serializes concurrent read-modify-write cycles to prevent data loss.
   Completer<void>? _lock;
 

@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 void main() {
-  final j = jsonDecode(File('doc/runthru-backlog.json').readAsStringSync())
-      as Map<String, dynamic>;
+  final j =
+      jsonDecode(File('doc/runthru-backlog.json').readAsStringSync())
+          as Map<String, dynamic>;
   print('Valid JSON: ${j['project']}');
   print('Releases: ${(j['releases'] as List).length}');
 
@@ -21,6 +22,7 @@ void main() {
       }
     }
   }
+
   countNodes(j);
   print('Total nodes with id: $nodeCount');
 
@@ -40,6 +42,7 @@ void main() {
       }
     }
   }
+
   checkRationale(j);
   print('Missing granularity_rationale: $missing');
 
@@ -64,6 +67,7 @@ void main() {
       }
     }
   }
+
   checkPowerShell(j);
   print('PowerShell commands remaining: $psCount');
 
@@ -83,6 +87,7 @@ void main() {
       }
     }
   }
+
   checkBlockers(j);
   print('Nodes with ethical_blockers: ${blockerNodes.join(', ')}');
 
@@ -109,13 +114,18 @@ void main() {
       }
     }
   }
+
   findE132(j);
 
   // Check no Speedy Boy references
   final content = File('doc/runthru-backlog.json').readAsStringSync();
-  final speedyCount =
-      RegExp(r'[Ss]peedy\s*[Bb]oy', caseSensitive: false).allMatches(content).length;
+  final speedyCount = RegExp(
+    r'[Ss]peedy\s*[Bb]oy',
+    caseSensitive: false,
+  ).allMatches(content).length;
   print('Speedy Boy references: $speedyCount');
 
-  print('\n=== VALIDATION ${missing == 0 && psCount == 0 && speedyCount == 0 ? "PASSED" : "FAILED"} ===');
+  print(
+    '\n=== VALIDATION ${missing == 0 && psCount == 0 && speedyCount == 0 ? "PASSED" : "FAILED"} ===',
+  );
 }

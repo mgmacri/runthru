@@ -3,6 +3,8 @@
 *.log
 *.pyc
 *.swp
+Xcode_*.xip
+build/iosbox/
 .DS_Store
 .atom/
 .buildlog/
@@ -58,6 +60,10 @@ Satoshi_Complete/
 
 # Apple API keys — NEVER commit
 *.p8
+
+# Dart compile-time secrets (dart-define-from-file) — NEVER commit
+dart_defines/*.json
+!dart_defines/*.example.json
 
 # Dart skills cache (local tool)
 .dart_skills/

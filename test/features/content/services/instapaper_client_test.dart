@@ -287,6 +287,7 @@ void main() {
       ).thenAnswer(
         (_) async => http.Response(
           jsonEncode([
+            {'type': 'meta'},
             {'type': 'user', 'user_id': 123, 'username': 'test'},
             {
               'type': 'bookmark',
@@ -340,6 +341,7 @@ void main() {
       ).thenAnswer(
         (_) async => http.Response(
           jsonEncode([
+            {'type': 'meta'},
             {'type': 'user', 'user_id': 123, 'username': 'test'},
           ]),
           200,
@@ -350,7 +352,7 @@ void main() {
       expect(bookmarks, isEmpty);
     });
 
-    test('filters out non-bookmark types from response', () async {
+    test('filters out non-bookmark items', () async {
       when(
         () => mockHttp.post(
           any(),
@@ -360,14 +362,21 @@ void main() {
       ).thenAnswer(
         (_) async => http.Response(
           jsonEncode([
+            {'type': 'meta'},
             {'type': 'user', 'user_id': 123, 'username': 'test'},
             {
               'type': 'bookmark',
               'bookmark_id': 1,
               'url': 'https://a.com',
               'title': 'A',
+              'description': '',
+              'hash': 'xyz',
+              'progress': 0.0,
+              'progress_timestamp': 0,
+              'time': 0,
+              'starred': '0',
+              'private_source': '',
             },
-            {'type': 'meta', 'some': 'data'},
           ]),
           200,
         ),
@@ -413,6 +422,7 @@ void main() {
       ).thenAnswer(
         (_) async => http.Response(
           jsonEncode([
+            {'type': 'meta'},
             {'type': 'user', 'user_id': 123, 'username': 'test'},
           ]),
           200,

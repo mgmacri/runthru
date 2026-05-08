@@ -57,9 +57,10 @@ void main() {
   file.writeAsStringSync(content);
 
   // Verify
-  final remaining = RegExp(r'Speedy\s*Boy', caseSensitive: false)
-      .allMatches(content)
-      .length;
+  final remaining = RegExp(
+    r'Speedy\s*Boy',
+    caseSensitive: false,
+  ).allMatches(content).length;
   print('Speedy Boy references remaining: $remaining');
 
   // grep patterns use 'speedy.boy' and 'speedy' which are functional patterns, not brand references

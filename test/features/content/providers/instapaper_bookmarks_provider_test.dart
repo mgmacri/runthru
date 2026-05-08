@@ -8,6 +8,7 @@ import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
 
@@ -40,11 +41,13 @@ void main() {
   late MockHttpClient mockHttp;
 
   setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
     registerFallbackValue(Uri.parse('https://example.com'));
   });
 
   setUp(() {
     mockHttp = MockHttpClient();
+    SharedPreferences.setMockInitialValues({});
   });
 
   group('InstapaperBookmarks', () {

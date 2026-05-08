@@ -48,7 +48,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ref.read(instapaperArticleImportProvider.notifier).clear();
         context.push(
           '/read-instapaper',
-          extra: {'document': next.document, 'title': next.title},
+          extra: {
+            'document': next.document,
+            'title': next.title,
+            'bookmarkId': next.bookmarkId,
+            'initialProgress': next.initialProgress,
+          },
         );
       } else if (next is ArticleImportError) {
         ScaffoldMessenger.of(
