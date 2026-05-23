@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RunThru — Paced Reading for Focus</title>
+  <meta name="description" content="RunThru helps ADHD and neurodivergent readers finish what they start. Word-by-word pacing that works with your attention, not against it." />
+  <link rel="canonical" href="https://runthruapp.com/" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600;12..96,700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Tokens ─────────────────────────────────────────────── */
+    :root {
+      --bg:            #EDE3D2;
+      --shadow-light:  #F4F5F0;
+      --shadow-dark:   #DDD5C7;
+      --text:          #2E272A;
+      --text-secondary:#625D5D;
+      --accent:        #4C7E86;
+      --marigold:      #FDAC53;
+      --sea-green:     #149C88;
+      --coral:         #ED5656;
+      --white-soft:    #F4F5F0;
+
+      --neu-raised: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+      --neu-raised-lg: 10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light);
+      --neu-inset: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+
+      --radius: 16px;
+      --radius-pill: 999px;
+    }
+
+    /* ── Reset ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    .container {
+      width: min(1100px, 100% - 3rem);
+      margin-inline: auto;
+    }
+    section { padding-block: 80px; }
+
+    /* ── Nav ────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+      padding-block: 16px;
+    }
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--accent); }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .nav-links a {
+      color: var(--text-secondary);
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius-pill);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--white-soft);
+      box-shadow: var(--neu-raised);
+    }
+    .btn-primary:hover {
+      box-shadow: var(--neu-raised-lg);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: var(--neu-raised);
+    }
+    .btn-ghost:hover {
+      box-shadow: var(--neu-raised-lg);
+      transform: translateY(-1px);
+    }
+
+    /* ── Hero ───────────────────────────────────────────────── */
+    #hero {
+      padding-block: 100px 80px;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: var(--radius-pill);
+      background: var(--bg);
+      box-shadow: var(--neu-raised);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 24px;
+    }
+    .hero-title {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -1.5px;
+      margin-bottom: 20px;
+    }
+    .hero-title em {
+      font-style: normal;
+      color: var(--accent);
+    }
+    .hero-sub {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin-inline: auto;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 64px;
+    }
+
+    /* ── Reading Demo ───────────────────────────────────────── */
+    .demo-stage {
+      position: relative;
+      width: min(480px, 90vw);
+      margin-inline: auto;
+      aspect-ratio: 9/6;
+      border-radius: 24px;
+      background: #F5F0EA;
+      box-shadow:
+        var(--neu-raised-lg),
+        inset 0 0 40px rgba(240,235,229,0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .demo-stage::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(135deg, transparent 40%, rgba(184,176,168,0.08) 50%, transparent 60%),
+        linear-gradient(45deg, transparent 60%, rgba(208,196,184,0.06) 70%, transparent 80%);
+      pointer-events: none;
+    }
+    .demo-wpm {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      opacity: 0.6;
+      margin-bottom: 24px;
+    }
+    .demo-word-wrap {
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .demo-word {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 400;
+      color: var(--text);
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.12s ease, transform 0.12s ease;
+      white-space: nowrap;
+    }
+    .demo-word.anchor {
+      color: var(--coral);
+      font-weight: 700;
+    }
+    .demo-word.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .demo-progress-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: var(--sea-green);
+      border-radius: 0 2px 0 0;
+      transition: width 0.3s linear;
+      opacity: 0.7;
+    }
+    .demo-controls {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    .demo-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--shadow-dark);
+    }
+    .demo-dot.active { background: var(--accent); }
+
+    /* ── Section headers ────────────────────────────────────── */
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3.5vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 520px;
+      line-height: 1.6;
+    }
+
+    /* ── How It Works ───────────────────────────────────────── */
+    #how { background: var(--bg); }
+    #how .container { display: grid; gap: 64px; }
+    #how .header { text-align: center; }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+    }
+    .step-card {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      box-shadow: var(--neu-raised);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .step-card:hover {
+      box-shadow: var(--neu-raised-lg);
+      transform: translateY(-2px);
+    }
+    .step-num {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-pill);
+      background: var(--bg);
+      box-shadow: var(--neu-inset);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .step-card h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+    .step-card p  { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+    /* ── Features ───────────────────────────────────────────── */
+    #features .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+    .feature-list { display: flex; flex-direction: column; gap: 20px; margin-top: 40px; }
+    .feature-item { display: flex; gap: 16px; align-items: flex-start; }
+    .feature-icon {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: var(--bg);
+      box-shadow: var(--neu-raised);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .feature-item h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .feature-item p  { font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
+    .feature-visual  { position: sticky; top: 100px; }
+    .stat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .stat-card {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 24px 20px;
+      box-shadow: var(--neu-raised);
+    }
+    .stat-card .stat-value {
+      font-size: 32px; font-weight: 700;
+      letter-spacing: -1px; line-height: 1; margin-bottom: 6px;
+    }
+    .stat-card .stat-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+    .stat-card.accent-green .stat-value { color: var(--sea-green); }
+    .stat-card.accent-blue .stat-value  { color: var(--accent); }
+    .stat-card.accent-gold .stat-value  { color: var(--marigold); }
+    .stat-card.accent-coral .stat-value { color: var(--coral); }
+
+    /* ── Pledge ─────────────────────────────────────────────── */
+    #pledge { padding-block: 60px; }
+    .pledge-box {
+      background: var(--bg);
+      border-radius: 24px;
+      box-shadow: var(--neu-raised-lg);
+      padding: 48px;
+      display: flex; gap: 40px; align-items: flex-start;
+    }
+    .pledge-icon { font-size: 36px; flex-shrink: 0; line-height: 1; }
+    .pledge-box h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+    .pledge-box p  { font-size: 15px; color: var(--text-secondary); line-height: 1.65; max-width: 600px; }
+
+    /* ── Download ───────────────────────────────────────────── */
+    #download { text-align: center; padding-block: 80px; }
+    #download .section-title { margin-inline: auto; max-width: 600px; }
+    #download .section-sub   { margin-inline: auto; margin-bottom: 40px; }
+    .store-badges { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .store-badge {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      background: var(--bg);
+      box-shadow: var(--neu-raised);
+      font-weight: 600; font-size: 14px;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+    .store-badge:hover { box-shadow: var(--neu-raised-lg); transform: translateY(-2px); }
+    .store-badge svg { width: 22px; height: 22px; }
+    .badge-sub  { font-size: 10px; font-weight: 400; color: var(--text-secondary); display: block; letter-spacing: 0.04em; }
+    .badge-main { font-size: 15px; font-weight: 600; }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    footer { border-top: 1px solid var(--shadow-dark); padding-block: 40px; }
+    footer .container {
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .footer-brand { font-weight: 700; font-size: 16px; }
+    .footer-brand span { color: var(--accent); }
+    .footer-links { display: flex; gap: 24px; list-style: none; font-size: 13px; color: var(--text-secondary); }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy { font-size: 12px; color: var(--text-secondary); opacity: 0.7; }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      section { padding-block: 56px; }
+      #features .container { grid-template-columns: 1fr; }
+      .feature-visual { position: static; }
+      .pledge-box { flex-direction: column; gap: 20px; padding: 32px 24px; }
+      nav .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="nav-logo">Run<span>Thru</span></div>
+    <ul class="nav-links">
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#download">Download</a></li>
+    </ul>
+    <a href="#download" class="btn btn-primary" style="padding:10px 20px;font-size:14px;">Get the app</a>
+  </div>
+</nav>
+
+<section id="hero">
+  <div class="container">
+    <div class="hero-eyebrow">For ADHD &amp; neurodivergent readers</div>
+    <h1 class="hero-title">
+      Your attention isn't broken.<br/>
+      It just needs a <em>better direction.</em>
+    </h1>
+    <p class="hero-sub">
+      RunThru guides your focus word by word, at a pace you control.
+      Stop re-reading the same paragraph. Start finishing books.
+    </p>
+    <div class="hero-ctas">
+      <a href="#download" class="btn btn-primary">Download Free</a>
+      <a href="#how" class="btn btn-ghost">See how it works</a>
+    </div>
+    <div class="demo-stage" aria-label="Animated reading demo">
+      <div class="demo-wpm">250 WPM</div>
+      <div class="demo-word-wrap">
+        <div class="demo-word" id="demoWord">focus</div>
+      </div>
+      <div class="demo-progress-bar" id="demoBar" style="width:0%"></div>
+      <div class="demo-controls">
+        <div class="demo-dot active"></div>
+        <div class="demo-dot"></div>
+        <div class="demo-dot"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="container">
+    <div class="header">
+      <div class="section-label">Simple by design</div>
+      <h2 class="section-title">From shelf to flow in three steps</h2>
+      <p class="section-sub" style="margin-inline:auto;">No complicated setup. Import anything, set your pace, and read.</p>
+    </div>
+    <div class="steps">
+      <div class="step-card">
+        <div class="step-num">1</div>
+        <h3>Import anything</h3>
+        <p>Open a PDF, EPUB, or paste text from anywhere. The share sheet works from your browser, Files app, and every reading app on your device.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">2</div>
+        <h3>Set your pace</h3>
+        <p>Dial in your WPM with a satisfying twist gesture. RunThru adapts automatically — longer words get a little more time, punctuation gives you room to breathe.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">3</div>
+        <h3>Read. Actually finish.</h3>
+        <p>Words appear one at a time in a focused viewport. Your eyes stop hunting, your mind stops wandering. Reading becomes something you complete.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <div>
+      <div class="section-label">Built for you</div>
+      <h2 class="section-title">Reading the way your brain works</h2>
+      <p class="section-sub">Not faster. Not slower. Just steadier.</p>
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-icon">🎯</div>
+          <div>
+            <h4>Adaptive pacing</h4>
+            <p>Word length, punctuation, and paragraph breaks are all factored in. The rhythm feels natural, not mechanical.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">🎨</div>
+          <div>
+            <h4>20+ font choices</h4>
+            <p>OpenDyslexic, serifs, monospace, system fonts. Pick the typeface your brain finds easiest — accessibility is never locked behind a paywall.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">📱</div>
+          <div>
+            <h4>Offline first</h4>
+            <p>Everything stays on your device. No account required, no cloud syncing unless you want it.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">📚</div>
+          <div>
+            <h4>Instapaper sync</h4>
+            <p>Your saved articles, ready to read. RunThru imports directly from your Instapaper queue.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">📊</div>
+          <div>
+            <h4>Reading analytics</h4>
+            <p>See your streaks, session time, and words read — motivation that celebrates completion, not competition.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="feature-visual">
+      <div class="stat-cards">
+        <div class="stat-card accent-blue">
+          <div class="stat-value">250+</div>
+          <div class="stat-label">Adjustable WPM range</div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-value">100%</div>
+          <div class="stat-label">Accessibility features free</div>
+        </div>
+        <div class="stat-card accent-gold">
+          <div class="stat-value">20+</div>
+          <div class="stat-label">Font choices</div>
+        </div>
+        <div class="stat-card accent-coral">
+          <div class="stat-value">0</div>
+          <div class="stat-label">Accounts required</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pledge" style="padding-block:60px;">
+  <div class="container">
+    <div class="pledge-box">
+      <div class="pledge-icon">♿</div>
+      <div>
+        <h2>Accessibility is non-negotiable</h2>
+        <p>
+          OpenDyslexic, adjustable spacing, color vision deficiency themes, font scaling, and
+          the ruler guide are all free — always. RunThru will never paywall features that
+          exist to make reading possible for someone. This is a promise, not a policy.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="container">
+    <div class="section-label">Get RunThru</div>
+    <h2 class="section-title">Start reading. Actually finish.</h2>
+    <p class="section-sub">Free to download. No account. No dark patterns. Just reading.</p>
+    <div class="store-badges">
+      <a href="#" class="store-badge" aria-label="Download on the App Store">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        <div>
+          <span class="badge-sub">Download on the</span>
+          <span class="badge-main">App Store</span>
+        </div>
+      </a>
+      <a href="#" class="store-badge" aria-label="Get it on Google Play">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.18 23.76c.3.17.64.24.99.2L14.64 12 3.18.04c-.35-.04-.69.03-.99.2C1.67.72 1.25 1.34 1.25 2.06v19.88c0 .72.42 1.34 1.93 1.82zM16.09 13.41l2.54 2.54-9.29 5.36 6.75-7.9zm2.88-4.65L16.09 10.6 9.34 2.7l9.29 5.36c1.04.6 1.08 1.75.34 2.7zM15.12 12L5.25 1.59l9.87 5.7L17.5 10l-2.38 2z"/></svg>
+        <div>
+          <span class="badge-sub">Get it on</span>
+          <span class="badge-main">Google Play</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-brand">Run<span>Thru</span></div>
+    <ul class="footer-links">
+      <li><a href="https://runthruapp.com/privacy">Privacy Policy</a></li>
+      <li><a href="mailto:mattmacri89@gmail.com">Contact</a></li>
+    </ul>
+    <div class="footer-copy">&copy; 2025 RunThru</div>
+  </div>
+</footer>
+
+<script>
+  const words = [
+    { text: "Reading",   anchor: false },
+    { text: "shouldn't", anchor: false },
+    { text: "feel",      anchor: false },
+    { text: "like",      anchor: false },
+    { text: "a",         anchor: false },
+    { text: "battle.",   anchor: false },
+    { text: "RunThru",   anchor: true  },
+    { text: "guides",    anchor: false },
+    { text: "your",      anchor: false },
+    { text: "focus",     anchor: false },
+    { text: "word",      anchor: false },
+    { text: "by",        anchor: false },
+    { text: "word,",     anchor: false },
+    { text: "at",        anchor: false },
+    { text: "a",         anchor: false },
+    { text: "pace",      anchor: false },
+    { text: "you",       anchor: false },
+    { text: "control.",  anchor: false },
+  ];
+
+  const wordEl = document.getElementById('demoWord');
+  const barEl  = document.getElementById('demoBar');
+  let idx = 0;
+  const baseMs = 60000 / 250;
+
+  function getDelay(word) {
+    let ms = baseMs;
+    if (word.length > 7)  ms *= 1.3;
+    if (word.length > 10) ms *= 1.15;
+    if (/[.,!?]$/.test(word)) ms *= 1.5;
+    return ms;
+  }
+
+  function showNext() {
+    const w = words[idx];
+    wordEl.classList.remove('visible');
+    wordEl.classList.toggle('anchor', w.anchor);
+    setTimeout(() => {
+      wordEl.textContent = w.text;
+      wordEl.classList.add('visible');
+    }, 80);
+    barEl.style.width = ((idx + 1) / words.length * 100) + '%';
+    idx = (idx + 1) % words.length;
+    setTimeout(showNext, idx === 0 ? 2000 : getDelay(w.text));
+  }
+
+  showNext();
+</script>
+</body>
+</html>
