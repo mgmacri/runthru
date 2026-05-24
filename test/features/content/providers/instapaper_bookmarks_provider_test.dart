@@ -8,6 +8,7 @@ import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
+import 'package:runthru/features/content/services/instapaper_sync_queue.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
@@ -35,9 +36,16 @@ class FakeInstapaperAuth extends Notifier<InstapaperAuthState>
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<void> connect() async {}
 }
 
 void main() {
+  const testConfig = InstapaperClientConfig(
+    consumerKey: 'consumer_key',
+    consumerSecret: 'consumer_secret',
+  );
   late MockHttpClient mockHttp;
 
   setUpAll(() {
@@ -70,7 +78,7 @@ void main() {
     });
 
     test('fetches bookmarks when authenticated', () async {
-      final client = InstapaperClient(httpClient: mockHttp);
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig);
       client.setTokens(token: 'tok', tokenSecret: 'sec');
 
       when(
@@ -121,6 +129,132 @@ void main() {
       expect(bookmarks[0].bookmarkId, equals(1001));
       expect(bookmarks[1].bookmarkId, equals(1002));
     });
+
+    test(
+      'syncProgress updates local bookmark list state optimistically',
+      () async {
+        final client = InstapaperClient(
+          httpClient: mockHttp,
+          config: testConfig,
+        );
+        client.setTokens(token: 'tok', tokenSecret: 'sec');
+
+        when(
+          () => mockHttp.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer((invocation) async {
+          final uri = invocation.positionalArguments.first as Uri;
+          if (uri.path == '/api/1/bookmarks/list') {
+            return http.Response(
+              jsonEncode([
+                {'type': 'user', 'user_id': 123, 'username': 'test'},
+                {
+                  'type': 'bookmark',
+                  'bookmark_id': 1001,
+                  'url': 'https://example.com/article',
+                  'title': 'Test Article',
+                  'progress': 0.10,
+                },
+              ]),
+              200,
+            );
+          }
+          return http.Response('', 200);
+        });
+
+        final container = ProviderContainer(
+          overrides: [
+            instapaperAuthProvider.overrideWith(
+              () => FakeInstapaperAuth(
+                initialState: const InstapaperAuthAuthenticated(
+                  user: InstapaperUser(userId: 123, username: 'test'),
+                ),
+                testClient: client,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await container.read(instapaperBookmarksProvider.future);
+
+        await container
+            .read(instapaperBookmarksProvider.notifier)
+            .syncProgress(bookmarkId: 1001, progress: 0.42);
+
+        final bookmarks = container
+            .read(instapaperBookmarksProvider)
+            .valueOrNull;
+        expect(bookmarks, isNotNull);
+        expect(bookmarks!.single.progress, equals(0.42));
+        expect(bookmarks.single.progressLabel, equals('42%'));
+      },
+    );
+
+    test('syncProgress keeps local progress when remote drain fails', () async {
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig);
+      client.setTokens(token: 'tok', tokenSecret: 'sec');
+
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((invocation) async {
+        final uri = invocation.positionalArguments.first as Uri;
+        if (uri.path == '/api/1/bookmarks/list') {
+          return http.Response(
+            jsonEncode([
+              {'type': 'user', 'user_id': 123, 'username': 'test'},
+              {
+                'type': 'bookmark',
+                'bookmark_id': 1001,
+                'url': 'https://example.com/article',
+                'title': 'Test Article',
+                'progress': 0.10,
+              },
+            ]),
+            200,
+          );
+        }
+        throw Exception('network down');
+      });
+
+      final container = ProviderContainer(
+        overrides: [
+          instapaperAuthProvider.overrideWith(
+            () => FakeInstapaperAuth(
+              initialState: const InstapaperAuthAuthenticated(
+                user: InstapaperUser(userId: 123, username: 'test'),
+              ),
+              testClient: client,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(instapaperBookmarksProvider.future);
+
+      await container
+          .read(instapaperBookmarksProvider.notifier)
+          .syncProgress(bookmarkId: 1001, progress: 0.37);
+
+      final bookmarks = container.read(instapaperBookmarksProvider).valueOrNull;
+      expect(bookmarks, isNotNull);
+      expect(bookmarks!.single.progress, equals(0.37));
+
+      final pending = await container
+          .read(instapaperSyncQueueProvider)
+          .pendingOps();
+      expect(pending, hasLength(1));
+      expect(pending.single, isA<ProgressOp>());
+      expect((pending.single as ProgressOp).progress, equals(0.37));
+    });
   });
 
   group('InstapaperArticleImport', () {
@@ -141,7 +275,7 @@ void main() {
     });
 
     test('transitions to loading then done on successful import', () async {
-      final client = InstapaperClient(httpClient: mockHttp);
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig);
       client.setTokens(token: 'tok', tokenSecret: 'sec');
 
       when(
@@ -190,7 +324,7 @@ void main() {
     });
 
     test('transitions to error on API failure', () async {
-      final client = InstapaperClient(httpClient: mockHttp);
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig);
       client.setTokens(token: 'tok', tokenSecret: 'sec');
 
       when(
@@ -237,7 +371,7 @@ void main() {
     });
 
     test('clear resets to idle', () async {
-      final client = InstapaperClient(httpClient: mockHttp);
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig);
       client.setTokens(token: 'tok', tokenSecret: 'sec');
 
       when(
@@ -287,7 +421,7 @@ void main() {
     });
 
     test('normalises HTML through ContentNormaliser', () async {
-      final client = InstapaperClient(httpClient: mockHttp);
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig);
       client.setTokens(token: 'tok', tokenSecret: 'sec');
 
       when(

@@ -52,10 +52,26 @@ class ExtractedDocument {
   bool get hasPageBoundaries => pageBoundaries.isNotEmpty;
 
   /// Append sentences from another document (used for progressive extraction).
+  ///
+  /// Phase-2 extractions start their own word and sentence indices from zero.
+  /// We offset every incoming [PageBoundary] by this document's current word
+  /// and sentence counts so the merged boundaries are globally correct.
   ExtractedDocument merge(ExtractedDocument other) {
+    final wordOffset = totalWords;
+    final sentenceOffset = sentences.length;
+    final offsetBoundaries = other.pageBoundaries
+        .map(
+          (b) => PageBoundary(
+            pageNumber: b.pageNumber,
+            startSentenceIndex: b.startSentenceIndex + sentenceOffset,
+            startWordIndex: b.startWordIndex + wordOffset,
+            firstWords: b.firstWords,
+          ),
+        )
+        .toList();
     return ExtractedDocument(
       sentences: [...sentences, ...other.sentences],
-      pageBoundaries: [...pageBoundaries, ...other.pageBoundaries],
+      pageBoundaries: [...pageBoundaries, ...offsetBoundaries],
       totalPages: other.totalPages > 0 ? other.totalPages : totalPages,
     );
   }

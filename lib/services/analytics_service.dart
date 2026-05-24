@@ -49,11 +49,20 @@ class AnalyticsService {
     final sessions = await getSessions();
     if (sessions.isEmpty) return const ReadingStats();
 
-    final totalWords =
-        sessions.fold<int>(0, (sum, s) => sum + s.wordsRead);
-    final totalWpmWeighted =
-        sessions.fold<double>(0, (sum, s) => sum + s.avgWpm * s.wordsRead);
+    final totalWords = sessions.fold<int>(0, (sum, s) => sum + s.wordsRead);
+    final totalWpmWeighted = sessions.fold<double>(
+      0,
+      (sum, s) => sum + s.avgWpm * s.wordsRead,
+    );
     final avgWpm = totalWords > 0 ? totalWpmWeighted / totalWords : 0.0;
+    final readingTimeHistory = _aggregateReadingTimeByDay(sessions);
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final weekCutoff = todayDate.subtract(const Duration(days: 6));
+    final totalReadingTime = sessions.fold<Duration>(
+      Duration.zero,
+      (sum, session) => sum + _readingDuration(session),
+    );
 
     return ReadingStats(
       totalSessions: sessions.length,
@@ -61,6 +70,15 @@ class AnalyticsService {
       avgWpm: avgWpm,
       streak: _calculateStreak(sessions),
       wpmHistory: _aggregateByDay(sessions),
+      totalReadingTime: totalReadingTime,
+      todayReadingTime: _readingTimeForDay(readingTimeHistory, todayDate),
+      weekReadingTime: readingTimeHistory
+          .where((entry) => !entry.date.isBefore(weekCutoff))
+          .fold<Duration>(
+            Duration.zero,
+            (sum, entry) => sum + entry.readingTime,
+          ),
+      readingTimeHistory: readingTimeHistory,
     );
   }
 
@@ -74,14 +92,15 @@ class AnalyticsService {
     if (sessions.isEmpty) return 0;
 
     // Collect unique dates (local time, date only).
-    final dates = sessions
-        .map((s) {
-          final t = s.startTime.toLocal();
-          return DateTime(t.year, t.month, t.day);
-        })
-        .toSet()
-        .toList()
-      ..sort();
+    final dates =
+        sessions
+            .map((s) {
+              final t = s.startTime.toLocal();
+              return DateTime(t.year, t.month, t.day);
+            })
+            .toSet()
+            .toList()
+          ..sort();
 
     if (dates.isEmpty) return 0;
 
@@ -125,20 +144,70 @@ class AnalyticsService {
       final date = cutoff.add(Duration(days: i));
       final daySessions = grouped[date];
       if (daySessions != null && daySessions.isNotEmpty) {
-        final totalWords =
-            daySessions.fold<int>(0, (sum, s) => sum + s.wordsRead);
+        final totalWords = daySessions.fold<int>(
+          0,
+          (sum, s) => sum + s.wordsRead,
+        );
         final totalWpmWeighted = daySessions.fold<double>(
-            0, (sum, s) => sum + s.avgWpm * s.wordsRead);
+          0,
+          (sum, s) => sum + s.avgWpm * s.wordsRead,
+        );
         final avg = totalWords > 0 ? totalWpmWeighted / totalWords : 0.0;
-        result.add(DailyWpm(
-          date: date,
-          avgWpm: avg,
-          sessionsCount: daySessions.length,
-        ));
+        result.add(
+          DailyWpm(date: date, avgWpm: avg, sessionsCount: daySessions.length),
+        );
       }
     }
 
     return result;
+  }
+
+  /// Aggregate reading time by day for the last 30 days.
+  List<DailyReadingTime> _aggregateReadingTimeByDay(
+    List<ReadingSession> sessions,
+  ) {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final cutoff = todayDate.subtract(const Duration(days: 29));
+
+    final grouped = <DateTime, Duration>{};
+    for (final session in sessions) {
+      final t = session.startTime.toLocal();
+      final dateKey = DateTime(t.year, t.month, t.day);
+      if (dateKey.isBefore(cutoff)) continue;
+
+      grouped.update(
+        dateKey,
+        (duration) => duration + _readingDuration(session),
+        ifAbsent: () => _readingDuration(session),
+      );
+    }
+
+    final result = <DailyReadingTime>[];
+    for (int i = 0; i < 30; i++) {
+      final date = cutoff.add(Duration(days: i));
+      result.add(
+        DailyReadingTime(
+          date: date,
+          readingTime: grouped[date] ?? Duration.zero,
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  Duration _readingTimeForDay(List<DailyReadingTime> history, DateTime date) {
+    for (final entry in history) {
+      if (entry.date == date) return entry.readingTime;
+    }
+    return Duration.zero;
+  }
+
+  Duration _readingDuration(ReadingSession session) {
+    final duration = session.duration;
+    if (duration == null || duration.isNegative) return Duration.zero;
+    return duration;
   }
 }
 

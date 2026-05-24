@@ -6,13 +6,12 @@ part of 'instapaper_auth_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$instapaperAuthHash() => r'40762c359fb6fdb381e57763fb9f8af2a24c7a64';
+String _$instapaperAuthHash() => r'9db22c262a070de715ba61288854a8a6fcce2409';
 
 /// Manages Instapaper authentication lifecycle.
 ///
-/// Persists OAuth tokens in flutter_secure_storage. On [build], checks
-/// for existing tokens and attempts session restoration. Use [login] to
-/// authenticate and [logout] to clear tokens.
+/// Uses [InstapaperAuthService] to keep secure storage, credential exchange,
+/// and API verification outside UI state management.
 ///
 /// Copied from [InstapaperAuth].
 @ProviderFor(InstapaperAuth)

@@ -62,7 +62,7 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
-    _persist();
+    unawaited(_persist());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

@@ -6,17 +6,27 @@ import 'dart:isolate';
 import 'package:path_provider/path_provider.dart';
 import 'package:runthru/services/models.dart';
 
-/// Caches extracted PDF documents to local JSON files.
+/// Caches extracted PDF documents to local gzip-compressed JSON files.
 /// Uses LRU eviction to stay under [maxCacheBytes] (default 50 MB).
 ///
+/// Documents are stored as gzip'd UTF-8 JSON (`dart:io` [gzip]) — natural
+/// language word lists compress ~5-10x versus raw JSON, and encode/decode
+/// runs in an isolate to keep the main thread free.
+///
 /// Supports two cache tiers:
-/// - **Preview cache** (`*_preview.json`): pages 1–3 for fast startup.
-/// - **Full cache** (`*.json`): the complete document.
+/// - **Preview cache** (`*_preview.json.gz`): pages 1–3 for fast startup.
+/// - **Full cache** (`*.json.gz`): the complete document.
 class PdfCache {
   PdfCache._();
 
   /// Maximum cache size in bytes (50 MB).
   static const int maxCacheBytes = 50 * 1024 * 1024;
+
+  /// Suffix for full-document cache files.
+  static const String _fullSuffix = '.json.gz';
+
+  /// Suffix for preview cache files.
+  static const String _previewSuffix = '_preview.json.gz';
 
   static Future<String?> _cacheDir() async {
     try {
@@ -47,6 +57,30 @@ class PdfCache {
     return input.hashCode.toUnsigned(64).toRadixString(16);
   }
 
+  /// Reads a gzip'd-JSON [ExtractedDocument] from [cacheFile], or null if the
+  /// payload is invalid or predates page-boundary support. Decode (gunzip +
+  /// JSON parse) runs in an isolate — payloads can be multi-MB.
+  static Future<ExtractedDocument?> _readGzipDoc(File cacheFile) async {
+    final bytes = await cacheFile.readAsBytes();
+    final doc = await Isolate.run(() {
+      final jsonStr = utf8.decode(gzip.decode(bytes));
+      final json = jsonDecode(jsonStr) as Map<String, Object?>;
+      return ExtractedDocument.fromJson(json);
+    });
+    // Invalidate cache entries without page boundaries (old format).
+    if (!doc.hasPageBoundaries) return null;
+    return doc;
+  }
+
+  /// Encodes [doc] to gzip'd UTF-8 JSON and writes it to [cacheFile]. Encode
+  /// (JSON serialize + gzip) runs in an isolate to keep the main thread free.
+  static Future<void> _writeGzipDoc(File cacheFile, ExtractedDocument doc) async {
+    final bytes = await Isolate.run(
+      () => gzip.encode(utf8.encode(jsonEncode(doc.toJson()))),
+    );
+    await cacheFile.writeAsBytes(bytes);
+  }
+
   /// Load full cached document, or null if missing / invalid.
   static Future<ExtractedDocument?> load(String filePath) async {
     try {
@@ -54,7 +88,7 @@ class PdfCache {
       if (dir == null) return null;
 
       final key = await _cacheKey(filePath);
-      final cacheFile = File('$dir/$key.json');
+      final cacheFile = File('$dir/$key$_fullSuffix');
       if (!await cacheFile.exists()) return null;
 
       // Touch the file to update access time for LRU
@@ -64,15 +98,7 @@ class PdfCache {
         // Non-critical — ignore
       }
 
-      final raw = await cacheFile.readAsString();
-      // Decode JSON off the main thread — can be multi-MB.
-      final doc = await Isolate.run(() {
-        final json = jsonDecode(raw) as Map<String, Object?>;
-        return ExtractedDocument.fromJson(json);
-      });
-      // Invalidate cache entries without page boundaries (old format).
-      if (!doc.hasPageBoundaries) return null;
-      return doc;
+      return _readGzipDoc(cacheFile);
     } on Object catch (e) {
       dev.log('Cache load failed: $e', name: 'pdf_cache');
       return null;
@@ -86,7 +112,7 @@ class PdfCache {
       if (dir == null) return null;
 
       final key = await _cacheKey(filePath);
-      final cacheFile = File('$dir/${key}_preview.json');
+      final cacheFile = File('$dir/$key$_previewSuffix');
       if (!await cacheFile.exists()) return null;
 
       try {
@@ -95,15 +121,7 @@ class PdfCache {
         // Non-critical
       }
 
-      final raw = await cacheFile.readAsString();
-      // Decode JSON off the main thread — can be multi-MB.
-      final doc = await Isolate.run(() {
-        final json = jsonDecode(raw) as Map<String, Object?>;
-        return ExtractedDocument.fromJson(json);
-      });
-      // Invalidate cache entries without page boundaries (old format).
-      if (!doc.hasPageBoundaries) return null;
-      return doc;
+      return _readGzipDoc(cacheFile);
     } on Object catch (e) {
       dev.log('Preview cache load failed: $e', name: 'pdf_cache');
       return null;
@@ -117,10 +135,7 @@ class PdfCache {
       if (dir == null) return;
 
       final key = await _cacheKey(filePath);
-      final cacheFile = File('$dir/$key.json');
-      // Encode JSON off the main thread.
-      final json = await Isolate.run(() => jsonEncode(doc.toJson()));
-      await cacheFile.writeAsString(json);
+      await _writeGzipDoc(File('$dir/$key$_fullSuffix'), doc);
 
       await _evictIfOverBudget(dir);
     } on Object catch (e) {
@@ -138,10 +153,7 @@ class PdfCache {
       if (dir == null) return;
 
       final key = await _cacheKey(filePath);
-      final cacheFile = File('$dir/${key}_preview.json');
-      // Encode JSON off the main thread.
-      final json = await Isolate.run(() => jsonEncode(doc.toJson()));
-      await cacheFile.writeAsString(json);
+      await _writeGzipDoc(File('$dir/$key$_previewSuffix'), doc);
 
       await _evictIfOverBudget(dir);
     } on Object catch (e) {

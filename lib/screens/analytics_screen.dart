@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/design/design.dart';
@@ -6,216 +5,199 @@ import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/store/analytics_models.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
 
-/// Screen displaying reading analytics: WPM chart, stats cards, streak.
-class AnalyticsScreen extends ConsumerStatefulWidget {
+final _readingStatsProvider = FutureProvider<ReadingStats>((ref) {
+  return ref.watch(analyticsServiceProvider).calculateStats();
+});
+
+/// Screen displaying reading momentum, time spent, streaks, and encouragement.
+class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
 
   @override
-  ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(_readingStatsProvider);
 
-class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
-  ReadingStats? _stats;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
-    final service = ref.read(analyticsServiceProvider);
-    final stats = await service.calculateStats();
-    if (mounted) {
-      setState(() {
-        _stats = stats;
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: RunThruTokens.shellBase,
       appBar: AppBar(
         backgroundColor: RunThruTokens.shellBase,
         elevation: 0,
-        title: const Text(
-          'Reading Analytics',
-          style: RunThruTypography.title,
+        title: const Text('Reading Wins', style: RunThruTypography.title),
+        iconTheme: const IconThemeData(color: RunThruTokens.shellTextPrimary),
+      ),
+      body: stats.when(
+        data: _buildContent,
+        error: (_, __) => const _MessageState(
+          icon: Icons.insights_outlined,
+          title: 'Reading wins need a minute',
+          message: 'Come back in a moment and your progress should be here.',
         ),
-        iconTheme: const IconThemeData(
-          color: RunThruTokens.shellTextPrimary,
+        loading: () => Center(
+          child: Text(
+            'Loading...',
+            style: RunThruTypography.body.copyWith(
+              color: RunThruTokens.shellTextSecondary,
+            ),
+          ),
         ),
       ),
-      body: _loading
-          ? Center(
-              child: Text(
-                'Loading...',
-                style: RunThruTypography.body.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
-                ),
-              ),
-            )
-          : _buildContent(),
     );
   }
 
-  Widget _buildContent() {
-    final stats = _stats ?? const ReadingStats();
-
+  Widget _buildContent(ReadingStats stats) {
     if (stats.totalSessions == 0) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.auto_graph,
-                size: 48,
-                color: RunThruTokens.shellTextSecondary.withAlpha(120),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'No reading sessions yet',
-                style: RunThruTypography.title,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Start reading a PDF to see your analytics here.',
-                style: RunThruTypography.body.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
+      return const _MessageState(
+        icon: Icons.auto_awesome_outlined,
+        title: 'Nothing to measure yet',
+        message: 'Read something you want to get through, then come back here.',
       );
     }
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
-        // ── WPM Over Time Chart ──
-        if (stats.wpmHistory.isNotEmpty)
-          NeumorphicCard(
-            surface: RunThruSurface.shell,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'WPM Over Time',
-                  style: RunThruTypography.title,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Last 30 days',
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 200,
-                  child: _WpmChart(history: stats.wpmHistory),
-                ),
-              ],
-            ),
-          ),
-
-        // ── Stat Cards Row ──
+        _EncouragementCard(stats: stats),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Words',
-                  value: _formatNumber(stats.totalWordsRead),
-                ),
-              ),
-              Expanded(
-                child: _StatCard(
-                  label: 'Sessions',
-                  value: stats.totalSessions.toString(),
+                  label: 'Reading time',
+                  value: _formatReadingTime(stats.totalReadingTime),
+                  icon: Icons.schedule,
+                  iconColor: RunThruTokens.shellAccent,
                 ),
               ),
               Expanded(
                 child: _StatCard(
                   label: 'Streak',
-                  value: stats.streak.toString(),
+                  value: _formatStreak(stats.streak),
                   icon: Icons.local_fire_department,
-                  iconColor: RunThruTokens.shellError,
+                  iconColor: RunThruTokens.shellProcessing,
                 ),
               ),
             ],
           ),
         ),
-
-        // ── Average WPM Card ──
-        NeumorphicCard(
-          surface: RunThruSurface.shell,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Average WPM',
-                      style: RunThruTypography.title,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Weighted by words read per session',
-                      style: RunThruTypography.caption.copyWith(
-                        color: RunThruTokens.shellTextSecondary,
-                      ),
-                    ),
-                  ],
+                child: _StatCard(
+                  label: 'Today',
+                  value: _formatReadingTime(stats.todayReadingTime),
+                  icon: Icons.today_outlined,
+                  iconColor: RunThruTokens.shellReady,
                 ),
               ),
-              Text(
-                stats.avgWpm.round().toString(),
-                style: RunThruTypography.display.copyWith(
-                  color: RunThruTokens.shellAccent,
+              Expanded(
+                child: _StatCard(
+                  label: 'This week',
+                  value: _formatReadingTime(stats.weekReadingTime),
+                  icon: Icons.calendar_view_week_outlined,
+                  iconColor: RunThruTokens.shellAccent,
                 ),
               ),
             ],
           ),
         ),
+        _RhythmCard(history: stats.readingTimeHistory),
+        _FeelGoodCard(stats: stats),
       ],
     );
   }
+}
 
-  String _formatNumber(int n) {
-    if (n >= 1000000) {
-      return '${(n / 1000000).toStringAsFixed(1)}M';
-    } else if (n >= 1000) {
-      return '${(n / 1000).toStringAsFixed(1)}K';
-    }
-    return n.toString();
+class _MessageState extends StatelessWidget {
+  const _MessageState({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 48,
+              color: RunThruTokens.shellTextSecondary.withAlpha(120),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: RunThruTypography.title,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-/// Neumorphic stat card for the summary row.
+class _EncouragementCard extends StatelessWidget {
+  const _EncouragementCard({required this.stats});
+
+  final ReadingStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return NeumorphicCard(
+      surface: RunThruSurface.shell,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _encouragementTitle(stats),
+            style: RunThruTypography.display.copyWith(
+              color: RunThruTokens.shellTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _encouragementMessage(stats),
+            style: RunThruTypography.body.copyWith(
+              color: RunThruTokens.shellTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatCard extends StatelessWidget {
   const _StatCard({
     required this.label,
     required this.value,
-    this.icon,
-    this.iconColor,
+    required this.icon,
+    required this.iconColor,
   });
 
   final String label;
   final String value;
-  final IconData? icon;
-  final Color? iconColor;
+  final IconData icon;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -225,28 +207,58 @@ class _StatCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: iconColor),
-                const SizedBox(width: 4),
-              ],
-              Flexible(
-                child: Text(
-                  value,
-                  style: RunThruTypography.badge,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          Icon(icon, size: 22, color: iconColor),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: RunThruTypography.badge,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
+          const SizedBox(height: 6),
+          Text(label, style: RunThruTypography.caption),
+        ],
+      ),
+    );
+  }
+}
+
+class _RhythmCard extends StatelessWidget {
+  const _RhythmCard({required this.history});
+
+  final List<DailyReadingTime> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final lastWeek = history.length <= 7
+        ? history
+        : history.sublist(history.length - 7);
+
+    return NeumorphicCard(
+      surface: RunThruSurface.shell,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Reading rhythm', style: RunThruTypography.title),
           const SizedBox(height: 4),
           Text(
-            label,
-            style: RunThruTypography.caption,
+            'A gentle look at where reading fit this week.',
+            style: RunThruTypography.caption.copyWith(
+              color: RunThruTokens.shellTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Semantics(
+            label: 'Reading rhythm for the last seven days',
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final entry in lastWeek)
+                  Expanded(child: _RhythmDay(entry: entry)),
+              ],
+            ),
           ),
         ],
       ),
@@ -254,133 +266,144 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// Line chart showing daily average WPM over the last 30 days.
-class _WpmChart extends StatelessWidget {
-  const _WpmChart({required this.history});
+class _RhythmDay extends StatelessWidget {
+  const _RhythmDay({required this.entry});
 
-  final List<DailyWpm> history;
+  final DailyReadingTime entry;
 
   @override
   Widget build(BuildContext context) {
-    if (history.isEmpty) return const SizedBox.shrink();
+    final height = entry.hasReading ? 48.0 : 18.0;
+    final color = entry.hasReading
+        ? RunThruTokens.shellReady
+        : RunThruTokens.shellTextSecondary.withAlpha(90);
 
-    // Build spots from history.
-    final today = DateTime.now();
-    final todayDate = DateTime(today.year, today.month, today.day);
-    final cutoff = todayDate.subtract(const Duration(days: 29));
-
-    final spots = <FlSpot>[];
-    for (final entry in history) {
-      final dayIndex = entry.date.difference(cutoff).inDays.toDouble();
-      if (dayIndex >= 0 && dayIndex <= 29) {
-        spots.add(FlSpot(dayIndex, entry.avgWpm));
-      }
-    }
-
-    if (spots.isEmpty) return const SizedBox.shrink();
-
-    // Sort by x.
-    spots.sort((a, b) => a.x.compareTo(b.x));
-
-    final maxWpm = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    final minWpm = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
-    final yMax = (maxWpm + 50).ceilToDouble();
-    final yMin = (minWpm - 50).clamp(0, double.infinity).floorToDouble();
-
-    return LineChart(
-      LineChartData(
-        minX: 0,
-        maxX: 29,
-        minY: yMin,
-        maxY: yMax,
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: ((yMax - yMin) / 4).clamp(1, double.infinity),
-          getDrawingHorizontalLine: (_) => const FlLine(
-            color: RunThruTokens.shellDarkShadow,
-            strokeWidth: 0.5,
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Container(
+          width: 18,
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(9),
           ),
         ),
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
+        const SizedBox(height: 8),
+        Text(_weekdayLabel(entry.date), style: RunThruTypography.caption),
+      ],
+    );
+  }
+}
+
+class _FeelGoodCard extends StatelessWidget {
+  const _FeelGoodCard({required this.stats});
+
+  final ReadingStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return NeumorphicCard(
+      surface: RunThruSurface.shell,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Worth feeling good about',
+            style: RunThruTypography.title,
           ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
+          const SizedBox(height: 12),
+          _FeelGoodRow(
+            icon: Icons.check_circle_outline,
+            text: stats.todayReadingTime > Duration.zero
+                ? 'You made room for reading today.'
+                : 'The next reading moment is still available.',
           ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 28,
-              interval: 7,
-              getTitlesWidget: (value, meta) {
-                final date = cutoff.add(Duration(days: value.toInt()));
-                return SideTitleWidget(
-                  axisSide: meta.axisSide,
-                  child: Text(
-                    '${date.month}/${date.day}',
-                    style: RunThruTypography.caption.copyWith(fontSize: 10),
-                  ),
-                );
-              },
-            ),
+          _FeelGoodRow(
+            icon: Icons.repeat,
+            text: stats.streak > 1
+                ? 'You came back more than once.'
+                : 'Showing up once still counts.',
           ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 44,
-              getTitlesWidget: (value, meta) {
-                return SideTitleWidget(
-                  axisSide: meta.axisSide,
-                  child: Text(
-                    value.toInt().toString(),
-                    style: RunThruTypography.caption.copyWith(fontSize: 10),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        borderData: FlBorderData(show: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            curveSmoothness: 0.3,
-            color: RunThruTokens.shellAccent,
-            barWidth: 2.5,
-            isStrokeCapRound: true,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-                radius: 3,
-                color: RunThruTokens.shellAccent,
-                strokeWidth: 1.5,
-                strokeColor: RunThruTokens.shellBase,
-              ),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              color: RunThruTokens.shellAccent.withAlpha(30),
-            ),
+          _FeelGoodRow(
+            icon: Icons.favorite_border,
+            text: stats.totalReadingTime.inMinutes >= 30
+                ? 'Your attention has had real practice here.'
+                : 'A small start is a real start.',
           ),
         ],
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => RunThruTokens.shellTextPrimary,
-            getTooltipItems: (spots) => spots.map((spot) {
-              return LineTooltipItem(
-                '${spot.y.round()} WPM',
-                RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellBase,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
-          ),
-        ),
       ),
     );
   }
+}
+
+class _FeelGoodRow extends StatelessWidget {
+  const _FeelGoodRow({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: RunThruTokens.shellAccent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatReadingTime(Duration duration) {
+  if (duration < const Duration(minutes: 1)) return 'A few moments';
+  if (duration < const Duration(hours: 1)) {
+    return 'About ${duration.inMinutes} min';
+  }
+
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  if (minutes < 10) return 'About $hours hr';
+  return 'About $hours hr ${minutes ~/ 10}0 min';
+}
+
+String _formatStreak(int streak) {
+  if (streak <= 0) return 'Ready';
+  if (streak == 1) return '1 day';
+  return '$streak days';
+}
+
+String _encouragementTitle(ReadingStats stats) {
+  if (stats.todayReadingTime > Duration.zero) return 'You read today';
+  if (stats.streak > 1) return 'Your streak is waiting';
+  return 'You have started';
+}
+
+String _encouragementMessage(ReadingStats stats) {
+  if (stats.streak >= 7) {
+    return 'That is a steady pattern. Keep it kind, and keep it yours.';
+  }
+  if (stats.todayReadingTime > Duration.zero) {
+    return 'You made room for reading, and that counts.';
+  }
+  if (stats.weekReadingTime >= const Duration(hours: 1)) {
+    return 'This week already has meaningful reading time in it.';
+  }
+  return 'Any amount of reading is still a step through the thing you opened.';
+}
+
+String _weekdayLabel(DateTime date) {
+  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  return labels[date.weekday - 1];
 }

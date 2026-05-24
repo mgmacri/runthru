@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/context_reveal_notifier.dart';
+import 'package:runthru/core/motion_parallax_controller.dart';
 import 'package:runthru/core/context_reveal_state.dart';
 import 'package:runthru/core/dynamic_font_size.dart';
 import 'package:runthru/core/gesture_classifier.dart';
@@ -23,6 +24,8 @@ import 'package:runthru/core/wpm_dial_notifier.dart';
 import 'package:runthru/core/wpm_dial_state.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
+import 'package:runthru/features/content/services/reading_progress_sync.dart';
+import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/hooks/bookmark_notifier.dart';
 import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/services/models.dart';
@@ -121,6 +124,23 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Cached analytics service for safe use in dispose().
   late final AnalyticsService _analyticsService;
 
+  /// Cached bookmark notifier for safe use during lifecycle/dispose flushes.
+  late final BookmarkNotifier _bookmarkNotifier;
+
+  /// Cached Instapaper notifier for optimistic list updates and queued sync.
+  late final InstapaperBookmarks _instapaperBookmarks;
+
+  /// Session-scoped coalescer for Instapaper progress writes.
+  late final ReadingProgressSync _instapaperProgressSync;
+
+  /// Cross-source Continue Reading store notifier, cached for safe use in
+  /// lifecycle/dispose flushes (drives the library's Continue Reading shelf).
+  late final ReadingProgress _shelfProgress;
+
+  /// Motion parallax controller — provides sensor-driven head position to
+  /// [ParallaxRoom] and [PauseFog3D] without double gyroscope subscriptions.
+  late final MotionParallaxController _motionCtrl;
+
   /// TextPainter pool for the flat 2D word painter (None intensity).
   // P7 Grade C — reused pool avoids paint()-time allocation (Rule 9)
   final TextPainterPool _flatPainterPool = TextPainterPool();
@@ -130,6 +150,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// Whether this session is reading an Instapaper article.
   bool get _isInstapaper => widget.instapaperBookmarkId != null;
+
+  WordTimerState _lastTimerState = const WordTimerState();
+  int _lastGlobalIndex = 0;
 
   static bool get _isDesktop {
     if (kIsWeb) return false;
@@ -141,6 +164,25 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     super.initState();
     _queue = ref.read(preprocessingQueueProvider.notifier);
     _analyticsService = ref.read(analyticsServiceProvider);
+    _bookmarkNotifier = ref.read(bookmarkProvider(widget.filePath).notifier);
+    _instapaperBookmarks = ref.read(instapaperBookmarksProvider.notifier);
+    _shelfProgress = ref.read(readingProgressProvider.notifier);
+    _instapaperProgressSync = ReadingProgressSync(
+      writeLocalProgress: ({required contentId, required wordIndex}) async {
+        if (!_isClipboard || _isInstapaper) {
+          _bookmarkNotifier.updateIndex(wordIndex);
+          await _bookmarkNotifier.save();
+        }
+      },
+      writeRemoteProgress: ({required bookmarkId, required progress}) =>
+          _instapaperBookmarks.syncProgress(
+            bookmarkId: bookmarkId,
+            progress: progress,
+          ),
+      onError: (error, stackTrace) {
+        appLog('instapaper', 'progress sync failed: $error');
+      },
+    );
     final initWpm =
         (ref.read(configProvider).valueOrNull ?? const AppConfig()).defaultWpm;
     _sweepEngine = GradientSweepEngine(
@@ -151,6 +193,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       configNotifier: ref.read(configProvider.notifier),
     );
     _hintController.onLongPressHintTimerFired = _showLongPressHint;
+    _motionCtrl = MotionParallaxController();
     appLog('ParallaxReadingScreen', 'initState filePath=${widget.filePath}');
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -159,6 +202,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       appLog('ParallaxReadingScreen', 'post-frame: loading document');
+      if (!mounted) return;
+      // Start motion tracking (reduced motion + desktop detected at runtime).
+      final config =
+          ref.read(configProvider).valueOrNull ?? const AppConfig();
+      if (config.parallaxIntensity != ParallaxIntensity.none) {
+        _motionCtrl.start(
+          reducedMotion: isReducedMotion(context),
+          isDesktop: _isDesktop,
+        );
+      }
       if (_isClipboard) {
         _initClipboardReading();
       } else {
@@ -170,6 +223,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   @override
   void dispose() {
     _endAnalyticsSession();
+    _recordShelfProgress();
+    unawaited(_flushInstapaperProgress());
+    _instapaperProgressSync.cancelTimers();
     _restartFlashTimer?.cancel();
     _sentenceGapTimer?.cancel();
     _hintController.dispose();
@@ -177,6 +233,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _focusNode.dispose();
     _flatPainterPool.dispose();
     _sweepEngine.dispose();
+    _motionCtrl.dispose();
     _queue.resumeBackground();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (_isDesktop && _isFullScreen) windowManager.setFullScreen(false);
@@ -207,28 +264,74 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _analyticsService.saveSession(session);
   }
 
-  /// Sync current reading position to Instapaper. Optimistic + offline-first:
-  /// updates the local bookmark list immediately and enqueues the op for
-  /// durable retry (see [InstapaperSyncQueue]).
-  void _syncInstapaperProgress() {
+  /// Records current reading position for throttled Instapaper progress sync.
+  void _recordInstapaperProgress(WordTimerState timerState, int globalIndex) {
     final bookmarkId = widget.instapaperBookmarkId;
     if (bookmarkId == null) return;
-    // Only sync if words were actually read this session.
-    if (_sessionWordCount == 0 && _sessionStart != null) {
-      appLog('instapaper', 'sync skipped — no words read this session');
-      return;
-    }
-    final timerState = ref.read(wordTimerProvider);
-    final progress = timerState.progress;
-    appLog(
-      'instapaper',
-      'queue progress bookmarkId=$bookmarkId progress=${progress.toStringAsFixed(3)} wordsRead=$_sessionWordCount',
+
+    final totalWords = _allDocWords.isNotEmpty
+        ? _allDocWords.length
+        : timerState.totalWords;
+    final progress = totalWords > 0 ? globalIndex / totalWords : 0.0;
+    _instapaperProgressSync.record(
+      ReadingProgressSnapshot(
+        contentId: widget.filePath,
+        wordIndex: globalIndex,
+        totalWordCount: totalWords,
+        progress: progress,
+        instapaperBookmarkId: bookmarkId,
+      ),
     );
-    // Goes through the bookmarks notifier so the library tile updates
-    // optimistically as well as enqueueing the server-side write.
-    ref
-        .read(instapaperBookmarksProvider.notifier)
-        .syncProgress(bookmarkId: bookmarkId, progress: progress);
+  }
+
+  /// Human-readable title for the Continue Reading shelf entry.
+  ///
+  /// Prefers the supplied document title (Instapaper articles, clipboard);
+  /// falls back to the file's base name for local books.
+  String get _shelfTitle {
+    final clipTitle = widget.clipboardDocument?.title.trim();
+    if (clipTitle != null && clipTitle.isNotEmpty) return clipTitle;
+    final base = widget.filePath.split(RegExp(r'[/\\]')).last;
+    return base.isNotEmpty ? base : widget.filePath;
+  }
+
+  /// Records the current position to the cross-source Continue Reading store.
+  ///
+  /// No-op for ephemeral clipboard sessions (Rule 28). Instapaper articles and
+  /// local books are persisted so they surface on the library shelf.
+  void _recordShelfProgress() {
+    if (_isClipboard && !_isInstapaper) return;
+    final total = _allDocWords.isNotEmpty
+        ? _allDocWords.length
+        : _lastTimerState.totalWords;
+    if (total <= 0 || _lastGlobalIndex <= 0) return;
+    unawaited(
+      _shelfProgress.record(
+        contentId: widget.filePath,
+        source: _isInstapaper ? 'instapaper' : 'local',
+        title: _shelfTitle,
+        wordIndex: _lastGlobalIndex,
+        totalWords: total,
+      ),
+    );
+  }
+
+  /// Removes this item from the Continue Reading shelf once fully read.
+  void _markShelfFinished() {
+    if (_isClipboard && !_isInstapaper) return;
+    unawaited(_shelfProgress.markFinished(widget.filePath));
+  }
+
+  /// Flush current reading position to local storage and Instapaper queue.
+  Future<void> _flushInstapaperProgress() async {
+    if (!_isInstapaper) return;
+    _recordInstapaperProgress(_lastTimerState, _lastGlobalIndex);
+    await _instapaperProgressSync.flush(contentId: widget.filePath);
+  }
+
+  void _cacheTimerPosition(int localIndex) {
+    _lastTimerState = ref.read(wordTimerProvider);
+    _lastGlobalIndex = _sliceOffset + localIndex;
   }
 
   /// Archive the Instapaper bookmark when article is fully read.
@@ -237,22 +340,22 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final bookmarkId = widget.instapaperBookmarkId;
     if (bookmarkId == null) return;
     appLog('instapaper', 'queue archive bookmarkId=$bookmarkId');
-    ref
-        .read(instapaperBookmarksProvider.notifier)
-        .archive(bookmarkId: bookmarkId);
+    _instapaperBookmarks.archive(bookmarkId: bookmarkId);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _endAnalyticsSession();
       // Persist local bookmark for normal docs and Instapaper articles.
       // Pure clipboard sessions remain ephemeral (Rule 28).
       if (!_isClipboard || _isInstapaper) {
-        ref.read(bookmarkProvider(widget.filePath).notifier).save();
+        unawaited(ref.read(bookmarkProvider(widget.filePath).notifier).save());
       }
-      _syncInstapaperProgress();
+      _recordShelfProgress();
+      unawaited(_flushInstapaperProgress());
     } else if (state == AppLifecycleState.resumed) {
       if (ref.read(wordTimerProvider).isPlaying) {
         _sessionStart = DateTime.now();
@@ -277,6 +380,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final queue = ref.read(preprocessingQueueProvider.notifier);
     await queue.prioritize(widget.filePath);
 
+    if (!mounted) return;
     final processed = ref.read(preprocessingQueueProvider);
     final entry = processed[widget.filePath];
     appLog(
@@ -287,10 +391,24 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (entry?.document != null) {
       _loadDocument(entry!.document!);
     } else {
+      final reason = entry?.errorMessage ?? entry?.status.name ?? 'unknown';
       appLog(
         'ParallaxReadingScreen',
-        'WARN: document null — words never load. entry=$entry',
+        'ERROR: document null after prioritize — reason=$reason entry=$entry',
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              entry?.status == PdfStatus.unsupported
+                  ? 'This file type is not supported.'
+                  : 'Could not open file. It may be missing or corrupted.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        context.pop();
+      }
     }
   }
 
@@ -343,6 +461,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _wordNotifier.value = _words[startIndex];
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
+    _cacheTimerPosition(startIndex);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _sessionStart = DateTime.now();
@@ -411,6 +530,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         _wordNotifier.value = _words[startIndex.clamp(0, _words.length - 1)];
         final timer = ref.read(wordTimerProvider.notifier);
         timer.loadDocument(_words.length, startIndex: startIndex);
+        _cacheTimerPosition(startIndex);
         timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
         timer.setWpm(config.defaultWpm);
 
@@ -445,6 +565,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
+    _cacheTimerPosition(startIndex);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _sessionStart = DateTime.now();
@@ -477,10 +598,18 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (ref.read(wordTimerProvider).isPlaying) {
       timer.pause();
       if (!_isClipboard || _isInstapaper) {
-        ref.read(bookmarkProvider(widget.filePath).notifier).save();
+        unawaited(
+          ref
+              .read(bookmarkProvider(widget.filePath).notifier)
+              .save()
+              .catchError((Object e) {
+            appLog('bookmark', 'save failed on pause: $e');
+          }),
+        );
       }
+      _recordShelfProgress();
       _endAnalyticsSession();
-      _syncInstapaperProgress();
+      unawaited(_flushInstapaperProgress());
       if (!_hasPausedOnce) {
         _hasPausedOnce = true;
         _tryShowHint(HintId.swipeLr);
@@ -595,6 +724,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _wordNotifier.value = _words.first;
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: 0);
+    _cacheTimerPosition(0);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
@@ -626,9 +756,19 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       _sweepEngine.stop();
     }
     if (!_isClipboard || _isInstapaper) {
-      ref.read(bookmarkProvider(widget.filePath).notifier).save();
+      // Fire-and-forget: BookmarkNotifier is not auto-disposed, so the async
+      // save completes even after this widget is popped.
+      unawaited(
+        ref
+            .read(bookmarkProvider(widget.filePath).notifier)
+            .save()
+            .catchError((Object e) {
+          appLog('bookmark', 'save failed on back: $e');
+        }),
+      );
     }
-    _syncInstapaperProgress();
+    _recordShelfProgress();
+    unawaited(_flushInstapaperProgress());
     ref.read(wordTimerProvider.notifier).pause();
     if (mounted) context.pop();
   }
@@ -1097,19 +1237,28 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         // even before the API sync completes.
         if (!_isClipboard || _isInstapaper) {
           final globalIndex = _sliceOffset + idx;
+          _lastTimerState = next;
+          _lastGlobalIndex = globalIndex;
           ref
               .read(bookmarkProvider(widget.filePath).notifier)
               .updateIndex(globalIndex);
+          _recordInstapaperProgress(next, globalIndex);
         }
 
         // Detect range completion.
         if (_readingRange != null && !_isRangeComplete && next.isFinished) {
           setState(() => _isRangeComplete = true);
+          unawaited(_flushInstapaperProgress());
         }
 
         // Archive Instapaper bookmark when the full article is finished.
         if (next.isFinished && _isInstapaper) {
+          unawaited(_flushInstapaperProgress());
           _archiveInstapaper();
+          _markShelfFinished();
+        } else if (next.isFinished && _readingRange == null) {
+          // Local book read to the end — drop it from Continue Reading.
+          _markShelfFinished();
         }
       }
     });
@@ -1186,14 +1335,22 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                       progress: progress,
                                     ),
                                   ),
-                                  if (config.parallaxIntensity !=
-                                          ParallaxIntensity.none &&
-                                      !crState.isActive)
+                                  if (!crState.isActive)
                                     Positioned.fill(
                                       child: PauseFog3D(
                                         isPaused:
                                             !isPlaying && _words.isNotEmpty,
                                         wpm: wpm,
+                                        onResume: _togglePause,
+                                        showUpgradeTip: config.parallaxIntensity ==
+                                            ParallaxIntensity.none,
+                                        onUpgradeTap: config.parallaxIntensity ==
+                                                ParallaxIntensity.none
+                                            ? () => context.push('/settings')
+                                            : null,
+                                        externalPosition:
+                                            _motionCtrl.positionNotifier,
+                                        onRecalibrate: _motionCtrl.recalibrate,
                                       ),
                                     ),
                                   if (_isRangeComplete && _readingRange != null)
@@ -1207,13 +1364,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                         onContinueReading:
                                             _continueReadingPastRange,
                                         onSetNewRange: () {
-                                          ref
-                                              .read(
-                                                bookmarkProvider(
-                                                  widget.filePath,
-                                                ).notifier,
-                                              )
-                                              .save();
+                                          unawaited(
+                                            ref
+                                                .read(
+                                                  bookmarkProvider(
+                                                    widget.filePath,
+                                                  ).notifier,
+                                                )
+                                                .save(),
+                                          );
+                                          unawaited(_flushInstapaperProgress());
                                           context.push(
                                             Uri(
                                               path: '/range-picker',
@@ -1224,13 +1384,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           );
                                         },
                                         onGoToLibrary: () {
-                                          ref
-                                              .read(
-                                                bookmarkProvider(
-                                                  widget.filePath,
-                                                ).notifier,
-                                              )
-                                              .save();
+                                          unawaited(
+                                            ref
+                                                .read(
+                                                  bookmarkProvider(
+                                                    widget.filePath,
+                                                  ).notifier,
+                                                )
+                                                .save(),
+                                          );
+                                          unawaited(_flushInstapaperProgress());
                                           ref
                                               .read(wordTimerProvider.notifier)
                                               .pause();
@@ -1292,6 +1455,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                         child: PauseFog3D(
                                           isPaused: crState.isSweepPaused,
                                           wpm: wpm,
+                                          externalPosition:
+                                              _motionCtrl.positionNotifier,
+                                          onRecalibrate:
+                                              _motionCtrl.recalibrate,
                                         ),
                                       ),
                                     ),
@@ -1519,38 +1686,35 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           ),
                                         ),
                                       ),
-                                    // Simple dimming on pause (no fog) — suppress
-                                    // during CR since CR has its own background.
-                                    if (!isPlaying &&
-                                        _words.isNotEmpty &&
-                                        !crState.isActive)
-                                      const Positioned.fill(
-                                        child: ColoredBox(
-                                          color:
-                                              RunThruTokens.stagePauseOverlay,
-                                        ),
-                                      ),
+                                    // Pause veil is now handled by PauseFog3D
+                                    // inside overlayStack (rising lavender blind).
                                     // Shared overlays
                                     Positioned.fill(child: overlayStack),
                                   ],
                                 );
                               }
 
-                              return ParallaxRoom(
-                                headX: 0,
-                                headY: 0,
-                                // Hide RSVP word during ContextReveal
-                                currentWord: crState.isActive
-                                    ? ''
-                                    : currentWord,
-                                fontSize: fontSize,
-                                anchorColor: effectiveAnchorColor,
-                                isPlaying: isPlaying,
-                                fontFamily: config.fontFamily,
-                                wpm: wpm,
-                                intervalMs: (60000 / wpm).round(),
-                                parallaxIntensity: config.parallaxIntensity,
-                                child: overlayStack,
+                              return ValueListenableBuilder<Offset>(
+                                valueListenable:
+                                    _motionCtrl.positionNotifier,
+                                builder: (context, headPos, _) =>
+                                    ParallaxRoom(
+                                  headX: headPos.dx,
+                                  headY: headPos.dy,
+                                  // Hide RSVP word during ContextReveal
+                                  currentWord: crState.isActive
+                                      ? ''
+                                      : currentWord,
+                                  fontSize: fontSize,
+                                  anchorColor: effectiveAnchorColor,
+                                  isPlaying: isPlaying,
+                                  fontFamily: config.fontFamily,
+                                  wpm: wpm,
+                                  intervalMs: (60000 / wpm).round(),
+                                  parallaxIntensity:
+                                      config.parallaxIntensity,
+                                  child: overlayStack,
+                                ),
                               );
                             },
                           ),

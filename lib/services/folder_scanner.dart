@@ -7,7 +7,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/services/models.dart';
-import 'package:runthru/store/config.dart';
+import 'package:runthru/store/library_source.dart';
+import 'package:runthru/store/library_sources.dart';
 
 /// Scans one or more folders recursively for .pdf files.
 /// Supports multi-directory concurrent scanning with streaming results.
@@ -83,9 +84,7 @@ class FolderScannerService {
 
   /// Stream scanned PdfEntry objects incrementally from multiple directories.
   /// Cards appear one-by-one as they are discovered.
-  static Stream<PdfEntry> scanMultipleStream(
-    List<String> folderPaths,
-  ) async* {
+  static Stream<PdfEntry> scanMultipleStream(List<String> folderPaths) async* {
     if (folderPaths.isEmpty) return;
 
     final seen = <String>{};
@@ -129,8 +128,10 @@ class FolderScannerService {
           ? dir.listSync()
           : dir.listSync(recursive: true, followLinks: false);
 
-      dev.log('_scanSync — listSync returned ${entities.length} entities',
-          name: _tag);
+      dev.log(
+        '_scanSync — listSync returned ${entities.length} entities',
+        name: _tag,
+      );
 
       for (final entity in entities) {
         if (entity is File) {
@@ -143,8 +144,10 @@ class FolderScannerService {
         }
       }
     } on FileSystemException catch (e) {
-      dev.log('_scanSync FileSystemException: ${e.message} (${e.path})',
-          name: _tag);
+      dev.log(
+        '_scanSync FileSystemException: ${e.message} (${e.path})',
+        name: _tag,
+      );
     } on Object catch (e) {
       dev.log('_scanSync unexpected error: $e', name: _tag);
     }
@@ -163,32 +166,86 @@ class FolderScannerService {
     }
     return canonical;
   }
+
+  /// Scan a set of [LibrarySource]s into a merged, deduplicated book list.
+  ///
+  /// Folder sources are scanned concurrently (batched, via [scanMultipleAsync]);
+  /// file sources become direct [PdfEntry]s. Results are deduplicated by
+  /// canonical path so overlapping sources don't produce duplicate books.
+  static Future<List<PdfEntry>> scanSources(List<LibrarySource> sources) async {
+    final referencedFolderPaths = <String>[];
+    final ownedFolderPaths = <String>[];
+    final fileEntries = <PdfEntry>[];
+
+    for (final source in sources) {
+      if (source.kind == LibrarySourceKind.folder) {
+        if (source.ownsFiles) {
+          ownedFolderPaths.add(source.locator);
+        } else {
+          referencedFolderPaths.add(source.locator);
+        }
+      } else {
+        final lower = source.locator.toLowerCase();
+        final isBook = lower.endsWith('.pdf') || lower.endsWith('.epub');
+        if (isBook && File(source.locator).existsSync()) {
+          final name = source.locator.split(Platform.pathSeparator).last;
+          fileEntries.add(PdfEntry(filePath: source.locator, fileName: name));
+        }
+      }
+    }
+
+    final referencedFolderEntries = await scanMultipleAsync(
+      referencedFolderPaths,
+    );
+    final ownedFolderEntries = await scanMultipleAsync(ownedFolderPaths);
+
+    final seen = <String>{};
+    final seenBookNames = <String>{};
+    final results = <PdfEntry>[];
+    for (final entry in [...referencedFolderEntries, ...fileEntries]) {
+      if (seen.add(_canonicalPath(entry.filePath))) {
+        seenBookNames.add(entry.fileName.toLowerCase());
+        results.add(entry);
+      }
+    }
+    for (final entry in ownedFolderEntries) {
+      final nameKey = entry.fileName.toLowerCase();
+      if (seenBookNames.add(nameKey) &&
+          seen.add(_canonicalPath(entry.filePath))) {
+        results.add(entry);
+      }
+    }
+    results.sort((a, b) => a.fileName.compareTo(b.fileName));
+    return results;
+  }
 }
 
-/// Riverpod provider that watches config for folder path changes.
+/// Riverpod provider that scans the user's library sources into a book list.
+///
+/// Watches [librarySourcesProvider]; rescans whenever sources are added or
+/// removed. Folder scanning is concurrent/batched under the hood.
 final pdfListProvider = FutureProvider<List<PdfEntry>>((ref) async {
-  final config = ref.watch(configProvider);
-  return config.when(
-    data: (c) {
-      appLog('pdfListProvider', 'config loaded — folder=${c.pdfFolderPath}');
-      final path = c.pdfFolderPath;
-      if (path == null || path.isEmpty) return Future.value([]);
-      // Support single path via scanAsync for backward compatibility.
-      return FolderScannerService.scanAsync(path);
+  final sources = ref.watch(librarySourcesProvider);
+  return sources.when(
+    data: (list) {
+      appLog('pdfListProvider', 'scanning ${list.length} source(s)');
+      return FolderScannerService.scanSources(list);
     },
     loading: () async {
-      appLog('pdfListProvider', 'config loading…');
+      appLog('pdfListProvider', 'sources loading…');
       return [];
     },
     error: (e, __) async {
-      appLog('pdfListProvider', 'config error: $e');
+      appLog('pdfListProvider', 'sources error: $e');
       return [];
     },
   );
 });
 
 /// Stream-based provider for incremental multi-directory scanning.
-final pdfStreamProvider =
-    StreamProvider.family<PdfEntry, List<String>>((ref, folderPaths) {
+final pdfStreamProvider = StreamProvider.family<PdfEntry, List<String>>((
+  ref,
+  folderPaths,
+) {
   return FolderScannerService.scanMultipleStream(folderPaths);
 });

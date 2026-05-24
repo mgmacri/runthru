@@ -10,6 +10,7 @@ workflows:
       xcode: latest
       groups:
         - instapaper_credentials  # Codemagic env group: INSTAPAPER_CONSUMER_KEY, INSTAPAPER_CONSUMER_SECRET
+        - google_signin_credentials  # Codemagic env group: GOOGLE_SIGN_IN_CLIENT_ID (iOS OAuth client), GOOGLE_SIGN_IN_SERVER_CLIENT_ID
     scripts:
       # CFBundleVersion must strictly increase for App Store Connect.
       # Never rely on the +N in pubspec.yaml being manually bumped.
@@ -40,7 +41,9 @@ workflows:
             --release \
             --no-codesign \
             --dart-define=INSTAPAPER_CONSUMER_KEY="$INSTAPAPER_CONSUMER_KEY" \
-            --dart-define=INSTAPAPER_CONSUMER_SECRET="$INSTAPAPER_CONSUMER_SECRET"
+            --dart-define=INSTAPAPER_CONSUMER_SECRET="$INSTAPAPER_CONSUMER_SECRET" \
+            --dart-define=GOOGLE_SIGN_IN_CLIENT_ID="$GOOGLE_SIGN_IN_CLIENT_ID" \
+            --dart-define=GOOGLE_SIGN_IN_SERVER_CLIENT_ID="$GOOGLE_SIGN_IN_SERVER_CLIENT_ID"
       - name: Apply signing profiles (after Flutter migration)
         script: |
           xcode-project use-profiles
@@ -67,6 +70,59 @@ workflows:
         auth: integration
         submit_to_testflight: true
         submit_to_app_store: false
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+  android-play-store:
+    name: Android Play Store Internal
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      java: 21
+      android_signing:
+        - runthru_upload_keystore
+      vars:
+        PACKAGE_NAME: com.runthru.app
+      groups:
+        - instapaper_credentials  # Codemagic env group: INSTAPAPER_CONSUMER_KEY, INSTAPAPER_CONSUMER_SECRET
+        - google_signin_credentials  # Codemagic env group: GOOGLE_SIGN_IN_SERVER_CLIENT_ID (Android Web OAuth client)
+        - google_play_credentials # GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Write Android signing properties
+        script: |
+          test -n "$CM_KEYSTORE_PATH"
+          test -n "$CM_KEYSTORE_PASSWORD"
+          test -n "$CM_KEY_ALIAS"
+          test -n "$CM_KEY_PASSWORD"
+          cat > android/key.properties <<EOF
+          storeFile=$CM_KEYSTORE_PATH
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          keyPassword=$CM_KEY_PASSWORD
+          EOF
+      - name: Run tests
+        script: flutter test
+      - name: Build Android App Bundle
+        script: |
+          flutter build appbundle \
+            --release \
+            --dart-define=INSTAPAPER_CONSUMER_KEY="$INSTAPAPER_CONSUMER_KEY" \
+            --dart-define=INSTAPAPER_CONSUMER_SECRET="$INSTAPAPER_CONSUMER_SECRET" \
+            --dart-define=GOOGLE_SIGN_IN_SERVER_CLIENT_ID="$GOOGLE_SIGN_IN_SERVER_CLIENT_ID"
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab
+      - build/app/outputs/logs/*.log
+    publishing:
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true
     triggering:
       events:
         - push

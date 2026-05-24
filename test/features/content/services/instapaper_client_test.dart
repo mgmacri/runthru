@@ -8,6 +8,10 @@ import 'package:runthru/features/content/services/instapaper_client.dart';
 class MockHttpClient extends Mock implements http.Client {}
 
 void main() {
+  const testConfig = InstapaperClientConfig(
+    consumerKey: 'consumer_key',
+    consumerSecret: 'consumer_secret',
+  );
   late MockHttpClient mockHttp;
   late InstapaperClient client;
 
@@ -17,10 +21,38 @@ void main() {
 
   setUp(() {
     mockHttp = MockHttpClient();
-    client = InstapaperClient(httpClient: mockHttp);
+    client = InstapaperClient(httpClient: mockHttp, config: testConfig);
   });
 
   group('authenticate', () {
+    test(
+      'throws setup error before token exchange when consumer config missing',
+      () async {
+        final missingConfigClient = InstapaperClient(httpClient: mockHttp);
+
+        expect(
+          () => missingConfigClient.authenticate(
+            username: 'user@test.com',
+            password: 'pass123',
+          ),
+          throwsA(
+            isA<InstapaperAuthException>().having(
+              (e) => e.kind,
+              'kind',
+              InstapaperFailureKind.missingConfiguration,
+            ),
+          ),
+        );
+        verifyNever(
+          () => mockHttp.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        );
+      },
+    );
+
     test('returns token pair on successful xAuth', () async {
       when(
         () => mockHttp.post(
@@ -102,6 +134,28 @@ void main() {
       );
     });
 
+    test('parses URL-encoded token response robustly', () {
+      final result = InstapaperClient.parseOAuthTokenResponse(
+        'oauth_token=test%20token&oauth_token_secret=test%2Bsecret',
+      );
+
+      expect(result.token, equals('test token'));
+      expect(result.tokenSecret, equals('test+secret'));
+    });
+
+    test('rejects token response missing token secret', () {
+      expect(
+        () => InstapaperClient.parseOAuthTokenResponse('oauth_token=abc'),
+        throwsA(
+          isA<InstapaperAuthException>().having(
+            (e) => e.kind,
+            'kind',
+            InstapaperFailureKind.unexpectedResponse,
+          ),
+        ),
+      );
+    });
+
     test('clears previous tokens before xAuth attempt', () async {
       client.setTokens(token: 'old_token', tokenSecret: 'old_secret');
 
@@ -132,6 +186,25 @@ void main() {
       // Authorization header should NOT contain oauth_token (xAuth signs
       // with consumer-only)
       expect(headers['Authorization'], isNotNull);
+      expect(headers['Authorization'], isNot(contains('old_token')));
+    });
+  });
+
+  group('redaction', () {
+    test('redacts credentials, tokens, and Authorization headers', () {
+      final redacted = InstapaperRedactor.redact(
+        'username=user@test.com password=secret '
+        'oauth_token=tokenValue oauth_token_secret=secretValue '
+        'Authorization: OAuth oauth_token="headerValue", oauth_signature="sig"',
+      );
+
+      expect(redacted, isNot(contains('user@test.com')));
+      expect(redacted, isNot(contains(' secret ')));
+      expect(redacted, isNot(contains('tokenValue')));
+      expect(redacted, isNot(contains('secretValue')));
+      expect(redacted, isNot(contains('headerValue')));
+      expect(redacted, isNot(contains('sig')));
+      expect(redacted, contains('[REDACTED]'));
     });
   });
 

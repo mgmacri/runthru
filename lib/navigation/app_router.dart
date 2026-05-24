@@ -9,6 +9,7 @@ import 'package:runthru/screens/home_shell.dart';
 import 'package:runthru/screens/parallax_reading_screen.dart';
 import 'package:runthru/screens/range_picker_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
+import 'package:runthru/screens/settings_sources_screen.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
@@ -58,8 +59,16 @@ final appRouter = GoRouter(
         );
       },
     ),
-    GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=1'),
-    GoRoute(path: '/settings', redirect: (_, __) => '/?tab=2'),
+    GoRoute(path: '/sources', redirect: (_, __) => '/?tab=1'),
+    GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=2'),
+    GoRoute(path: '/settings', redirect: (_, __) => '/?tab=3'),
+    GoRoute(
+      path: '/settings/sources',
+      pageBuilder: (context, state) => MaterialPage(
+        key: state.pageKey,
+        child: const SettingsSourcesScreen(),
+      ),
+    ),
     // Rule 28 — clipboard reading route; document passed via extra
     GoRoute(
       path: '/read-clipboard',
@@ -96,6 +105,28 @@ final appRouter = GoRouter(
             filePath: filePath,
             instapaperBookmarkId: bookmarkId,
             instapaperInitialProgress: initialProgress,
+            clipboardDocument: ClipboardDocument(
+              title: title,
+              fullText: '',
+              document: document!,
+              pastedAt: DateTime.now(),
+            ),
+          ),
+        );
+      },
+    ),
+    // Google Drive reading route; imported document + stable Drive ID via extra.
+    GoRoute(
+      path: '/read-drive',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, Object?>?;
+        final document = extra?['document'] as ExtractedDocument?;
+        final title = extra?['title'] as String? ?? 'Google Drive Document';
+        final fileId = extra?['fileId'] as String? ?? title;
+        return wallFoldTransitionPage(
+          key: state.pageKey,
+          child: ParallaxReadingScreen(
+            filePath: 'drive://$fileId',
             clipboardDocument: ClipboardDocument(
               title: title,
               fullText: '',

@@ -20,7 +20,7 @@ class InstapaperBookmark {
   /// Parse from Instapaper API JSON response.
   factory InstapaperBookmark.fromJson(Map<String, Object?> json) {
     return InstapaperBookmark(
-      bookmarkId: json['bookmark_id'] as int,
+      bookmarkId: (json['bookmark_id'] as num).toInt(),
       url: json['url'] as String? ?? '',
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',

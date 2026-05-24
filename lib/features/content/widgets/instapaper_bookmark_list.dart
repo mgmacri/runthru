@@ -27,7 +27,9 @@ class InstapaperSection extends ConsumerWidget {
     final authState = ref.watch(instapaperAuthProvider);
 
     return switch (authState) {
+      InstapaperAuthChecking() => const _LoadingState(),
       InstapaperAuthUnauthenticated() => const _LoginPrompt(),
+      InstapaperAuthLegacyFallbackRequired() => const _LoginPrompt(),
       InstapaperAuthLoading() => const _LoadingState(),
       InstapaperAuthAuthenticated(:final user) => _BookmarkList(
         username: user.username,
@@ -38,7 +40,7 @@ class InstapaperSection extends ConsumerWidget {
   }
 }
 
-/// Login form for Instapaper xAuth authentication.
+/// Login form for Instapaper's documented legacy API authentication.
 class _LoginPrompt extends ConsumerStatefulWidget {
   const _LoginPrompt();
 
@@ -60,10 +62,12 @@ class _LoginPromptState extends ConsumerState<_LoginPrompt> {
   void _submit() {
     final username = _usernameController.text.trim();
     if (username.isEmpty) return;
+    final password = _passwordController.text;
+    _passwordController.clear();
 
     ref
         .read(instapaperAuthProvider.notifier)
-        .login(username: username, password: _passwordController.text);
+        .login(username: username, password: password);
   }
 
   @override
@@ -75,6 +79,13 @@ class _LoginPromptState extends ConsumerState<_LoginPrompt> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text('Instapaper', style: RunThruTypography.title),
+          const SizedBox(height: 8),
+          Text(
+            'Use legacy sign-in only if browser sign-in is unavailable. RunThru exchanges these credentials once and stores only OAuth tokens.',
+            style: RunThruTypography.caption.copyWith(
+              color: RunThruTokens.shellTextSecondary,
+            ),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _usernameController,
@@ -140,7 +151,7 @@ class _LoginPromptState extends ConsumerState<_LoginPrompt> {
                 ),
               ),
               child: Text(
-                'Sign in',
+                'Connect Instapaper',
                 style: RunThruTypography.body.copyWith(
                   color: RunThruTokens.shellOnError,
                 ),
@@ -405,7 +416,7 @@ class _ErrorState extends ConsumerWidget {
               onPressed: () =>
                   ref.read(instapaperAuthProvider.notifier).logout(),
               child: Text(
-                'Try again',
+                'Connect Instapaper',
                 style: RunThruTypography.body.copyWith(
                   color: RunThruTokens.shellAccent,
                 ),

@@ -1,7 +1,6 @@
 import UIKit
 import Social
 import MobileCoreServices
-import UniformTypeIdentifiers
 
 /// RunThru Share Extension — receives shared content and writes it to the
 /// App Group container for the main app to pick up on foreground resume.
@@ -12,6 +11,10 @@ import UniformTypeIdentifiers
 class ShareViewController: SLComposeServiceViewController {
 
     private let appGroupIdentifier = "group.com.mgmacri.runthru"
+    private let pdfTypeIdentifier = kUTTypePDF as String
+    private let urlTypeIdentifier = kUTTypeURL as String
+    private let htmlTypeIdentifier = kUTTypeHTML as String
+    private let plainTextTypeIdentifier = kUTTypePlainText as String
 
     override func isContentValid() -> Bool {
         return true
@@ -27,24 +30,24 @@ class ShareViewController: SLComposeServiceViewController {
             guard let attachments = item.attachments else { continue }
 
             for provider in attachments {
-                if provider.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) {
+                if provider.hasItemConformingToTypeIdentifier(pdfTypeIdentifier) {
                     handleFile(provider: provider, type: "pdfFile", ext: "pdf",
-                               typeIdentifier: UTType.pdf.identifier)
+                               typeIdentifier: pdfTypeIdentifier)
                     return
                 } else if provider.hasItemConformingToTypeIdentifier("org.idpf.epub-container") {
                     handleFile(provider: provider, type: "epubFile", ext: "epub",
                                typeIdentifier: "org.idpf.epub-container")
                     return
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                } else if provider.hasItemConformingToTypeIdentifier(urlTypeIdentifier) {
                     handleURL(provider: provider)
                     return
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.html.identifier) {
+                } else if provider.hasItemConformingToTypeIdentifier(htmlTypeIdentifier) {
                     handleText(provider: provider, type: "htmlText",
-                               typeIdentifier: UTType.html.identifier)
+                               typeIdentifier: htmlTypeIdentifier)
                     return
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                } else if provider.hasItemConformingToTypeIdentifier(plainTextTypeIdentifier) {
                     handleText(provider: provider, type: "text",
-                               typeIdentifier: UTType.plainText.identifier)
+                               typeIdentifier: plainTextTypeIdentifier)
                     return
                 }
             }
@@ -84,7 +87,7 @@ class ShareViewController: SLComposeServiceViewController {
     }
 
     private func handleURL(provider: NSItemProvider) {
-        provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] item, error in
+        provider.loadItem(forTypeIdentifier: urlTypeIdentifier, options: nil) { [weak self] item, error in
             guard let self = self else { return }
 
             if let url = item as? URL {

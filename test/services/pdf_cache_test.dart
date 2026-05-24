@@ -28,9 +28,9 @@ class _TestCache {
     if (!dir.existsSync()) dir.createSync(recursive: true);
 
     final key = _cacheKey(filePath, lastModified);
-    final cacheFile = File('$cacheDir/$key.json');
-    final json = jsonEncode(doc.toJson());
-    await cacheFile.writeAsString(json);
+    final cacheFile = File('$cacheDir/$key.json.gz');
+    final bytes = gzip.encode(utf8.encode(jsonEncode(doc.toJson())));
+    await cacheFile.writeAsBytes(bytes);
   }
 
   Future<ExtractedDocument?> load(
@@ -38,12 +38,13 @@ class _TestCache {
     DateTime? lastModified,
   }) async {
     final key = _cacheKey(filePath, lastModified);
-    final cacheFile = File('$cacheDir/$key.json');
+    final cacheFile = File('$cacheDir/$key.json.gz');
     if (!cacheFile.existsSync()) return null;
 
     try {
-      final raw = await cacheFile.readAsString();
-      final json = jsonDecode(raw) as Map<String, Object?>;
+      final bytes = await cacheFile.readAsBytes();
+      final json = jsonDecode(utf8.decode(gzip.decode(bytes)))
+          as Map<String, Object?>;
       final doc = ExtractedDocument.fromJson(json);
       if (!doc.hasPageBoundaries) return null;
       return doc;
@@ -186,15 +187,16 @@ void main() {
     });
 
     test(
-      'handles corrupt JSON gracefully (returns null, does not throw)',
+      'handles corrupt payload gracefully (returns null, does not throw)',
       () async {
-        // Write corrupt JSON directly to the cache file.
+        // Write non-gzip bytes directly to the cache file — gzip.decode throws,
+        // which load() must swallow into a null result.
         final modified = DateTime(2025, 1, 1);
         final fullKey = '/corrupt/file.pdf|${modified.toIso8601String()}'
             .hashCode
             .toUnsigned(64)
             .toRadixString(16);
-        final cacheFile = File('${tempDir.path}/$fullKey.json');
+        final cacheFile = File('${tempDir.path}/$fullKey.json.gz');
         await cacheFile.writeAsString('{invalid json!!!');
 
         // Load should return null, not throw.
@@ -205,6 +207,37 @@ void main() {
         expect(result, isNull);
       },
     );
+
+    test('stored payload is gzip-compressed and smaller than raw JSON',
+        () async {
+      // A document with lots of repetitive natural-language-ish words —
+      // exactly what gzip excels at.
+      final doc = _buildDoc(sentenceCount: 200, wordsPerSentence: 12);
+      final modified = DateTime(2025, 1, 1);
+
+      await cache.save('/big/file.pdf', doc, lastModified: modified);
+
+      final key = '/big/file.pdf|${modified.toIso8601String()}'
+          .hashCode
+          .toUnsigned(64)
+          .toRadixString(16);
+      final stored = File('${tempDir.path}/$key.json.gz');
+      expect(stored.existsSync(), isTrue);
+
+      final rawJsonBytes = utf8.encode(jsonEncode(doc.toJson())).length;
+      final gzBytes = stored.lengthSync();
+      expect(gzBytes, lessThan(rawJsonBytes));
+
+      // gzip magic number (0x1f 0x8b) confirms the on-disk format.
+      final header = stored.readAsBytesSync();
+      expect(header[0], 0x1f);
+      expect(header[1], 0x8b);
+
+      // And it still round-trips.
+      final loaded = await cache.load('/big/file.pdf', lastModified: modified);
+      expect(loaded, isNotNull);
+      expect(loaded!.totalWords, doc.totalWords);
+    });
 
     test('document without page boundaries returns null on load', () async {
       // Documents without page boundaries are considered invalid (old format).

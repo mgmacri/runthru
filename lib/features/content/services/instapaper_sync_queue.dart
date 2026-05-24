@@ -156,6 +156,12 @@ class InstapaperSyncQueue {
   /// Drain the queue. Safe to call on auth change or app resume.
   Future<void> drain() => _serialise(_drainLocked);
 
+  /// Clear all pending Instapaper write operations.
+  Future<void> clear() => _serialise(() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kQueueKey);
+  });
+
   Future<void> _drainLocked() async {
     if (_draining) return;
     final client = _clientResolver();
@@ -198,13 +204,16 @@ class InstapaperSyncQueue {
           } else {
             appLog(
               'instapaper-queue',
-              'dropping op (api ${e.errorCode}): ${e.message}',
+              'dropping op category=${e.kind.name} code=${e.errorCode}',
             );
           }
         } on Object catch (e) {
           // Network / IO error — keep op for retry.
           remaining.add(op);
-          appLog('instapaper-queue', 'transient error — keeping op: $e');
+          appLog(
+            'instapaper-queue',
+            'transient error — keeping op: ${InstapaperRedactor.redact('$e')}',
+          );
         }
       }
 

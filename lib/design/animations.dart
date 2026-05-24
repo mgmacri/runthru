@@ -109,6 +109,16 @@ class RunThruAnimations {
     return SpringSimulation(dialEmergeSpring, from, to, velocity);
   }
 
+  // ── A-015: Pause button z-jiggle appear (3-step diminishing bounce) ──
+  static const Duration pauseButtonJiggleDuration = Duration(milliseconds: 700);
+
+  // ── A-016: Pause "blind" rise from bottom to top ──
+  static const Duration pauseGradientRiseDuration = Duration(milliseconds: 850);
+  static const Curve pauseGradientRiseCurve = Curves.easeOutCubic;
+
+  // ── A-017: Pause wave horizontal flow (continuous while rising) ──
+  static const Duration pauseWaveFlowDuration = Duration(milliseconds: 2200);
+
   // ── A-014: Elastic Jiggle (ceiling feedback) ──
   // P1 Grade C — underdamped spring for satisfying bounce-back
   // damping = 2 × dampingRatio × √(mass × stiffness) = 2 × 0.5 × √600 ≈ 24.5

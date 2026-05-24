@@ -115,6 +115,17 @@ class RunThruTokens extends ThemeExtension<RunThruTokens> {
   // Text primary — rich dark for maximum contrast on marble
   static const Color textPrimary = Color(0xFF2E272A);
 
+  // ── Pause overlay "blind" rising wave (leading edge) ──
+  // Soft lavender flowing line — a calm accent distinct from the warm stage,
+  // marking the leading edge of the blind as it sweeps up on pause.
+  static const Color pauseWaveLineLight = Color(0xFFB9AEC8);
+  static const Color pauseWaveLineMid = Color(0xFF8D839E);
+  static const Color pauseWaveShadow = Color(0xFF342B38);
+  // Blind body wash — cool lavender so the veil reads clearly against both the
+  // warm flat stage and the marble room. Used translucently.
+  static const Color pauseBlindWashLight = Color(0xFFCFC7DA);
+  static const Color pauseBlindWashDeep = Color(0xFFA59BB8);
+
   // ── Anchor color palette (Bright group from design palette) ──
   static const List<Color> anchorColors = [
     Color(0xFFED5656), // Hot Coral

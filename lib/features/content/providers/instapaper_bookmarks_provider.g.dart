@@ -7,7 +7,7 @@ part of 'instapaper_bookmarks_provider.dart';
 // **************************************************************************
 
 String _$instapaperSyncQueueHash() =>
-    r'4521b5371953860b4e2219f0c55299df974b090b';
+    r'52c03f2769ff80e640094ce299b525fc1366fbde';
 
 /// Singleton sync queue for Instapaper write operations. Kept alive so
 /// pending ops survive widget tree disposal (e.g. leaving the library
@@ -51,7 +51,7 @@ final instapaperArticleImportProvider =
 
 typedef _$InstapaperArticleImport = AutoDisposeNotifier<ArticleImportState>;
 String _$instapaperBookmarksHash() =>
-    r'57a71eb1b02f28f4a9048d8c50cf28959db89a51';
+    r'67ea9b9515220c5eeaa7f4e1c010321ead2214ee';
 
 /// Fetches the user's Instapaper bookmarks when authenticated.
 ///

@@ -1,3 +1,7 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+
 pluginManagement {
     def flutterSdkPath = {
         def properties = new Properties()
@@ -7,7 +11,49 @@ pluginManagement {
         return flutterSdkPath
     }()
 
-    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+    def flutterGradlePlugin = file("$flutterSdkPath/packages/flutter_tools/gradle")
+    def localFlutterGradlePlugin = file(".gradle/flutter_gradle")
+    def localFlutterGradleStamp = file(".gradle/flutter_gradle.source")
+    def flutterGradleStamp = {
+        def sourcePath = flutterGradlePlugin.toPath()
+        def digest = MessageDigest.getInstance("SHA-256")
+        def paths = Files.walk(sourcePath)
+        try {
+            paths.filter { Files.isRegularFile(it) }
+                .sorted()
+                .forEach { source ->
+                    def relativePath = sourcePath.relativize(source).toString()
+                    digest.update("${relativePath}:${Files.size(source)}:${Files.getLastModifiedTime(source).toMillis()}\n".getBytes("UTF-8"))
+                }
+        } finally {
+            paths.close()
+        }
+        return "${flutterGradlePlugin.absolutePath}:${digest.digest().encodeHex()}"
+    }()
+
+    if (!localFlutterGradlePlugin.exists() || !localFlutterGradleStamp.exists()
+        || localFlutterGradleStamp.text != flutterGradleStamp) {
+        localFlutterGradlePlugin.deleteDir()
+        def sourcePath = flutterGradlePlugin.toPath()
+        def targetPath = localFlutterGradlePlugin.toPath()
+        def paths = Files.walk(sourcePath)
+        try {
+            paths.forEach { source ->
+                def target = targetPath.resolve(sourcePath.relativize(source))
+                if (Files.isDirectory(source)) {
+                    Files.createDirectories(target)
+                } else {
+                    Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+                }
+            }
+        } finally {
+            paths.close()
+        }
+        localFlutterGradleStamp.parentFile.mkdirs()
+        localFlutterGradleStamp.text = flutterGradleStamp
+    }
+
+    includeBuild(localFlutterGradlePlugin.path)
 
     repositories {
         google()

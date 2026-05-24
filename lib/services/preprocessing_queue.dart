@@ -4,6 +4,7 @@ import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/core/logger.dart';
+import 'package:runthru/services/document_classifier.dart';
 import 'package:runthru/services/device_capability.dart';
 import 'package:runthru/services/epub_extractor.dart';
 import 'package:runthru/services/folder_scanner.dart';
@@ -18,13 +19,10 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   PreprocessingQueue(this._ref) : super({}) {
     _maxWorkers = _ref.read(deviceCapabilityProvider).maxWorkers;
     _currentMaxWorkers = _maxWorkers;
-    _init();
+    scheduleMicrotask(_init);
   }
 
   final Ref _ref;
-
-  /// Whether a file is EPUB based on extension.
-  static bool _isEpub(String path) => path.toLowerCase().endsWith('.epub');
 
   /// Phase 1 queue — preview extraction (pages 1–3).
   final _previewQueue = Queue<String>();
@@ -62,10 +60,12 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   OverallProgress get overallProgress {
     final total = state.length;
     final completed = state.values
-        .where((e) =>
-            e.status == PdfStatus.ready ||
-            e.status == PdfStatus.permanentlyFailed ||
-            e.status == PdfStatus.unsupported)
+        .where(
+          (e) =>
+              e.status == PdfStatus.ready ||
+              e.status == PdfStatus.permanentlyFailed ||
+              e.status == PdfStatus.unsupported,
+        )
         .length;
     return OverallProgress(completed: completed, total: total);
   }
@@ -74,32 +74,23 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   void _init() {
     _ref.listen(pdfListProvider, (previous, next) {
-      next.when(
-        data: _enqueueAll,
-        loading: () {},
-        error: (_, __) {},
-      );
+      next.when(data: _enqueueAll, loading: () {}, error: (_, __) {});
     });
     // Initial enqueue
     final entries = _ref.read(pdfListProvider);
-    entries.when(
-      data: _enqueueAll,
-      loading: () {},
-      error: (_, __) {},
-    );
+    entries.when(data: _enqueueAll, loading: () {}, error: (_, __) {});
   }
 
   void _enqueueAll(List<PdfEntry> entries) {
     appLog('preprocessing', 'enqueueAll — ${entries.length} files');
+    final scanCycleSeen = <String>{};
     for (final entry in entries) {
-      if (!state.containsKey(entry.filePath)) {
-        appLog('preprocessing', 'enqueue file=${entry.fileName}');
-        state = {
-          ...state,
-          entry.filePath: entry.copyWith(status: PdfStatus.queued),
-        };
-        _previewQueue.add(entry.filePath);
+      final key = _logicalBookKey(entry);
+      if (!scanCycleSeen.add(key)) {
+        appLog('preprocessing', 'dedupe skip cycleKey=$key');
+        continue;
       }
+      _enqueueIfNew(entry);
     }
     _startNotificationUpdates();
     _fillWorkers();
@@ -107,13 +98,22 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   /// Enqueue entries from a streaming multi-directory scan.
   void enqueueEntry(PdfEntry entry) {
-    if (state.containsKey(entry.filePath)) return;
+    _enqueueIfNew(entry);
+    _fillWorkers();
+  }
+
+  void _enqueueIfNew(PdfEntry entry) {
+    final key = _logicalBookKey(entry);
+    if (state.values.any((existing) => _logicalBookKey(existing) == key)) {
+      appLog('preprocessing', 'enqueue skipped duplicate key=$key');
+      return;
+    }
     state = {
       ...state,
       entry.filePath: entry.copyWith(status: PdfStatus.queued),
     };
     _previewQueue.add(entry.filePath);
-    _fillWorkers();
+    appLog('preprocessing', 'enqueue file=${entry.fileName} key=$key');
   }
 
   /// Pause all background processing.
@@ -128,9 +128,19 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   }
 
   /// Prioritize a single file — if preview, extract remaining pages immediately.
+  ///
+  /// If the file is not yet in the queue (e.g. the reader was opened before
+  /// the background scan finished), it is enqueued on-demand so extraction
+  /// can proceed.
   Future<void> prioritize(String filePath) async {
-    final existing = state[filePath];
-    if (existing == null) return;
+    var existing = state[filePath];
+    if (existing == null) {
+      // Not yet scanned — enqueue on demand so extraction can proceed.
+      final fileName = filePath.split(RegExp(r'[/\\]')).last;
+      _enqueueIfNew(PdfEntry(filePath: filePath, fileName: fileName));
+      existing = state[filePath];
+      if (existing == null) return; // dedup removed it; already processing
+    }
     if (existing.status == PdfStatus.ready) return;
 
     _priorityFile = filePath;
@@ -162,6 +172,7 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   /// Fill worker slots from preview queue first, then completion queue.
   void _fillWorkers() {
+    if (!mounted) return;
     if (_isPaused) return;
 
     while (_activeWorkers.length < _currentMaxWorkers) {
@@ -173,6 +184,7 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
         }
         _activeWorkers.add(filePath);
         _processPreview(filePath).whenComplete(() {
+          if (!mounted) return;
           _activeWorkers.remove(filePath);
           // After preview, enqueue for background completion if needed.
           final current = state[filePath];
@@ -191,6 +203,7 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
         }
         _activeWorkers.add(filePath);
         _processBackgroundCompletion(filePath).whenComplete(() {
+          if (!mounted) return;
           _activeWorkers.remove(filePath);
           _fillWorkers();
         });
@@ -217,15 +230,28 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
     // Check full cache first — skip both phases.
     try {
+      final kind = await DocumentClassifier.classifyPath(filePath);
+      if (kind == DocumentKind.unsupported) {
+        _update(
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.unsupported,
+            errorMessage: 'This file type is not supported.',
+          ),
+        );
+        return;
+      }
+
       final cachedFull = await PdfCache.load(filePath);
       if (cachedFull != null) {
         _update(
-            filePath,
-            entry.copyWith(
-              status: PdfStatus.ready,
-              document: cachedFull,
-              progress: entry.progress.copyWith(phase: ExtractionPhase.done),
-            ));
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.ready,
+            document: cachedFull,
+            progress: entry.progress.copyWith(phase: ExtractionPhase.done),
+          ),
+        );
         return;
       }
     } on Object catch (e) {
@@ -236,20 +262,22 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     try {
       final cachedPreview = await PdfCache.loadPreview(filePath);
       if (cachedPreview != null) {
-        final totalPages = _isEpub(filePath)
+        final kind = await DocumentClassifier.classifyPath(filePath);
+        final totalPages = kind == DocumentKind.epub
             ? await epubChapterCountInIsolate(filePath)
             : await pdfPageCountInIsolate(filePath);
         _update(
-            filePath,
-            entry.copyWith(
-              status: PdfStatus.preview,
-              document: cachedPreview,
-              progress: PdfProgress(
-                lastCompletedPage: previewPageCount.clamp(0, totalPages),
-                totalPages: totalPages,
-                phase: ExtractionPhase.preview,
-              ),
-            ));
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.preview,
+            document: cachedPreview,
+            progress: PdfProgress(
+              lastCompletedPage: previewPageCount.clamp(0, totalPages),
+              totalPages: totalPages,
+              phase: ExtractionPhase.preview,
+            ),
+          ),
+        );
         return;
       }
     } on Object catch (e) {
@@ -260,7 +288,11 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     _update(filePath, entry.copyWith(status: PdfStatus.processing));
 
     try {
-      final result = _isEpub(filePath)
+      final kind = await DocumentClassifier.classifyPath(filePath);
+      if (kind == DocumentKind.unsupported) {
+        throw const UnsupportedPdfError('This file type is not supported.');
+      }
+      final result = kind == DocumentKind.epub
           ? await extractEpubPagesInIsolate(filePath, 0, previewPageCount - 1)
           : await extractPdfPagesInIsolate(filePath, 0, previewPageCount - 1);
 
@@ -281,47 +313,53 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
           dev.log('Cache save failed: $e', name: 'preprocessing');
         });
         _update(
-            filePath,
-            entry.copyWith(
-              status: PdfStatus.ready,
-              document: previewDoc,
-              retryCount: 0,
-              progress: PdfProgress(
-                lastCompletedPage: totalPages,
-                totalPages: totalPages,
-                phase: ExtractionPhase.done,
-              ),
-            ));
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.ready,
+            document: previewDoc,
+            retryCount: 0,
+            progress: PdfProgress(
+              lastCompletedPage: totalPages,
+              totalPages: totalPages,
+              phase: ExtractionPhase.done,
+            ),
+          ),
+        );
       } else {
         _update(
-            filePath,
-            entry.copyWith(
-              status: PdfStatus.preview,
-              document: previewDoc,
-              retryCount: 0,
-              progress: PdfProgress(
-                lastCompletedPage: pagesExtracted,
-                totalPages: totalPages,
-                phase: ExtractionPhase.preview,
-              ),
-            ));
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.preview,
+            document: previewDoc,
+            retryCount: 0,
+            progress: PdfProgress(
+              lastCompletedPage: pagesExtracted,
+              totalPages: totalPages,
+              phase: ExtractionPhase.preview,
+            ),
+          ),
+        );
       }
     } on UnsupportedPdfError catch (e) {
       appLog('preprocessing', 'unsupported file=$filePath error=${e.message}');
       _update(
-          filePath,
-          entry.copyWith(
-            status: PdfStatus.unsupported,
-            errorMessage: e.message,
-          ));
+        filePath,
+        entry.copyWith(status: PdfStatus.unsupported, errorMessage: e.message),
+      );
     } on PdfTimeoutError catch (e) {
       appLog('preprocessing', 'timeout file=$filePath');
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: true);
     } on Object catch (e, st) {
       appLog(
-          'preprocessing', 'preview extraction FAILED file=$filePath error=$e');
-      dev.log('Preview extraction failed: $e',
-          name: 'preprocessing', error: e, stackTrace: st);
+        'preprocessing',
+        'preview extraction FAILED file=$filePath error=$e',
+      );
+      dev.log(
+        'Preview extraction failed: $e',
+        name: 'preprocessing',
+        error: e,
+        stackTrace: st,
+      );
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: true);
     }
   }
@@ -342,25 +380,31 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     if (startPage >= totalPages) {
       // Already complete.
       _update(
-          filePath,
-          entry.copyWith(
-            status: PdfStatus.ready,
-            progress: progress.copyWith(phase: ExtractionPhase.done),
-          ));
+        filePath,
+        entry.copyWith(
+          status: PdfStatus.ready,
+          progress: progress.copyWith(phase: ExtractionPhase.done),
+        ),
+      );
       return;
     }
 
     _update(
-        filePath,
-        entry.copyWith(
-          status: PdfStatus.processing,
-          progress: progress.copyWith(
-            phase: ExtractionPhase.backgroundCompletion,
-          ),
-        ));
+      filePath,
+      entry.copyWith(
+        status: PdfStatus.processing,
+        progress: progress.copyWith(
+          phase: ExtractionPhase.backgroundCompletion,
+        ),
+      ),
+    );
 
     try {
-      final result = _isEpub(filePath)
+      final kind = await DocumentClassifier.classifyPath(filePath);
+      if (kind == DocumentKind.unsupported) {
+        throw const UnsupportedPdfError('This file type is not supported.');
+      }
+      final result = kind == DocumentKind.epub
           ? await extractEpubPagesInIsolate(filePath, startPage, totalPages - 1)
           : await extractPdfPagesInIsolate(filePath, startPage, totalPages - 1);
 
@@ -372,24 +416,35 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       });
 
       _update(
-          filePath,
-          entry.copyWith(
-            status: PdfStatus.ready,
-            document: fullDoc,
-            retryCount: 0,
-            progress: PdfProgress(
-              lastCompletedPage: totalPages,
-              totalPages: totalPages,
-              phase: ExtractionPhase.done,
-            ),
-          ));
+        filePath,
+        entry.copyWith(
+          status: PdfStatus.ready,
+          document: fullDoc,
+          retryCount: 0,
+          progress: PdfProgress(
+            lastCompletedPage: totalPages,
+            totalPages: totalPages,
+            phase: ExtractionPhase.done,
+          ),
+        ),
+      );
+    } on UnsupportedPdfError catch (e) {
+      appLog('preprocessing', 'unsupported completion file=$filePath');
+      _update(
+        filePath,
+        entry.copyWith(status: PdfStatus.unsupported, errorMessage: e.message),
+      );
     } on PdfTimeoutError catch (e) {
       appLog('preprocessing', 'timeout (completion) file=$filePath');
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: false);
     } on Object catch (e, st) {
       appLog('preprocessing', 'completion FAILED file=$filePath error=$e');
-      dev.log('Background completion failed: $e',
-          name: 'preprocessing', error: e, stackTrace: st);
+      dev.log(
+        'Background completion failed: $e',
+        name: 'preprocessing',
+        error: e,
+        stackTrace: st,
+      );
       _handleRetry(filePath, entry, e.toString(), isPreviewPhase: false);
     }
   }
@@ -406,31 +461,43 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       if (isPreviewPhase) {
         // Phase 1 failure — mark as permanently failed.
         _update(
-            filePath,
-            entry.copyWith(
-              status: PdfStatus.permanentlyFailed,
-              errorMessage: 'Failed after ${PdfEntry.maxRetries} attempts: '
-                  '$errorMessage',
-              retryCount: retries,
-            ));
-        dev.log('Permanently failed (preview): $filePath',
-            name: 'preprocessing');
-        appLog('preprocessing',
-            'PERMANENTLY FAILED file=$filePath error=$errorMessage');
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.permanentlyFailed,
+            errorMessage:
+                'Failed after ${PdfEntry.maxRetries} attempts: '
+                '$errorMessage',
+            retryCount: retries,
+          ),
+        );
+        dev.log(
+          'Permanently failed (preview): $filePath',
+          name: 'preprocessing',
+        );
+        appLog(
+          'preprocessing',
+          'PERMANENTLY FAILED file=$filePath error=$errorMessage',
+        );
       } else {
         // Phase 2 failure — keep preview data, mark as preview (partial).
         _update(
-            filePath,
-            entry.copyWith(
-              status: PdfStatus.preview,
-              errorMessage: 'Partial — pages 1–$previewPageCount only. '
-                  'Background completion failed: $errorMessage',
-              retryCount: retries,
-            ));
-        dev.log('Background completion permanently failed: $filePath',
-            name: 'preprocessing');
-        appLog('preprocessing',
-            'completion permanently failed file=$filePath error=$errorMessage');
+          filePath,
+          entry.copyWith(
+            status: PdfStatus.preview,
+            errorMessage:
+                'Partial — pages 1–$previewPageCount only. '
+                'Background completion failed: $errorMessage',
+            retryCount: retries,
+          ),
+        );
+        dev.log(
+          'Background completion permanently failed: $filePath',
+          name: 'preprocessing',
+        );
+        appLog(
+          'preprocessing',
+          'completion permanently failed file=$filePath error=$errorMessage',
+        );
       }
     } else {
       // Exponential backoff: 1s, 4s, 16s.
@@ -459,6 +526,13 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     if (!mounted) return;
     state = {...state, filePath: entry};
     _progressController.add(entry);
+  }
+
+  static String _logicalBookKey(PdfEntry entry) {
+    final normalizedPath = entry.filePath.replaceAll('\\', '/');
+    final segments = normalizedPath.split('/');
+    final fileName = segments.isEmpty ? entry.fileName : segments.last;
+    return fileName.toLowerCase();
   }
 
   /// Retry all failed (non-permanent) entries.
@@ -520,8 +594,8 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
 final preprocessingQueueProvider =
     StateNotifierProvider<PreprocessingQueue, Map<String, PdfEntry>>(
-  PreprocessingQueue.new,
-);
+      PreprocessingQueue.new,
+    );
 
 // ── Selector providers for the UI ──
 

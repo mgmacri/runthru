@@ -261,7 +261,10 @@ InstapaperSyncQueue instapaperSyncQueue(Ref ref) {
   // Drain whenever auth becomes authenticated (e.g. login, app resume).
   ref.listen<InstapaperAuthState>(instapaperAuthProvider, (prev, next) {
     if (next is InstapaperAuthAuthenticated) {
-      queue.drain();
+      unawaited(queue.drain());
+    } else if (prev is InstapaperAuthAuthenticated &&
+        next is InstapaperAuthUnauthenticated) {
+      unawaited(queue.clear());
     }
   }, fireImmediately: true);
   return queue;

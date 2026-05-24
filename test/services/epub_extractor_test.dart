@@ -159,8 +159,8 @@ void main() {
       await File(epubPath).writeAsString('not a zip file');
 
       try {
-        expect(
-          () => epubExtract(epubPath),
+        await expectLater(
+          epubExtract(epubPath),
           throwsA(isA<UnsupportedPdfError>()),
         );
       } finally {
@@ -185,8 +185,8 @@ void main() {
 
       try {
         // Should throw UnsupportedPdfError for no extractable text.
-        expect(
-          () => epubExtract(epubPath),
+        await expectLater(
+          epubExtract(epubPath),
           throwsA(isA<UnsupportedPdfError>()),
         );
       } finally {

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:runthru/core/reading_range_resolver.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/services/document_classifier.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
 import 'package:runthru/store/config.dart';
@@ -390,6 +391,19 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (DocumentClassifier.kindFromExtension(widget.filePath) !=
+        DocumentKind.pdf) {
+      return Scaffold(
+        backgroundColor: RunThruTokens.shellBase,
+        body: SafeArea(
+          child: _RangeUnavailableState(
+            message: 'Reading ranges are available for PDF files only.',
+            onBack: () => context.pop(),
+          ),
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -412,6 +426,8 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
                     widget.filePath,
                     controller: _pdfController,
                     params: PdfViewerParams(
+                      errorBannerBuilder: (context, error, stackTrace, ref) =>
+                          _PdfViewerErrorBanner(onBack: () => context.pop()),
                       textSelectionParams: PdfTextSelectionParams(
                         enabled: true,
                         onTextSelectionChange: _onTextSelectionChanged,
@@ -448,6 +464,68 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RangeUnavailableState extends StatelessWidget {
+  const _RangeUnavailableState({required this.message, required this.onBack});
+
+  final String message;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.info_outline_rounded,
+              size: 40,
+              color: RunThruTokens.shellTextSecondary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: onBack,
+              child: Text(
+                'Back to Library',
+                style: RunThruTypography.body.copyWith(
+                  color: RunThruTokens.shellAccent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PdfViewerErrorBanner extends StatelessWidget {
+  const _PdfViewerErrorBanner({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: RunThruTokens.shellBase,
+      child: _RangeUnavailableState(
+        message:
+            'This PDF could not be opened for range selection. You can remove it from Sources and import another copy.',
+        onBack: onBack,
       ),
     );
   }
@@ -646,9 +724,7 @@ class _DiscardDialog extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(32),
         padding: const EdgeInsets.all(24),
-        decoration: RunThruDecorations.raisedDecoration(
-          RunThruSurface.shell,
-        ),
+        decoration: RunThruDecorations.raisedDecoration(RunThruSurface.shell),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -674,10 +750,7 @@ class _DiscardDialog extends StatelessWidget {
                     decoration: RunThruDecorations.pillDecoration(
                       RunThruSurface.shell,
                     ),
-                    child: const Text(
-                      'Cancel',
-                      style: RunThruTypography.body,
-                    ),
+                    child: const Text('Cancel', style: RunThruTypography.body),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -717,16 +790,11 @@ class _ClearRangeDialog extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(32),
         padding: const EdgeInsets.all(24),
-        decoration: RunThruDecorations.raisedDecoration(
-          RunThruSurface.shell,
-        ),
+        decoration: RunThruDecorations.raisedDecoration(RunThruSurface.shell),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Clear reading range?',
-              style: RunThruTypography.title,
-            ),
+            const Text('Clear reading range?', style: RunThruTypography.title),
             const SizedBox(height: 16),
             Text(
               'This will restore full-document reading.',
@@ -748,10 +816,7 @@ class _ClearRangeDialog extends StatelessWidget {
                     decoration: RunThruDecorations.pillDecoration(
                       RunThruSurface.shell,
                     ),
-                    child: const Text(
-                      'Cancel',
-                      style: RunThruTypography.body,
-                    ),
+                    child: const Text('Cancel', style: RunThruTypography.body),
                   ),
                 ),
                 const SizedBox(width: 12),

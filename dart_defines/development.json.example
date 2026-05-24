@@ -1,4 +1,6 @@
 {
   "INSTAPAPER_CONSUMER_KEY": "your_consumer_key_here",
-  "INSTAPAPER_CONSUMER_SECRET": "your_consumer_secret_here"
+  "INSTAPAPER_CONSUMER_SECRET": "your_consumer_secret_here",
+  "GOOGLE_SIGN_IN_CLIENT_ID": "your_ios_oauth_client_id.apps.googleusercontent.com",
+  "GOOGLE_SIGN_IN_SERVER_CLIENT_ID": "your_web_oauth_client_id.apps.googleusercontent.com"
 }

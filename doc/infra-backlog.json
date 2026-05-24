@@ -1,0 +1,513 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "project": "RunThru — OSX-KVM iOS Dev Infrastructure",
+  "generated": "2026-05-15",
+  "last_updated": "2026-05-15",
+  "description": "Headless macOS VM on Linux (KVM) for Flutter iOS iteration. Tiered CI: Tier 1 = dart analyze + flutter test on Linux host (instant); Tier 2 = flutter build ios in VM (~30s); Tier 3 = flutter run on USB-connected iPhone via VM passthrough.",
+  "host": {
+    "os": "Arch Linux",
+    "cpu_cores": 12,
+    "ram_gb": 15,
+    "disk_free_gb": 288,
+    "vm_allocation": {
+      "cores": 6,
+      "ram_gb": 8,
+      "rationale": "Leaves 6 cores + 7GB for Linux host during parallel operation"
+    }
+  },
+  "vm": {
+    "macos_version": "Ventura (13.x)",
+    "rationale": "Ventura is most stable in OSX-KVM; Sonoma works but has more driver friction",
+    "disk_image_gb": 120,
+    "ssh_port_forward": "localhost:2222 -> VM:22",
+    "ssh_alias": "mac-vm",
+    "project_path_in_vm": "~/runthru"
+  },
+  "releases": [
+    {
+      "id": "R1",
+      "name": "iOS Dev Loop v1",
+      "milestones": [
+        {
+          "id": "I1.1",
+          "title": "VM Bootstrap",
+          "status": "not_started",
+          "description": "Clone OSX-KVM, create disk image, install macOS Ventura, configure SSH for headless access.",
+          "model": {
+            "primary": "Sonnet 4.6",
+            "fallback": "Opus 4.6",
+            "rationale": "Step-by-step shell scripting with clear verification"
+          },
+          "epics": [
+            {
+              "id": "EI1.1",
+              "title": "QEMU + macOS Ventura VM",
+              "status": "not_started",
+              "depends_on": [],
+              "features": [
+                {
+                  "id": "FI1.1.1",
+                  "title": "OSX-KVM clone and disk setup",
+                  "tasks": [
+                    {
+                      "id": "TI1.1.1.1",
+                      "title": "Clone OSX-KVM and fetch Ventura recovery image",
+                      "model": { "primary": "Haiku 4.5", "rationale": "Shell commands" },
+                      "files_in_scope": ["scripts/infra/fetch-macos.sh"],
+                      "verification_command": "ls $HOME/OSX-KVM/BaseSystem.img",
+                      "acceptance_criteria": [
+                        "OSX-KVM repo cloned to $HOME/OSX-KVM",
+                        "BaseSystem.dmg downloaded via fetch-macOS-v2.py (Ventura)",
+                        "BaseSystem.img created via dmg2img",
+                        "mac_hdd_ng.img (120G qcow2) created at $HOME/OSX-KVM/mac_hdd_ng.img"
+                      ],
+                      "estimated_hours": 1
+                    },
+                    {
+                      "id": "TI1.1.1.2",
+                      "title": "Write QEMU launch script (headless + VNC for setup)",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "QEMU flags require precision" },
+                      "files_in_scope": ["scripts/infra/launch-vm.sh"],
+                      "verification_command": "bash scripts/infra/launch-vm.sh --dry-run",
+                      "acceptance_criteria": [
+                        "scripts/infra/launch-vm.sh exists and is executable",
+                        "Flags: -enable-kvm, -m 8192, -smp 6, -machine q35, -cpu Penryn",
+                        "Network: -netdev user,id=net0,hostfwd=tcp::2222-:22 + virtio-net-pci",
+                        "Storage: OpenCore.qcow2 + mac_hdd_ng.img on virtio",
+                        "Default mode: -display none -daemonize (headless); --vnc flag adds -display vnc=:1 for setup",
+                        "PID file written to /tmp/osx-kvm.pid"
+                      ],
+                      "estimated_hours": 1
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.1.2",
+                  "title": "First boot + SSH configuration",
+                  "tasks": [
+                    {
+                      "id": "TI1.1.2.1",
+                      "title": "Document first-boot VNC setup procedure",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "Documentation" },
+                      "files_in_scope": ["scripts/infra/FIRST-BOOT.md"],
+                      "verification_command": "test -f scripts/infra/FIRST-BOOT.md",
+                      "acceptance_criteria": [
+                        "FIRST-BOOT.md documents: launch with --vnc, connect via VNC on :5901",
+                        "Documents: macOS install to disk, create user account, enable Remote Login (SSH)",
+                        "Documents: sudo systemsetup -setcomputersleep Never (disable sleep)",
+                        "Documents: baseline snapshot command after setup complete"
+                      ],
+                      "estimated_hours": 0.5
+                    },
+                    {
+                      "id": "TI1.1.2.2",
+                      "title": "Configure SSH alias and keypair for passwordless access",
+                      "model": { "primary": "Haiku 4.5", "rationale": "ssh-keygen + config" },
+                      "files_in_scope": ["scripts/infra/setup-ssh.sh"],
+                      "verification_command": "ssh mac-vm 'uname -s' 2>/dev/null | grep -q Darwin && echo PASS",
+                      "acceptance_criteria": [
+                        "~/.ssh/config contains Host mac-vm entry: HostName localhost, Port 2222, IdentityFile ~/.ssh/mac_vm_key",
+                        "ssh-keygen -t ed25519 creates ~/.ssh/mac_vm_key",
+                        "Public key copied to VM authorized_keys via ssh-copy-id",
+                        "ssh mac-vm 'uname -s' returns Darwin without password prompt"
+                      ],
+                      "estimated_hours": 0.5
+                    },
+                    {
+                      "id": "TI1.1.2.3",
+                      "title": "Create baseline VM snapshot",
+                      "model": { "primary": "Haiku 4.5", "rationale": "qemu-img snapshot" },
+                      "files_in_scope": ["scripts/infra/snapshot.sh"],
+                      "verification_command": "qemu-img snapshot -l $HOME/OSX-KVM/mac_hdd_ng.img | grep -q baseline",
+                      "acceptance_criteria": [
+                        "scripts/infra/snapshot.sh create|restore|list subcommands work",
+                        "Snapshot named 'baseline' exists in mac_hdd_ng.img after clean macOS install",
+                        "Snapshot named 'toolchain' created after I1.2 completes"
+                      ],
+                      "estimated_hours": 0.5
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "I1.2",
+          "title": "Flutter iOS Toolchain in VM",
+          "status": "not_started",
+          "description": "Install Xcode CLI tools, Flutter SDK (matching pubspec), CocoaPods, and Fastlane inside the macOS VM. Verify with flutter doctor.",
+          "model": {
+            "primary": "Sonnet 4.6",
+            "fallback": "Opus 4.6",
+            "rationale": "macOS toolchain installation with version pinning"
+          },
+          "depends_on": ["I1.1"],
+          "epics": [
+            {
+              "id": "EI1.2",
+              "title": "Xcode + Flutter + CocoaPods",
+              "status": "not_started",
+              "depends_on": ["I1.1"],
+              "features": [
+                {
+                  "id": "FI1.2.1",
+                  "title": "Xcode and CLI tools",
+                  "tasks": [
+                    {
+                      "id": "TI1.2.1.1",
+                      "title": "Write VM toolchain setup script",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "Script runs over SSH in VM" },
+                      "files_in_scope": ["scripts/infra/setup-toolchain.sh"],
+                      "verification_command": "ssh mac-vm 'xcodebuild -version' | grep -q Xcode",
+                      "acceptance_criteria": [
+                        "scripts/infra/setup-toolchain.sh runs via: ssh mac-vm 'bash -s' < scripts/infra/setup-toolchain.sh",
+                        "Installs Xcode Command Line Tools: xcode-select --install",
+                        "Accepts Xcode license: sudo xcodebuild -license accept",
+                        "Installs Homebrew if absent",
+                        "Installs rbenv + Ruby 3.x for CocoaPods/Fastlane gem isolation",
+                        "gem install cocoapods fastlane",
+                        "ssh mac-vm 'xcodebuild -version' returns Xcode version string"
+                      ],
+                      "estimated_hours": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.2.2",
+                  "title": "Flutter SDK pinned to project version",
+                  "tasks": [
+                    {
+                      "id": "TI1.2.2.1",
+                      "title": "Install Flutter SDK in VM matching pubspec constraint (^3.11.0)",
+                      "model": { "primary": "Haiku 4.5", "rationale": "git clone + PATH export" },
+                      "files_in_scope": ["scripts/infra/setup-toolchain.sh"],
+                      "verification_command": "ssh mac-vm 'flutter --version' | grep -E '^Flutter 3\\.'",
+                      "acceptance_criteria": [
+                        "Flutter SDK cloned to ~/flutter in VM, stable channel",
+                        "flutter --version reports 3.x.x matching ^3.11.0",
+                        "PATH updated in VM ~/.zshrc / ~/.bashrc",
+                        "ssh mac-vm 'flutter doctor' shows iOS toolchain green (no Xcode issues)",
+                        "ssh mac-vm 'flutter doctor' shows Android toolchain skipped (not needed)"
+                      ],
+                      "estimated_hours": 1
+                    },
+                    {
+                      "id": "TI1.2.2.2",
+                      "title": "Verify project builds in VM (no-codesign)",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "First build smoke test" },
+                      "files_in_scope": [],
+                      "verification_command": "ssh mac-vm 'cd ~/runthru && flutter build ios --no-codesign 2>&1 | tail -5'",
+                      "acceptance_criteria": [
+                        "Project synced to ~/runthru in VM (see I1.3)",
+                        "flutter build ios --no-codesign exits 0",
+                        "build/ios/iphoneos/Runner.app exists in VM",
+                        "dart analyze lib/ reports zero issues from VM"
+                      ],
+                      "estimated_hours": 1,
+                      "notes": "Depends on I1.3 for code sync; run this after sync is working"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "I1.3",
+          "title": "Code Sync Pipeline",
+          "status": "not_started",
+          "description": "Incremental rsync from Linux host to VM on file change. Watch daemon uses inotifywait. Tier 1 (analyze+test) runs on host; Tier 2 (build) runs in VM after sync.",
+          "model": {
+            "primary": "Haiku 4.5",
+            "fallback": "Sonnet 4.6",
+            "rationale": "Shell scripting — mechanical"
+          },
+          "depends_on": ["I1.1"],
+          "parallelizable_with": ["I1.2"],
+          "epics": [
+            {
+              "id": "EI1.3",
+              "title": "rsync + inotify watch loop",
+              "status": "not_started",
+              "features": [
+                {
+                  "id": "FI1.3.1",
+                  "title": "One-shot sync script",
+                  "tasks": [
+                    {
+                      "id": "TI1.3.1.1",
+                      "title": "Write scripts/infra/sync.sh",
+                      "model": { "primary": "Haiku 4.5", "rationale": "rsync one-liner with excludes" },
+                      "files_in_scope": ["scripts/infra/sync.sh"],
+                      "verification_command": "bash scripts/infra/sync.sh && ssh mac-vm 'test -f ~/runthru/pubspec.yaml' && echo PASS",
+                      "acceptance_criteria": [
+                        "Excludes: .dart_tool/, build/, .git/, .fvm/, ios/Pods/, android/.gradle/",
+                        "Uses rsync -avz --delete for incremental transfer",
+                        "Target: mac-vm:~/runthru/",
+                        "Exits non-zero if SSH connection fails",
+                        "Prints bytes transferred and elapsed time"
+                      ],
+                      "estimated_hours": 0.5
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.3.2",
+                  "title": "Watch daemon",
+                  "tasks": [
+                    {
+                      "id": "TI1.3.2.1",
+                      "title": "Write scripts/infra/watch.sh — inotifywait loop with tiered actions",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "Debounce logic + tier routing" },
+                      "files_in_scope": ["scripts/infra/watch.sh"],
+                      "verification_command": "bash -n scripts/infra/watch.sh && echo SYNTAX_OK",
+                      "acceptance_criteria": [
+                        "Watches lib/, test/, pubspec.yaml for modify/create/delete events",
+                        "Debounce: 1s settle window before triggering (avoids multi-event storms on save)",
+                        "Tier 1 (always): dart analyze --fatal-infos on Linux host; prints PASS/FAIL",
+                        "Tier 1 (always): flutter test on Linux host if no analyze errors",
+                        "Tier 2 (on --build flag or manual key press 'b'): sync + ssh mac-vm flutter build ios --no-codesign",
+                        "Ctrl-C cleanly kills background jobs",
+                        "Requires: inotify-tools package (prints install hint if absent)"
+                      ],
+                      "estimated_hours": 1.5
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "I1.4",
+          "title": "USB iPhone Passthrough",
+          "status": "not_started",
+          "description": "Pass through USB-connected iPhone from Linux host to macOS VM so flutter run and Xcode can deploy directly to device.",
+          "model": {
+            "primary": "Sonnet 4.6",
+            "fallback": "Opus 4.6",
+            "rationale": "udev + QEMU USB config requires precision"
+          },
+          "depends_on": ["I1.1"],
+          "epics": [
+            {
+              "id": "EI1.4",
+              "title": "udev rules + QEMU USB host device",
+              "status": "not_started",
+              "features": [
+                {
+                  "id": "FI1.4.1",
+                  "title": "Linux host udev rules",
+                  "tasks": [
+                    {
+                      "id": "TI1.4.1.1",
+                      "title": "Write udev rule granting QEMU access to Apple USB devices",
+                      "model": { "primary": "Haiku 4.5", "rationale": "udev rule syntax" },
+                      "files_in_scope": ["scripts/infra/setup-usb-passthrough.sh"],
+                      "verification_command": "cat /etc/udev/rules.d/99-qemu-usb.rules | grep -q '05ac'",
+                      "acceptance_criteria": [
+                        "Rule: SUBSYSTEM==\"usb\", ATTR{idVendor}==\"05ac\", GROUP=\"kvm\", MODE=\"0664\"",
+                        "udevadm control --reload-rules applied",
+                        "setup-usb-passthrough.sh idempotent (re-running does not duplicate the rule)"
+                      ],
+                      "estimated_hours": 0.5
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.4.2",
+                  "title": "QEMU USB passthrough in launch script",
+                  "tasks": [
+                    {
+                      "id": "TI1.4.2.1",
+                      "title": "Add --usb-passthrough flag to launch-vm.sh",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "Dynamic USB device detection" },
+                      "files_in_scope": ["scripts/infra/launch-vm.sh"],
+                      "verification_command": "ssh mac-vm 'system_profiler SPUSBDataType 2>/dev/null | grep -i iphone' | grep -qi iphone && echo PASS",
+                      "acceptance_criteria": [
+                        "launch-vm.sh --usb-passthrough detects connected iPhone via lsusb (vendor 05ac)",
+                        "Passes -device usb-host,vendorid=0x05ac,productid=<detected> to QEMU",
+                        "If no iPhone connected: prints warning, starts VM without passthrough",
+                        "VM must be restarted to pick up newly connected iPhone (documented in FIRST-BOOT.md)",
+                        "ssh mac-vm 'system_profiler SPUSBDataType' shows iPhone when connected and VM started with --usb-passthrough"
+                      ],
+                      "estimated_hours": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "I1.5",
+          "title": "CI Loop Scripts",
+          "status": "not_started",
+          "description": "Tier 2 (build) and Tier 3 (device run) scripts. Unified ci.sh entry point with --tier flag. Output is human-readable and machine-parseable (exit codes).",
+          "model": {
+            "primary": "Sonnet 4.6",
+            "rationale": "Script coordination with error handling"
+          },
+          "depends_on": ["I1.2", "I1.3"],
+          "epics": [
+            {
+              "id": "EI1.5",
+              "title": "Build and run automation",
+              "status": "not_started",
+              "features": [
+                {
+                  "id": "FI1.5.1",
+                  "title": "Tier 2 — iOS build in VM",
+                  "tasks": [
+                    {
+                      "id": "TI1.5.1.1",
+                      "title": "Write scripts/infra/build-ios.sh",
+                      "model": { "primary": "Haiku 4.5", "rationale": "SSH remote command" },
+                      "files_in_scope": ["scripts/infra/build-ios.sh"],
+                      "verification_command": "bash scripts/infra/build-ios.sh && echo EXIT_$?",
+                      "acceptance_criteria": [
+                        "Calls sync.sh first, then ssh mac-vm 'cd ~/runthru && flutter build ios --no-codesign'",
+                        "Streams build output to stdout in real time (no buffering)",
+                        "Exits with VM flutter build exit code",
+                        "Prints elapsed time on completion",
+                        "Prints clear PASS / FAIL banner at end"
+                      ],
+                      "estimated_hours": 0.5
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.5.2",
+                  "title": "Tier 3 — Device run via VM",
+                  "tasks": [
+                    {
+                      "id": "TI1.5.2.1",
+                      "title": "Write scripts/infra/run-device.sh",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "Device detection + flutter run" },
+                      "files_in_scope": ["scripts/infra/run-device.sh"],
+                      "verification_command": "bash -n scripts/infra/run-device.sh && echo SYNTAX_OK",
+                      "acceptance_criteria": [
+                        "Detects connected iPhone device ID via: ssh mac-vm 'flutter devices' | grep ios",
+                        "If no device found: prints actionable error (check USB passthrough, trust prompt)",
+                        "Runs: ssh -t mac-vm 'cd ~/runthru && flutter run -d <device_id>'",
+                        "-t flag allocates pseudo-TTY so hot reload (r) and quit (q) work interactively",
+                        "Ctrl-C on Linux host propagates SIGINT to flutter run in VM"
+                      ],
+                      "estimated_hours": 1
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.5.3",
+                  "title": "Unified entry point",
+                  "tasks": [
+                    {
+                      "id": "TI1.5.3.1",
+                      "title": "Write scripts/infra/ci.sh — unified entry point",
+                      "model": { "primary": "Haiku 4.5", "rationale": "Dispatch script" },
+                      "files_in_scope": ["scripts/infra/ci.sh"],
+                      "verification_command": "bash scripts/infra/ci.sh --help | grep -q 'tier'",
+                      "acceptance_criteria": [
+                        "ci.sh --tier 1: dart analyze + flutter test on host",
+                        "ci.sh --tier 2: sync + iOS build in VM",
+                        "ci.sh --tier 3: sync + flutter run on device",
+                        "ci.sh --watch: starts watch.sh daemon",
+                        "ci.sh --status: prints VM up/down, iPhone connected yes/no, last build result",
+                        "--help prints usage"
+                      ],
+                      "estimated_hours": 0.5
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "I1.6",
+          "title": "Headless Hardening",
+          "status": "not_started",
+          "description": "systemd unit for VM auto-start, resource tuning, snapshot workflow, and optional SSH MCP server integration for AI-native CI.",
+          "model": {
+            "primary": "Sonnet 4.6",
+            "rationale": "systemd unit + QEMU tuning"
+          },
+          "depends_on": ["I1.5"],
+          "epics": [
+            {
+              "id": "EI1.6",
+              "title": "Reliability + resource efficiency",
+              "status": "not_started",
+              "features": [
+                {
+                  "id": "FI1.6.1",
+                  "title": "systemd user unit for VM",
+                  "tasks": [
+                    {
+                      "id": "TI1.6.1.1",
+                      "title": "Write ~/.config/systemd/user/osx-kvm.service",
+                      "model": { "primary": "Haiku 4.5", "rationale": "systemd unit syntax" },
+                      "files_in_scope": ["scripts/infra/osx-kvm.service"],
+                      "verification_command": "systemctl --user status osx-kvm | grep -E '(active|inactive)'",
+                      "acceptance_criteria": [
+                        "Type=forking; PIDFile=/tmp/osx-kvm.pid",
+                        "ExecStart runs launch-vm.sh (headless, no --usb-passthrough)",
+                        "ExecStop sends ACPI shutdown: ssh mac-vm 'sudo shutdown -h now'",
+                        "Restart=on-failure; RestartSec=10",
+                        "scripts/infra/install-service.sh installs + enables the unit",
+                        "systemctl --user start/stop/status osx-kvm works"
+                      ],
+                      "estimated_hours": 1
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.6.2",
+                  "title": "Resource tuning",
+                  "tasks": [
+                    {
+                      "id": "TI1.6.2.1",
+                      "title": "Add memory ballooning and CPU tuning to launch-vm.sh",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "QEMU performance flags" },
+                      "files_in_scope": ["scripts/infra/launch-vm.sh"],
+                      "verification_command": "grep -q 'virtio-balloon' scripts/infra/launch-vm.sh && echo PASS",
+                      "acceptance_criteria": [
+                        "-device virtio-balloon-pci for dynamic memory (macOS can return unused RAM)",
+                        "-cpu host,kvm=on if host CPU is Intel (better perf than Penryn emulation)",
+                        "Fallback: -cpu Penryn if host is not Intel or host mode causes boot failure",
+                        "QEMU memory backend uses -mem-prealloc for lower latency on 8GB allocation",
+                        "Document in launch-vm.sh header: expected idle RAM usage on host ~6GB when VM active"
+                      ],
+                      "estimated_hours": 1
+                    }
+                  ]
+                },
+                {
+                  "id": "FI1.6.3",
+                  "title": "Optional: SSH MCP server for AI-native CI",
+                  "tasks": [
+                    {
+                      "id": "TI1.6.3.1",
+                      "title": "Document SSH MCP server setup for Claude Code direct VM access",
+                      "model": { "primary": "Sonnet 4.6", "rationale": "Configuration documentation" },
+                      "files_in_scope": ["scripts/infra/MCP-SSH-SETUP.md"],
+                      "verification_command": "test -f scripts/infra/MCP-SSH-SETUP.md",
+                      "acceptance_criteria": [
+                        "Documents mcp-server-ssh or equivalent (e.g. mcp-server-shell with SSH wrapper)",
+                        "Shows .claude/settings.json mcpServers entry for mac-vm SSH access",
+                        "Explains: Claude Code can then run flutter build / dart analyze in VM directly",
+                        "Security note: restrict MCP server to mac-vm host only, not general shell access"
+                      ],
+                      "estimated_hours": 0.5
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

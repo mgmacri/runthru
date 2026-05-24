@@ -32,12 +32,12 @@ class ReadingSession {
   Duration? get duration => endTime?.difference(startTime);
 
   Map<String, Object?> toJson() => {
-        'startTime': startTime.toIso8601String(),
-        'endTime': endTime?.toIso8601String(),
-        'wordsRead': wordsRead,
-        'avgWpm': avgWpm,
-        'filePath': filePath,
-      };
+    'startTime': startTime.toIso8601String(),
+    'endTime': endTime?.toIso8601String(),
+    'wordsRead': wordsRead,
+    'avgWpm': avgWpm,
+    'filePath': filePath,
+  };
 }
 
 /// Daily aggregated WPM for charting.
@@ -61,10 +61,23 @@ class DailyWpm {
   final int sessionsCount;
 
   Map<String, Object?> toJson() => {
-        'date': date.toIso8601String(),
-        'avgWpm': avgWpm,
-        'sessionsCount': sessionsCount,
-      };
+    'date': date.toIso8601String(),
+    'avgWpm': avgWpm,
+    'sessionsCount': sessionsCount,
+  };
+}
+
+/// Reading time aggregated for a single local day.
+class DailyReadingTime {
+  const DailyReadingTime({
+    required this.date,
+    this.readingTime = Duration.zero,
+  });
+
+  final DateTime date;
+  final Duration readingTime;
+
+  bool get hasReading => readingTime > Duration.zero;
 }
 
 /// Aggregate reading statistics.
@@ -75,6 +88,10 @@ class ReadingStats {
     this.avgWpm = 0.0,
     this.streak = 0,
     this.wpmHistory = const [],
+    this.totalReadingTime = Duration.zero,
+    this.todayReadingTime = Duration.zero,
+    this.weekReadingTime = Duration.zero,
+    this.readingTimeHistory = const [],
   });
 
   final int totalSessions;
@@ -82,4 +99,8 @@ class ReadingStats {
   final double avgWpm;
   final int streak;
   final List<DailyWpm> wpmHistory;
+  final Duration totalReadingTime;
+  final Duration todayReadingTime;
+  final Duration weekReadingTime;
+  final List<DailyReadingTime> readingTimeHistory;
 }

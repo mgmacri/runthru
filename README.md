@@ -161,6 +161,14 @@ flutter run -d chrome
 | `flutter build apk` | Release APK (Android) |
 | `flutter build ios` | Release build (iOS) |
 
+## AI Tooling Parity Check
+
+Run this to verify Claude/Codex parity for shared instructions, MCP wiring, plugins/skills baseline, and shared agent files:
+
+```bash
+scripts/verify_ai_parity.sh
+```
+
 ## Hot Reload / Hot Restart
 
 While the app is running in debug mode, press:

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:isolate';
 
@@ -19,6 +20,7 @@ import 'package:runthru/features/reading/widgets/paragraph_mode_view.dart';
 import 'package:runthru/features/reading/widgets/reading_ruler.dart';
 import 'package:runthru/features/reading/widgets/sentence_mode_view.dart';
 import 'package:runthru/features/reading/widgets/suppression_overlay.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:runthru/hooks/bookmark_notifier.dart';
 import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/services/models.dart';
@@ -88,11 +90,31 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     final queue = ref.read(preprocessingQueueProvider.notifier);
     await queue.prioritize(widget.filePath);
 
+    if (!mounted) return;
     final processed = ref.read(preprocessingQueueProvider);
     final entry = processed[widget.filePath];
 
     if (entry?.document != null) {
       _loadDocument(entry!.document!);
+    } else {
+      appLog(
+        'ReadingScreen',
+        'ERROR: document null after prioritize — status=${entry?.status} '
+        'reason=${entry?.errorMessage}',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              entry?.status == PdfStatus.unsupported
+                  ? 'This file type is not supported.'
+                  : 'Could not open file. It may be missing or corrupted.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        context.pop();
+      }
     }
   }
 
@@ -206,9 +228,10 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      ref.read(bookmarkProvider(widget.filePath).notifier).save();
+      unawaited(ref.read(bookmarkProvider(widget.filePath).notifier).save());
     }
   }
 
@@ -250,7 +273,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
 
     if (timerState.isPlaying) {
       timer.pause();
-      ref.read(bookmarkProvider(widget.filePath).notifier).save();
+      unawaited(ref.read(bookmarkProvider(widget.filePath).notifier).save());
       _endAnalyticsSession();
       final reducedMotion = isReducedMotion(context);
       if (!reducedMotion) {
@@ -344,9 +367,11 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                     ),
                     onPressed: () {
                       _endAnalyticsSession();
-                      ref
-                          .read(bookmarkProvider(widget.filePath).notifier)
-                          .save();
+                      unawaited(
+                        ref
+                            .read(bookmarkProvider(widget.filePath).notifier)
+                            .save(),
+                      );
                       ref.read(wordTimerProvider.notifier).pause();
                       context.pop();
                     },
@@ -483,6 +508,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
           child: PauseFog3D(
             isPaused: !timerState.isPlaying && _words.isNotEmpty,
             wpm: timerState.wpm,
+            onResume: _togglePause,
           ),
         ),
         if (_isRangeComplete && _readingRange != null)
@@ -495,7 +521,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
               averageWpm: timerState.wpm,
               onContinueReading: _continueReadingPastRange,
               onSetNewRange: () {
-                ref.read(bookmarkProvider(widget.filePath).notifier).save();
+                unawaited(
+                  ref.read(bookmarkProvider(widget.filePath).notifier).save(),
+                );
                 context.push(
                   Uri(
                     path: '/range-picker',
@@ -504,7 +532,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                 );
               },
               onGoToLibrary: () {
-                ref.read(bookmarkProvider(widget.filePath).notifier).save();
+                unawaited(
+                  ref.read(bookmarkProvider(widget.filePath).notifier).save(),
+                );
                 ref.read(wordTimerProvider.notifier).pause();
                 context.go('/');
               },

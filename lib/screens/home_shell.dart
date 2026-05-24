@@ -5,6 +5,7 @@ import 'package:runthru/design/design.dart';
 import 'package:runthru/screens/analytics_screen.dart';
 import 'package:runthru/screens/library_screen.dart';
 import 'package:runthru/screens/settings_screen.dart';
+import 'package:runthru/screens/sources_screen.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
@@ -27,7 +28,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab.clamp(0, 2);
+    _currentIndex = widget.initialTab.clamp(0, 3);
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -62,6 +63,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         onPageChanged: _onPageChanged,
         children: const [
           _KeepAlivePage(child: LibraryScreen()),
+          _KeepAlivePage(child: SourcesScreen()),
           _KeepAlivePage(child: _AnalyticsTab()),
           _KeepAlivePage(child: SettingsScreen()),
         ],
@@ -100,6 +102,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               icon: Icon(Icons.library_books_outlined),
               selectedIcon: Icon(Icons.library_books),
               label: 'Library',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.add_link_outlined),
+              selectedIcon: Icon(Icons.add_link),
+              label: 'Sources',
             ),
             NavigationDestination(
               icon: Icon(Icons.auto_graph_outlined),
@@ -178,7 +185,7 @@ class _AnalyticsTab extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Upgrade to track your reading speed, streaks, and progress over time.',
+                'Upgrade to track reading time, streaks, and gentle progress notes.',
                 style: RunThruTypography.body,
                 textAlign: TextAlign.center,
               ),
