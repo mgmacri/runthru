@@ -116,38 +116,50 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
     _jiggle = TweenSequence<double>([
       // Jiggle 1 up (200ms)
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 0.0,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 28,
       ),
       // Jiggle 1 back (100ms)
       TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 0.55)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween(
+          begin: 1.0,
+          end: 0.55,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 14,
       ),
       // Jiggle 2 up (150ms)
       TweenSequenceItem(
-        tween: Tween(begin: 0.55, end: 0.88)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 0.55,
+          end: 0.88,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 21,
       ),
       // Jiggle 2 back (70ms)
       TweenSequenceItem(
-        tween: Tween(begin: 0.88, end: 0.70)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween(
+          begin: 0.88,
+          end: 0.70,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 10,
       ),
       // Jiggle 3 up (100ms)
       TweenSequenceItem(
-        tween: Tween(begin: 0.70, end: 0.82)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 0.70,
+          end: 0.82,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 14,
       ),
       // Settle (130ms)
       TweenSequenceItem(
-        tween: Tween(begin: 0.82, end: 0.78)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 0.82,
+          end: 0.78,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 13,
       ),
     ]).animate(_jiggleController);
@@ -257,17 +269,16 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
     _lastGyroTime = DateTime.now();
     _tiltAngle = Offset.zero;
 
-    _gyroSub = gyroscopeEventStream(
-      samplingPeriod: SensorInterval.uiInterval,
-    ).listen(
-      _onGyro,
-      onError: (_) {
-        // Gyroscope unavailable on this device/platform — fall back to pointer
-        _gyroAvailable = false;
-        _gyroSub?.cancel();
-        _gyroSub = null;
-      },
-    );
+    _gyroSub = gyroscopeEventStream(samplingPeriod: SensorInterval.uiInterval)
+        .listen(
+          _onGyro,
+          onError: (_) {
+            // Gyroscope unavailable on this device/platform — fall back to pointer
+            _gyroAvailable = false;
+            _gyroSub?.cancel();
+            _gyroSub = null;
+          },
+        );
     _gyroAvailable = true;
   }
 
@@ -313,10 +324,7 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
     if (widget.externalPosition != null) return; // shared controller handles it
     final nx = ((localPosition.dx / screenSize.width) - 0.5) * 2;
     final ny = ((localPosition.dy / screenSize.height) - 0.5) * 2;
-    _parallaxOffset.value = Offset(
-      nx.clamp(-1.0, 1.0),
-      ny.clamp(-1.0, 1.0),
-    );
+    _parallaxOffset.value = Offset(nx.clamp(-1.0, 1.0), ny.clamp(-1.0, 1.0));
   }
 
   /// The active parallax position notifier: external when provided, else own.
@@ -345,13 +353,19 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final parallax = _activeParallax;
     return Listener(
-      onPointerHover: (e) => _onPointerMove(e.localPosition, MediaQuery.sizeOf(context)),
-      onPointerMove: (e) => _onPointerMove(e.localPosition, MediaQuery.sizeOf(context)),
+      onPointerHover: (e) =>
+          _onPointerMove(e.localPosition, MediaQuery.sizeOf(context)),
+      onPointerMove: (e) =>
+          _onPointerMove(e.localPosition, MediaQuery.sizeOf(context)),
       behavior: HitTestBehavior.translucent,
       child: AnimatedBuilder(
-        animation: Listenable.merge(
-          [_fade, _rise, _jiggleController, _breatheController, _flowController],
-        ),
+        animation: Listenable.merge([
+          _fade,
+          _rise,
+          _jiggleController,
+          _breatheController,
+          _flowController,
+        ]),
         builder: (context, _) {
           final fadeVal = _fade.value;
           if (fadeVal == 0) return const SizedBox.shrink();
@@ -370,8 +384,8 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
               // ── Radial veil — layer 1 (slowest parallax via repaint notifier) ──
               CustomPaint(
                 painter: _VeilPainter(
-                  color: RunThruTokens.pauseBlindWashDeep,
-                  opacity: fadeVal * 0.18,
+                  color: RunThruTokens.stageDarkShadow,
+                  opacity: fadeVal * 0.24,
                   parallaxNotifier: parallax,
                 ),
                 size: Size.infinite,
@@ -480,34 +494,64 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
 
           const SizedBox(height: 20),
 
-          // ── "Paused" label ──
-          Text(
-            'Paused',
-            style: RunThruTypography.caption.copyWith(
-              color: RunThruTokens.stageText.withValues(alpha: fadeVal * 0.55),
-              letterSpacing: 1.2,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: RunThruTokens.stageBase.withValues(alpha: fadeVal * 0.48),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [
+                BoxShadow(
+                  color: RunThruTokens.stageLightShadow.withValues(
+                    alpha: fadeVal * 0.42,
+                  ),
+                  offset: const Offset(-2, -2),
+                  blurRadius: 6,
+                ),
+                BoxShadow(
+                  color: RunThruTokens.stageDarkShadow.withValues(
+                    alpha: fadeVal * 0.50,
+                  ),
+                  offset: const Offset(2, 2),
+                  blurRadius: 7,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-
-          // ── Helper text ──
-          Text(
-            'Tap to resume',
-            style: RunThruTypography.caption.copyWith(
-              color: RunThruTokens.stageText.withValues(alpha: fadeVal * 0.35),
-              letterSpacing: 0.4,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Paused',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.stageText.withValues(
+                        alpha: fadeVal * 0.70,
+                      ),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap to resume',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.stageText.withValues(
+                        alpha: fadeVal * 0.46,
+                      ),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      height: 1.0,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
           // ── 3D mode upgrade tip ──
           if (widget.showUpgradeTip) ...[
             const SizedBox(height: 32),
-            _UpgradeTip(
-              fadeVal: fadeVal,
-              onTap: widget.onUpgradeTap,
-            ),
+            _UpgradeTip(fadeVal: fadeVal, onTap: widget.onUpgradeTap),
           ],
         ],
       ),
@@ -572,7 +616,9 @@ class _UpgradeTip extends StatelessWidget {
                       Text(
                         'Try 3D reading mode',
                         style: RunThruTypography.caption.copyWith(
-                          color: RunThruTokens.stageText.withValues(alpha: 0.80),
+                          color: RunThruTokens.stageText.withValues(
+                            alpha: 0.80,
+                          ),
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
                           letterSpacing: 0.2,
@@ -582,7 +628,9 @@ class _UpgradeTip extends StatelessWidget {
                       Text(
                         'Peripheral depth keeps your attention anchored — Yerkes-Dodson research on sustained focus.',
                         style: RunThruTypography.caption.copyWith(
-                          color: RunThruTokens.stageText.withValues(alpha: 0.45),
+                          color: RunThruTokens.stageText.withValues(
+                            alpha: 0.45,
+                          ),
                           fontSize: 10,
                           height: 1.4,
                         ),
@@ -654,10 +702,8 @@ class _VeilPainter extends CustomPainter {
       opacity != old.opacity || parallaxNotifier != old.parallaxNotifier;
 }
 
-/// A translucent "blind" that sweeps from the bottom of the screen up to the
-/// top on pause. Its leading (top) edge is a single flowing wavy line, rendered
-/// as an embossed stroke (soft shadow beneath, gradient body, highlight on top)
-/// so it reads as a raised lip riding on the rising fog.
+/// A translucent warm blind that sweeps from the bottom of the screen up to the
+/// top on pause. Its leading edge is rendered as a subtle neumorphic lip.
 ///
 /// The wave is NOT a persistent mid-screen decoration — it travels with the
 /// blind. At rest the blind has fully risen and the wavy edge has passed off
@@ -672,7 +718,7 @@ class _WavyRisePainter extends CustomPainter {
 
   final double riseProgress; // 0..1 — how far the blind has risen
   final double fadeProgress; // 0..1 — overall overlay opacity
-  final double flowPhase;    // 0..1 — horizontal flow of the wave
+  final double flowPhase; // 0..1 — horizontal flow of the wave
   final ValueNotifier<Offset> parallaxNotifier;
 
   // Wave + stroke geometry (mirrors the reference FlowingWavyLine proportions)
@@ -702,7 +748,9 @@ class _WavyRisePainter extends CustomPainter {
     var first = true;
     for (double x = -_wavelength; x <= size.width + _wavelength; x += _step) {
       final shiftedX = x + parallaxShiftX;
-      final y = edgeY + math.sin((shiftedX / _wavelength) * math.pi * 2 + phase) * amp;
+      final y =
+          edgeY +
+          math.sin((shiftedX / _wavelength) * math.pi * 2 + phase) * amp;
       if (first) {
         linePath.moveTo(x, y);
         first = false;
@@ -718,7 +766,12 @@ class _WavyRisePainter extends CustomPainter {
       ..close();
 
     final fillTop = edgeY - amp;
-    final fillRect = Rect.fromLTWH(0, fillTop, size.width, size.height - fillTop);
+    final fillRect = Rect.fromLTWH(
+      0,
+      fillTop,
+      size.width,
+      size.height - fillTop,
+    );
     canvas.drawPath(
       fillPath,
       Paint()
@@ -726,9 +779,15 @@ class _WavyRisePainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            RunThruTokens.pauseBlindWashLight.withValues(alpha: fadeProgress * 0.50),
-            RunThruTokens.pauseBlindWashDeep.withValues(alpha: fadeProgress * 0.74),
+            RunThruTokens.stageDarkShadow.withValues(
+              alpha: fadeProgress * 0.56,
+            ),
+            RunThruTokens.stageBase.withValues(alpha: fadeProgress * 0.76),
+            RunThruTokens.stageLightShadow.withValues(
+              alpha: fadeProgress * 0.62,
+            ),
           ],
+          stops: const [0.0, 0.52, 1.0],
         ).createShader(fillRect),
     );
 
@@ -738,31 +797,44 @@ class _WavyRisePainter extends CustomPainter {
     canvas.drawPath(
       linePath,
       Paint()
-        ..color = RunThruTokens.pauseWaveShadow.withValues(alpha: fadeProgress * 0.28)
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            RunThruTokens.stageDarkShadow.withValues(
+              alpha: fadeProgress * 0.46,
+            ),
+            RunThruTokens.stageBase.withValues(alpha: fadeProgress * 0.10),
+          ],
+        ).createShader(Rect.fromLTWH(0, edgeY - amp, size.width, amp * 2))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = _strokeWidth
+        ..strokeWidth = _strokeWidth * 0.86
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
     );
     canvas.restore();
 
-    // ── Main wavy stroke (lavender gradient body) ──
+    // ── Main wavy stroke (warm neumorphic gradient body) ──
     canvas.drawPath(
       linePath,
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.centerRight,
-          end: Alignment.centerLeft,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            RunThruTokens.pauseWaveLineLight.withValues(alpha: fadeProgress),
-            RunThruTokens.pauseWaveLineMid.withValues(alpha: fadeProgress),
-            RunThruTokens.pauseWaveLineLight.withValues(alpha: fadeProgress),
+            RunThruTokens.stageDarkShadow.withValues(
+              alpha: fadeProgress * 0.70,
+            ),
+            RunThruTokens.stageBase.withValues(alpha: fadeProgress * 0.84),
+            RunThruTokens.stageLightShadow.withValues(
+              alpha: fadeProgress * 0.76,
+            ),
           ],
-          stops: const [0.0, 0.5, 1.0],
+          stops: const [0.0, 0.46, 1.0],
         ).createShader(Offset.zero & size)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = _strokeWidth
+        ..strokeWidth = _strokeWidth * 0.70
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );
@@ -773,7 +845,9 @@ class _WavyRisePainter extends CustomPainter {
     canvas.drawPath(
       linePath,
       Paint()
-        ..color = RunThruTokens.stageLightShadow.withValues(alpha: fadeProgress * 0.45)
+        ..color = RunThruTokens.stageLightShadow.withValues(
+          alpha: fadeProgress * 0.45,
+        )
         ..style = PaintingStyle.stroke
         ..strokeWidth = _strokeWidth * 0.28
         ..strokeCap = StrokeCap.round

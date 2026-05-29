@@ -24,9 +24,16 @@ final appRouter = GoRouter(
       path: '/',
       pageBuilder: (context, state) {
         final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0;
+        final focusGoogleDriveBrowserSetting =
+            state.uri.queryParameters['focus'] == 'googleDriveBrowser';
+        final focusRequestId = state.uri.queryParameters['focusRequest'];
         return libraryTransitionPage(
           key: state.pageKey,
-          child: HomeShell(initialTab: tab),
+          child: HomeShell(
+            initialTab: tab,
+            focusGoogleDriveBrowserSetting: focusGoogleDriveBrowserSetting,
+            focusRequestId: focusRequestId,
+          ),
         );
       },
     ),

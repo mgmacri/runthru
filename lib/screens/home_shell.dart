@@ -13,9 +13,20 @@ import 'package:runthru/store/models.dart';
 /// Shell that wraps the four main tabs in a [PageView] with a bottom
 /// navigation bar. Swipe left/right to move between pages.
 class HomeShell extends ConsumerStatefulWidget {
-  const HomeShell({super.key, this.initialTab = 0});
+  const HomeShell({
+    super.key,
+    this.initialTab = 0,
+    this.focusGoogleDriveBrowserSetting = false,
+    this.focusRequestId,
+  });
 
   final int initialTab;
+
+  /// Whether Settings should scroll to the full Drive browser setting.
+  final bool focusGoogleDriveBrowserSetting;
+
+  /// Unique request token for repeated focus requests.
+  final String? focusRequestId;
 
   @override
   ConsumerState<HomeShell> createState() => _HomeShellState();
@@ -36,6 +47,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextIndex = widget.initialTab.clamp(0, 3);
+    if (nextIndex != _currentIndex) {
+      setState(() => _currentIndex = nextIndex);
+      if (_pageController.hasClients) {
+        if (widget.focusGoogleDriveBrowserSetting || isReducedMotion(context)) {
+          _pageController.jumpToPage(nextIndex);
+        } else {
+          _pageController.animateToPage(
+            nextIndex,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
+      }
+    }
   }
 
   void _onPageChanged(int index) {
@@ -61,11 +92,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       body: PageView(
         controller: _pageController,
         onPageChanged: _onPageChanged,
-        children: const [
-          _KeepAlivePage(child: LibraryScreen()),
-          _KeepAlivePage(child: SourcesScreen()),
-          _KeepAlivePage(child: _AnalyticsTab()),
-          _KeepAlivePage(child: SettingsScreen()),
+        children: [
+          const _KeepAlivePage(child: LibraryScreen()),
+          const _KeepAlivePage(child: SourcesScreen()),
+          const _KeepAlivePage(child: _AnalyticsTab()),
+          _KeepAlivePage(
+            child: SettingsScreen(
+              focusGoogleDriveBrowserSetting:
+                  widget.focusGoogleDriveBrowserSetting,
+              focusRequestId: widget.focusRequestId,
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: Theme(

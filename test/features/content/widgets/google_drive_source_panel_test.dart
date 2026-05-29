@@ -139,6 +139,7 @@ Widget _harness({
   AppConfig config = const AppConfig(
     googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
   ),
+  Widget child = const GoogleDriveSourcePanel(),
 }) {
   final authNotifier = auth ?? _FakeGoogleDriveAuth(authState);
   return ProviderScope(
@@ -150,8 +151,21 @@ Widget _harness({
       if (picker != null) googleDrivePickerProvider.overrideWithValue(picker),
       configProvider.overrideWith(() => _FakeConfigNotifier(config)),
     ],
-    child: const MaterialApp(home: Scaffold(body: GoogleDriveSourcePanel())),
+    child: MaterialApp(home: Scaffold(body: child)),
   );
+}
+
+class _ChooseDriveFilesButton extends ConsumerWidget {
+  const _ChooseDriveFilesButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(googleDriveImportProvider);
+    return TextButton(
+      onPressed: () => chooseGoogleDriveFilesForReading(context, ref),
+      child: const Text('Choose files'),
+    );
+  }
 }
 
 void main() {
@@ -168,36 +182,32 @@ void main() {
       expect(find.text('Google Drive'), findsOneWidget);
       expect(find.text('Not connected'), findsOneWidget);
       expect(find.text('Connect'), findsOneWidget);
-      expect(find.text('Choose files from Google Drive'), findsOneWidget);
       expect(
         find.text('RunThru can only access files you choose'),
-        findsWidgets,
+        findsOneWidget,
       );
-      expect(find.text('You can select multiple files'), findsOneWidget);
-      expect(find.text('Folders are not supported.'), findsOneWidget);
-      expect(find.text('Use full Drive browser'), findsOneWidget);
-      final toggle = tester.widget<Switch>(find.byType(Switch));
-      expect(toggle.value, isFalse);
+      expect(find.text('Choose files from Google Drive'), findsNothing);
+      expect(find.text('Use full Drive browser'), findsNothing);
+      expect(find.byTooltip('Google Drive settings'), findsOneWidget);
     });
 
-    testWidgets('full browser shows broader-access warning before enabling', (
-      tester,
-    ) async {
+    testWidgets('settings cog uses provided settings callback', (tester) async {
+      var opened = false;
       await tester.pumpWidget(
         _harness(
           authState: const GoogleDriveAuthUnauthenticated(),
           config: const AppConfig(),
+          child: GoogleDriveSourcePanel(
+            onOpenBrowserSetting: () => opened = true,
+          ),
         ),
       );
       await tester.pump();
 
-      expect(
-        find.text(
-          'Full Drive browser lets RunThru browse files across your Drive. It requires broader Google Drive access and may not be available in some organizations.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Use full Drive browser'), findsOneWidget);
+      await tester.tap(find.byTooltip('Google Drive settings'));
+      await tester.pump();
+
+      expect(opened, isTrue);
     });
 
     testWidgets('ui unavailable auth error shows retry copy', (tester) async {
@@ -242,6 +252,7 @@ void main() {
           config: const AppConfig(),
           client: client,
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -254,7 +265,7 @@ void main() {
       expect(picker.allowMultiple, isTrue);
       expect(picker.mimeTypes, contains(googleDocsMimeType));
       expect(client.metadataIds, ['picked-doc']);
-      final context = tester.element(find.byType(GoogleDriveSourcePanel));
+      final context = tester.element(find.byType(_ChooseDriveFilesButton));
       final container = ProviderScope.containerOf(context);
       final state = container.read(googleDriveImportProvider);
       expect(state, isA<GoogleDriveImportDone>());
@@ -293,6 +304,7 @@ void main() {
           config: const AppConfig(),
           client: client,
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -302,7 +314,7 @@ void main() {
       await tester.pump();
 
       expect(client.metadataIds, ['doc-a', 'doc-b']);
-      final context = tester.element(find.byType(GoogleDriveSourcePanel));
+      final context = tester.element(find.byType(_ChooseDriveFilesButton));
       final container = ProviderScope.containerOf(context);
       final state = container.read(googleDriveImportProvider);
       expect(state, isA<GoogleDriveImportDone>());
@@ -328,6 +340,7 @@ void main() {
             googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
           ),
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -353,6 +366,7 @@ void main() {
           auth: auth,
           config: const AppConfig(),
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -364,7 +378,7 @@ void main() {
       expect(auth.connectAccessModes, [
         GoogleDriveAccessMode.selectedFilesOnly,
       ]);
-      final context = tester.element(find.byType(GoogleDriveSourcePanel));
+      final context = tester.element(find.byType(_ChooseDriveFilesButton));
       final container = ProviderScope.containerOf(context);
       expect(
         container.read(googleDriveImportProvider),
@@ -389,6 +403,7 @@ void main() {
           auth: auth,
           config: const AppConfig(),
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -419,6 +434,7 @@ void main() {
           auth: auth,
           config: const AppConfig(),
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -464,6 +480,7 @@ void main() {
           client: client,
           config: const AppConfig(),
           picker: picker,
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();
@@ -490,6 +507,7 @@ void main() {
           authState: auth.initialState,
           auth: auth,
           config: const AppConfig(),
+          child: const _ChooseDriveFilesButton(),
         ),
       );
       await tester.pump();

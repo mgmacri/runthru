@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
+import 'package:runthru/features/content/widgets/brand_icons.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
 
 /// Neumorphic source-connection tile for Instapaper.
@@ -25,6 +26,7 @@ class InstapaperAuthTile extends ConsumerWidget {
     return switch (authState) {
       InstapaperAuthChecking() => const _SourceRow(
         icon: Icons.bookmark_outline,
+        iconWidget: InstapaperBrandIcon(size: 22),
         name: 'Instapaper',
         statusWidget: _StatusChip(label: 'Checking…', ready: false),
         trailing: SizedBox.shrink(),
@@ -35,6 +37,7 @@ class InstapaperAuthTile extends ConsumerWidget {
       ),
       InstapaperAuthLoading() => const _SourceRow(
         icon: Icons.bookmark_outline,
+        iconWidget: InstapaperBrandIcon(size: 22),
         name: 'Instapaper',
         statusWidget: _StatusChip(label: 'Connecting…', ready: false),
         trailing: SizedBox.shrink(),
@@ -75,8 +78,7 @@ class _InstapaperLoginSheet extends ConsumerStatefulWidget {
       _InstapaperLoginSheetState();
 }
 
-class _InstapaperLoginSheetState
-    extends ConsumerState<_InstapaperLoginSheet> {
+class _InstapaperLoginSheetState extends ConsumerState<_InstapaperLoginSheet> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _emailFocus = FocusNode();
@@ -100,10 +102,9 @@ class _InstapaperLoginSheetState
       setState(() => _inlineError = 'Enter your Instapaper email or username.');
       return;
     }
-    ref.read(instapaperAuthProvider.notifier).login(
-      username: email,
-      password: _passwordController.text,
-    );
+    ref
+        .read(instapaperAuthProvider.notifier)
+        .login(username: email, password: _passwordController.text);
   }
 
   @override
@@ -185,8 +186,9 @@ class _InstapaperLoginSheetState
               onPressed: isLoading ? null : _submit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: RunThruTokens.shellAccent,
-                disabledBackgroundColor:
-                    RunThruTokens.shellAccent.withValues(alpha: 0.5),
+                disabledBackgroundColor: RunThruTokens.shellAccent.withValues(
+                  alpha: 0.5,
+                ),
                 foregroundColor: RunThruTokens.shellBase,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -311,6 +313,7 @@ class _NotConnectedTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SourceRow(
       icon: Icons.bookmark_outline,
+      iconWidget: const InstapaperBrandIcon(size: 22),
       name: 'Instapaper',
       statusWidget: const _StatusChip(label: 'Not connected', ready: false),
       trailing: SizedBox(
@@ -352,6 +355,7 @@ class _ConnectedTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SourceRow(
       icon: Icons.bookmark_rounded,
+      iconWidget: const InstapaperBrandIcon(size: 22),
       name: 'Instapaper',
       statusWidget: _StatusChip(label: username, ready: true),
       trailing: SizedBox(
@@ -378,6 +382,7 @@ class _ErrorTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SourceRow(
       icon: Icons.bookmark_outline,
+      iconWidget: const InstapaperBrandIcon(size: 22),
       name: 'Instapaper',
       statusWidget: const _StatusChip(
         label: 'Error',
@@ -417,12 +422,14 @@ class _ErrorTile extends StatelessWidget {
 class _SourceRow extends StatelessWidget {
   const _SourceRow({
     required this.icon,
+    this.iconWidget,
     required this.name,
     required this.statusWidget,
     required this.trailing,
   });
 
   final IconData icon;
+  final Widget? iconWidget;
   final String name;
   final Widget statusWidget;
   final Widget trailing;
@@ -435,7 +442,7 @@ class _SourceRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 22, color: RunThruTokens.shellAccent),
+          iconWidget ?? Icon(icon, size: 22, color: RunThruTokens.shellAccent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

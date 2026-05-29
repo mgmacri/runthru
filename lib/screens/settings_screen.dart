@@ -14,8 +14,64 @@ import 'package:runthru/widgets/neumorphic_card.dart';
 import 'package:runthru/widgets/wpm_slider.dart';
 
 /// Settings screen with neumorphic cards.
-class SettingsScreen extends ConsumerWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends ConsumerStatefulWidget {
+  const SettingsScreen({
+    super.key,
+    this.focusGoogleDriveBrowserSetting = false,
+    this.focusRequestId,
+  });
+
+  /// Scrolls directly to the Google Drive browser setting after build.
+  final bool focusGoogleDriveBrowserSetting;
+
+  /// Unique request token for repeated focus requests.
+  final String? focusRequestId;
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _googleDriveBrowserSettingKey = GlobalKey();
+  String? _handledFocusRequestId;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleGoogleDriveBrowserFocus();
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusGoogleDriveBrowserSetting &&
+        (widget.focusRequestId != oldWidget.focusRequestId ||
+            !oldWidget.focusGoogleDriveBrowserSetting)) {
+      _scheduleGoogleDriveBrowserFocus();
+    }
+  }
+
+  void _scheduleGoogleDriveBrowserFocus() {
+    final requestId = widget.focusRequestId ?? 'initial';
+    if (!widget.focusGoogleDriveBrowserSetting ||
+        _handledFocusRequestId == requestId) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _handledFocusRequestId == requestId) return;
+      final context = _googleDriveBrowserSettingKey.currentContext;
+      if (context == null) return;
+      _handledFocusRequestId = requestId;
+      Scrollable.ensureVisible(
+        context,
+        duration: isReducedMotion(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
+  }
 
   void _showLogViewer(BuildContext context) {
     showModalBottomSheet<void>(
@@ -88,7 +144,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final configAsync = ref.watch(configProvider);
     final config = configAsync.valueOrNull ?? const AppConfig();
     final notifier = ref.read(configProvider.notifier);
@@ -164,6 +220,50 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Reading Comfort ──
           const SpacingControls(),
+
+          NeumorphicCard(
+            key: _googleDriveBrowserSettingKey,
+            surface: RunThruSurface.shell,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.manage_search_rounded,
+                  size: 22,
+                  color: RunThruTokens.shellAccent,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Use full Drive browser',
+                        style: RunThruTypography.title,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Browse supported files across Google Drive. This requires broader Drive access and may not be available in some organizations.',
+                        style: RunThruTypography.caption.copyWith(
+                          color: RunThruTokens.shellTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Switch.adaptive(
+                  value:
+                      config.googleDriveAccessMode ==
+                      GoogleDriveAccessMode.fullDriveBrowser,
+                  onChanged: (enabled) => notifier.setGoogleDriveAccessMode(
+                    enabled
+                        ? GoogleDriveAccessMode.fullDriveBrowser
+                        : GoogleDriveAccessMode.selectedFilesOnly,
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           // ── 3D Mode (Premium only — ALL platforms) ──
           if (hasPremium)

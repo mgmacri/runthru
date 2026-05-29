@@ -9,13 +9,12 @@ import 'package:runthru/features/content/providers/google_drive_auth_provider.da
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
 import 'package:runthru/features/content/services/library_import.dart';
+import 'package:runthru/features/content/widgets/brand_icons.dart';
 import 'package:runthru/features/content/widgets/google_drive_source_panel.dart';
 import 'package:runthru/features/content/widgets/instapaper_auth_tile.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/store/library_source.dart';
 import 'package:runthru/store/library_sources.dart';
-import 'package:runthru/store/config.dart';
-import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/library_source_menu.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
 
@@ -218,12 +217,14 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                 ),
                 LibrarySourceAction(
                   icon: Icons.bookmark_outline,
+                  iconWidget: const InstapaperBrandIcon(size: 20),
                   label: 'Instapaper',
                   semanticsLabel: 'Add from Instapaper',
                   onTap: () => _handleInstapaperAction(context),
                 ),
                 LibrarySourceAction(
                   icon: Icons.cloud_outlined,
+                  iconWidget: const GoogleDriveBrandIcon(size: 20),
                   label: 'Drive',
                   semanticsLabel: 'Add from Google Drive',
                   onTap: () => _handleGoogleDriveAction(context),
@@ -342,38 +343,8 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     }
   }
 
-  void _handleGoogleDriveAction(BuildContext ctx) {
-    final authState = ref.read(googleDriveAuthProvider);
-    final accessMode =
-        ref.read(configProvider).valueOrNull?.googleDriveAccessMode ??
-        GoogleDriveAccessMode.selectedFilesOnly;
-    if (authState is GoogleDriveAuthAuthenticated) {
-      if (accessMode == GoogleDriveAccessMode.fullDriveBrowser) {
-        ref.read(googleDriveFilesProvider.notifier).refresh();
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text('Refreshing Google Drive...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text('Choose files from Google Drive'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } else if (accessMode == GoogleDriveAccessMode.fullDriveBrowser) {
-      ref.read(googleDriveAuthProvider.notifier).connect();
-    } else {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(
-          content: Text('Choose files from the Google Drive source card.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
+  Future<void> _handleGoogleDriveAction(BuildContext ctx) async {
+    await chooseGoogleDriveFilesForReading(ctx, ref);
   }
 
   Future<void> _handlePaste(BuildContext ctx) async {

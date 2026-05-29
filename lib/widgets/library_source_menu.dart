@@ -14,9 +14,11 @@ class LibrarySourceAction {
     required this.label,
     required this.semanticsLabel,
     required this.onTap,
+    this.iconWidget,
   });
 
   final IconData icon;
+  final Widget? iconWidget;
   final String label;
   final String semanticsLabel;
   final VoidCallback onTap;
@@ -139,10 +141,7 @@ class _LibrarySourceMenuState extends State<LibrarySourceMenu>
         Positioned(
           right: widget.rightInset,
           bottom: widget.bottomInset,
-          child: NeumorphicPlusButton(
-            isOpen: _open,
-            onTap: _toggle,
-          ),
+          child: NeumorphicPlusButton(isOpen: _open, onTap: _toggle),
         ),
       ],
     );
@@ -202,8 +201,9 @@ class _NeumorphicPlusButtonState extends State<NeumorphicPlusButton> {
           decoration: decoration,
           alignment: Alignment.center,
           child: AnimatedRotation(
-            duration:
-                reduced ? Duration.zero : const Duration(milliseconds: 200),
+            duration: reduced
+                ? Duration.zero
+                : const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             turns: widget.isOpen ? 0.125 : 0.0,
             child: const Icon(
@@ -277,8 +277,7 @@ class CascadingSourceStack extends StatelessWidget {
     required LibrarySourceAction action,
   }) {
     // Per-card timing: start at 50% of previous card's duration → index * 0.5 * cardDuration.
-    final startMs =
-        (index * 0.5 * cardDuration.inMilliseconds).round();
+    final startMs = (index * 0.5 * cardDuration.inMilliseconds).round();
     final endMs = startMs + cardDuration.inMilliseconds;
     final start = (startMs / totalMs).clamp(0.0, 1.0);
     final end = (endMs / totalMs).clamp(0.0, 1.0);
@@ -385,17 +384,17 @@ class _EmbossedSourceActionCardState extends State<EmbossedSourceActionCard> {
         onTap: widget.onTap,
         child: Container(
           constraints: const BoxConstraints(minHeight: 48, minWidth: 160),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: decoration,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                widget.action.icon,
-                size: 20,
-                color: RunThruTokens.shellAccent,
-              ),
+              widget.action.iconWidget ??
+                  Icon(
+                    widget.action.icon,
+                    size: 20,
+                    color: RunThruTokens.shellAccent,
+                  ),
               const SizedBox(width: 10),
               Text(
                 widget.action.label,
