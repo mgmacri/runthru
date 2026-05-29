@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "repoCanonicalMemory": {
+      "command": "/home/matt/.local/bin/uv",
+      "args": [
+        "run",
+        "--offline",
+        "--with",
+        "mcp",
+        "python",
+        "/home/matt/dev/speedy-boyv3/tools/mcp/repo_canonical_memory.py"
+      ],
+      "cwd": "/home/matt/dev/speedy-boyv3",
+      "timeout": 30000,
+      "trust": true
+    }
+  }
+}

@@ -6,7 +6,7 @@ part of 'google_drive_files_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$googleDriveClientHash() => r'f2d75e793bfb455f3e82ca12c405289f932ce70b';
+String _$googleDriveClientHash() => r'fb9e9139a80a109960f76fec06580cd824073845';
 
 /// Google Drive client dependency.
 ///
@@ -90,7 +90,7 @@ final googleDriveTempDirectoryProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef GoogleDriveTempDirectoryRef = AutoDisposeFutureProviderRef<Directory>;
-String _$googleDriveFilesHash() => r'201e94272457105a5cdc92f63744ac5bf2a6b378';
+String _$googleDriveFilesHash() => r'bd606cdde05d0587ace4d734f7d34fc17b0aed37';
 
 /// Fetches and refreshes supported Google Drive files.
 ///
@@ -108,7 +108,7 @@ final googleDriveFilesProvider =
     );
 
 typedef _$GoogleDriveFiles = Notifier<GoogleDriveFileListState>;
-String _$googleDriveImportHash() => r'835e7ff2f7d08cb762098ce73d033247bd80924b';
+String _$googleDriveImportHash() => r'ab541eea16e463bbbcd804868317e708bc5b2e1a';
 
 /// Imports supported Google Drive files into RunThru documents.
 ///

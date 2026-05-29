@@ -96,14 +96,14 @@ class ProgressRecord {
 
   /// Serialises to JSON for SharedPreferences.
   Map<String, Object?> toJson() => {
-        'contentId': contentId,
-        'source': source,
-        'title': title,
-        'wordIndex': wordIndex,
-        'totalWords': totalWords,
-        'lastReadAt': lastReadAt.toIso8601String(),
-        'finished': finished,
-      };
+    'contentId': contentId,
+    'source': source,
+    'title': title,
+    'wordIndex': wordIndex,
+    'totalWords': totalWords,
+    'lastReadAt': lastReadAt.toIso8601String(),
+    'finished': finished,
+  };
 }
 
 /// Notifier managing the per-item progress store.
@@ -167,7 +167,9 @@ class ReadingProgress extends _$ReadingProgress {
 
   /// Returns the progress record for [contentId], or null if not found.
   ProgressRecord? getRecord(String contentId) {
-    return state.valueOrNull?.where((r) => r.contentId == contentId).firstOrNull;
+    return state.valueOrNull
+        ?.where((r) => r.contentId == contentId)
+        .firstOrNull;
   }
 
   /// Items in progress (not finished, wordIndex > 0), most-recent first,
@@ -175,16 +177,18 @@ class ReadingProgress extends _$ReadingProgress {
   List<ProgressRecord> get shelf {
     // First dedupe by contentId (handles stale duplicate writes).
     final unique = _indexByContentId(state.valueOrNull ?? const []).values;
-    final filtered = unique
-        .where((r) => !r.finished && r.wordIndex > 0)
-        .toList()
-      ..sort((a, b) => b.lastReadAt.compareTo(a.lastReadAt));
-    // Second-pass dedupe by normalised title — prevents the same book appearing
-    // twice when it was imported from two different paths.
-    final seenTitles = <String>{};
-    final deduped = filtered
-        .where((r) => seenTitles.add(r.title.trim().toLowerCase()))
-        .toList();
+    final filtered =
+        unique.where((r) => !r.finished && r.wordIndex > 0).toList()
+          ..sort((a, b) => b.lastReadAt.compareTo(a.lastReadAt));
+    // Second-pass dedupe local files by normalised title — prevents the same
+    // book appearing twice when it was imported from two different paths.
+    // Remote sources keep their stable contentId because identical titles can
+    // represent distinct Drive files, Instapaper items, or local books.
+    final seenLocalTitles = <String>{};
+    final deduped = filtered.where((r) {
+      if (r.source != 'local') return true;
+      return seenLocalTitles.add(r.title.trim().toLowerCase());
+    }).toList();
     return deduped.take(10).toList();
   }
 

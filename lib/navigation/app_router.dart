@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/clipboard_document.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/models/drive_content_identity.dart';
 import 'package:runthru/navigation/cube_transition.dart';
 import 'package:runthru/navigation/wall_fold_transition.dart';
 import 'package:runthru/screens/home_shell.dart';
@@ -78,6 +80,7 @@ final appRouter = GoRouter(
           key: state.pageKey,
           child: ParallaxReadingScreen(
             filePath: 'clipboard://${clipboardDoc?.title ?? 'clipboard'}',
+            contentSource: 'clipboard',
             clipboardDocument: clipboardDoc,
           ),
         );
@@ -103,6 +106,7 @@ final appRouter = GoRouter(
           key: state.pageKey,
           child: ParallaxReadingScreen(
             filePath: filePath,
+            contentSource: 'instapaper',
             instapaperBookmarkId: bookmarkId,
             instapaperInitialProgress: initialProgress,
             clipboardDocument: ClipboardDocument(
@@ -121,12 +125,27 @@ final appRouter = GoRouter(
       pageBuilder: (context, state) {
         final extra = state.extra as Map<String, Object?>?;
         final document = extra?['document'] as ExtractedDocument?;
-        final title = extra?['title'] as String? ?? 'Google Drive Document';
-        final fileId = extra?['fileId'] as String? ?? title;
+        final identity = extra?['identity'] as DriveContentIdentity?;
+        final title =
+            identity?.name ??
+            extra?['title'] as String? ??
+            'Google Drive Document';
+        final sourceId = driveSourceIdFromRouteExtra(extra, identity);
+        if (sourceId == null) {
+          appLog(
+            'google-drive-route',
+            'operation=drive_source_id classification=missing_identity '
+                'storage=preserved',
+          );
+          throw StateError(
+            'Drive reading route requires a Drive identity or fileId.',
+          );
+        }
         return wallFoldTransitionPage(
           key: state.pageKey,
           child: ParallaxReadingScreen(
-            filePath: 'drive://$fileId',
+            filePath: sourceId,
+            contentSource: 'drive',
             clipboardDocument: ClipboardDocument(
               title: title,
               fullText: '',
@@ -139,6 +158,39 @@ final appRouter = GoRouter(
     ),
   ],
 );
+
+/// Returns a stable Drive source ID from route extras, or null if missing.
+///
+/// A missing Drive identity/fileId must not fall back to a shared persistent
+/// value, because that would collide saved reading progress across documents.
+String? driveSourceIdFromRouteExtra(
+  Map<String, Object?>? extra,
+  DriveContentIdentity? identity,
+) {
+  final identitySourceId = identity?.sourceId;
+  if (_isValidDriveSourceId(identitySourceId)) {
+    return identitySourceId!.trim();
+  }
+
+  final fileId = extra?['fileId'] as String?;
+  if (fileId != null && fileId.trim().isNotEmpty) {
+    return 'drive://${fileId.trim()}';
+  }
+
+  final sourceId = extra?['sourceId'] as String?;
+  if (_isValidDriveSourceId(sourceId)) {
+    return sourceId!.trim();
+  }
+
+  return null;
+}
+
+bool _isValidDriveSourceId(String? sourceId) {
+  if (sourceId == null) return false;
+  final trimmed = sourceId.trim();
+  if (!trimmed.startsWith('drive://')) return false;
+  return trimmed.substring('drive://'.length).trim().isNotEmpty;
+}
 
 /// Routes to the appropriate reading screen based on configuration.
 ///

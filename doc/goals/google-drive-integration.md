@@ -7,12 +7,41 @@ You are Codex 5.5 working in the RunThru Flutter/Dart repo.
 Implement Google Drive as a first-class content source so users can:
 
 1. Connect their Google Drive account.
-2. Browse or search supported Drive files.
+2. Choose supported Drive files explicitly by default.
 3. Import readable files.
 4. Convert imported content into the app’s existing document model.
 5. Open the imported document in the existing paced reading flow.
 
 Mirror the existing Instapaper integration patterns where useful, but keep all Google Drive code clearly named and separate.
+
+## Access Scope Strategy
+
+Current default direction:
+
+- When the selected Drive picker is available, Google Drive uses
+  `https://www.googleapis.com/auth/drive.file`.
+- Users choose one or more files explicitly through a Drive-aware picker when
+  that picker is available in the build.
+- RunThru imports only the selected Drive file IDs.
+- This is the recommended default for business/Workspace trust.
+- Selected-file import does not require the full Drive browser when the picker
+  adapter is available.
+- In builds without a native Drive picker adapter, selected Drive picking is
+  shown as unavailable and does not silently fall back to the OS file picker.
+  Local OS file import remains a separate non-OAuth flow.
+
+Optional full browser:
+
+- Uses `https://www.googleapis.com/auth/drive.readonly`.
+- Requires explicit user opt-in through the "Use full Drive browser" setting.
+- May be blocked by Workspace admins.
+- May require additional Google OAuth verification/compliance before broad
+  public release.
+- This mode is not required for selected-file import when the picker adapter is
+  available.
+
+Runtime Workspace detection is not the product strategy. RunThru does not infer
+account type from email domains and does not inspect `hd` with tokeninfo.
 
 ## Inspect First
 
@@ -74,7 +103,8 @@ Implement:
 - restore session
 - sign out
 - authenticated / unauthenticated / loading / error states
-- minimal read-only Drive scopes
+- selected-file Drive scope by default
+- opt-in read-only Drive scope only for the full Drive browser
 - secure token storage
 - safe user-facing error messages
 
@@ -87,8 +117,8 @@ Create:
 
 Implement:
 
-- list supported files
-- search files by name
+- list supported files only in opt-in full Drive browser mode
+- search files by name only in opt-in full Drive browser mode
 - fetch file metadata
 - download binary files
 - export Google Docs
@@ -141,7 +171,8 @@ Add:
 connect tile
 connected account state if available
 disconnect action
-file list or Drive entry point
+selected-file Drive entry point
+optional full Drive browser file list
 refresh
 loading / empty / error states
 accessible semantics labels
@@ -177,7 +208,7 @@ flutter test
 Acceptance Criteria
 Google Drive appears as a source.
 User can connect and disconnect Google Drive.
-User can list supported Drive files.
+User can list supported Drive files in explicit full-browser mode.
 User can import a Google Doc and read it.
 User can import a Drive PDF and read it.
 Unsupported files do not crash the app.

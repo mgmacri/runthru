@@ -7,12 +7,15 @@ import 'package:runthru/features/content/providers/instapaper_auth_provider.dart
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
+import 'package:runthru/features/content/services/google_drive_client.dart';
 import 'package:runthru/features/content/services/library_import.dart';
 import 'package:runthru/features/content/widgets/google_drive_source_panel.dart';
 import 'package:runthru/features/content/widgets/instapaper_auth_tile.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/store/library_source.dart';
 import 'package:runthru/store/library_sources.dart';
+import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/library_source_menu.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
 
@@ -84,20 +87,36 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
       previous,
       next,
     ) {
-      if (next is GoogleDriveImportDone) {
+      if (next is GoogleDriveImportDone &&
+          next.origin == DriveImportOrigin.sources) {
         ref.read(googleDriveImportProvider.notifier).clear();
         context.push(
           '/read-drive',
           extra: {
             'document': next.document,
+            'identity': next.identity,
             'title': next.file.name,
             'fileId': next.file.id,
+            'sourceId': next.identity.sourceId,
           },
         );
-      } else if (next is GoogleDriveImportError) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(next.message)));
+      } else if (next is GoogleDriveImportError &&
+          next.origin == DriveImportOrigin.sources) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.message),
+            action: next.kind == GoogleDriveFailureKind.permission
+                ? SnackBarAction(
+                    label: 'Grant access',
+                    onPressed: () {
+                      ref
+                          .read(googleDriveFilesProvider.notifier)
+                          .grantAccessAndRefresh();
+                    },
+                  )
+                : null,
+          ),
+        );
       }
     });
 
@@ -219,7 +238,8 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
 
   bool _isUserVisibleSource(LibrarySource source) {
     if (!source.ownsFiles) return !_isLegacyAppDataLocator(source.locator);
-    return source.kind == LibrarySourceKind.folder;
+    return source.kind == LibrarySourceKind.folder &&
+        (source.sourceKey?.isNotEmpty ?? false);
   }
 
   bool _isLegacyAppDataLocator(String locator) {
@@ -324,16 +344,35 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
 
   void _handleGoogleDriveAction(BuildContext ctx) {
     final authState = ref.read(googleDriveAuthProvider);
+    final accessMode =
+        ref.read(configProvider).valueOrNull?.googleDriveAccessMode ??
+        GoogleDriveAccessMode.selectedFilesOnly;
     if (authState is GoogleDriveAuthAuthenticated) {
-      ref.read(googleDriveFilesProvider.notifier).refresh();
+      if (accessMode == GoogleDriveAccessMode.fullDriveBrowser) {
+        ref.read(googleDriveFilesProvider.notifier).refresh();
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text('Refreshing Google Drive...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text('Choose files from Google Drive'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (accessMode == GoogleDriveAccessMode.fullDriveBrowser) {
+      ref.read(googleDriveAuthProvider.notifier).connect();
+    } else {
       ScaffoldMessenger.of(ctx).showSnackBar(
         const SnackBar(
-          content: Text('Refreshing Google Drive...'),
+          content: Text('Choose files from the Google Drive source card.'),
           duration: Duration(seconds: 2),
         ),
       );
-    } else {
-      ref.read(googleDriveAuthProvider.notifier).connect();
     }
   }
 

@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
+import 'package:runthru/features/content/services/google_drive_client.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/services/models.dart';
@@ -43,16 +45,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final rawShelf = ref.read(readingProgressProvider.notifier).shelf;
     // Filter local shelf items to only those whose source file is still active.
     // Non-local sources (Instapaper, Drive) are always included.
-    final activePaths =
-        pdfListAsync.valueOrNull?.map((e) => e.filePath).toSet();
+    final activePaths = pdfListAsync.valueOrNull
+        ?.map((e) => e.filePath)
+        .toSet();
     final shelf = activePaths == null
         ? rawShelf
         : rawShelf
-            .where(
-              (r) =>
-                  r.source != 'local' || activePaths.contains(r.contentId),
-            )
-            .toList();
+              .where(
+                (r) => r.source != 'local' || activePaths.contains(r.contentId),
+              )
+              .toList();
     final authState = ref.watch(instapaperAuthProvider);
     final sourceCount = 1 + (authState is InstapaperAuthAuthenticated ? 1 : 0);
     final normalizedSearchQuery = _searchQuery.trim().toLowerCase();
@@ -77,6 +79,44 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(next.message)));
+      }
+    });
+
+    // Navigate to reader on successful Drive import from Continue Reading.
+    ref.listen<GoogleDriveImportState>(googleDriveImportProvider, (
+      previous,
+      next,
+    ) {
+      if (next is GoogleDriveImportDone &&
+          next.origin == DriveImportOrigin.libraryResume) {
+        ref.read(googleDriveImportProvider.notifier).clear();
+        context.push(
+          '/read-drive',
+          extra: {
+            'document': next.document,
+            'identity': next.identity,
+            'title': next.file.name,
+            'fileId': next.file.id,
+            'sourceId': next.identity.sourceId,
+          },
+        );
+      } else if (next is GoogleDriveImportError &&
+          next.origin == DriveImportOrigin.libraryResume) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.message),
+            action: next.kind == GoogleDriveFailureKind.permission
+                ? SnackBarAction(
+                    label: 'Grant access',
+                    onPressed: () {
+                      ref
+                          .read(googleDriveFilesProvider.notifier)
+                          .grantAccessAndRefresh();
+                    },
+                  )
+                : null,
+          ),
+        );
       }
     });
 
@@ -180,6 +220,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     // Navigate to the correct reader for the content type.
     if (item.contentId.startsWith('instapaper://')) {
       _resumeInstapaperItem(item);
+    } else if (item.contentId.startsWith('drive://')) {
+      _resumeDriveItem(item);
     } else {
       context.push(
         Uri(
@@ -214,6 +256,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
 
     ref.read(instapaperArticleImportProvider.notifier).importArticle(bookmark);
+  }
+
+  /// Resume a Google Drive document from the Continue Reading shelf.
+  ///
+  /// Re-fetches the document with read-only Drive access and lets the reader's
+  /// local bookmark restore the last word position from `drive://{fileId}`.
+  void _resumeDriveItem(ProgressRecord item) {
+    final fileId = item.contentId.replaceFirst('drive://', '');
+    if (fileId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Open this document from Google Drive to resume.'),
+        ),
+      );
+      return;
+    }
+
+    ref
+        .read(googleDriveImportProvider.notifier)
+        .importFileById(fileId, origin: DriveImportOrigin.libraryResume);
   }
 
   void _onBookTap(PdfEntry entry) {

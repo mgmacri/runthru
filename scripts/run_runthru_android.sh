@@ -2,33 +2,37 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AVD_NAME="${RUNTHRU_AVD_NAME:-runthru_api36}"
-DEVICE_ID="${RUNTHRU_DEVICE_ID:-emulator-5554}"
-ENV_FILE="${RUNTHRU_ENV_FILE:-$HOME/.bashrc}"
-EMULATOR_LOG="${RUNTHRU_EMULATOR_LOG:-/tmp/runthru-android-emulator.log}"
-# swiftshader_indirect forces software rendering on the CPU and can cause thermal shutdown.
-# Override with: ANDROID_EMULATOR_GPU=swiftshader_indirect ./run_runthru_android.sh
-ANDROID_EMULATOR_GPU="${ANDROID_EMULATOR_GPU:-host}"
-
-if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-fi
+AVD_NAME="runthru_api36"
+DEVICE_ID="emulator-5554"
+DART_DEFINES_FILE="dart_defines/development.json"
+EMULATOR_LOG="/tmp/runthru-android-emulator.log"
+ANDROID_EMULATOR_GPU="host"
 
 required_vars=(
   INSTAPAPER_CONSUMER_KEY
   INSTAPAPER_CONSUMER_SECRET
-  GOOGLE_SIGN_IN_CLIENT_ID
-  GOOGLE_SIGN_IN_SERVER_CLIENT_ID
+  GOOGLE_WEB_CLIENT_ID
 )
 
-for var_name in "${required_vars[@]}"; do
-  if [[ -z "${!var_name:-}" ]]; then
-    echo "Missing required environment variable: $var_name" >&2
-    echo "Set it in $ENV_FILE or export it before running this script." >&2
-    exit 1
-  fi
-done
+load_json_var_from_dart_defines_file() {
+  local var_name="$1"
+  jq -er --arg var_name "$var_name" '.[$var_name] // empty' "$ROOT_DIR/$DART_DEFINES_FILE"
+}
+
+if [[ ! -f "$ROOT_DIR/$DART_DEFINES_FILE" ]]; then
+  echo "Missing dart defines file: $DART_DEFINES_FILE" >&2
+  echo "Create it from dart_defines/development.json.example." >&2
+  exit 1
+fi
+
+if command -v jq >/dev/null; then
+  for var_name in "${required_vars[@]}"; do
+    if ! load_json_var_from_dart_defines_file "$var_name" >/dev/null; then
+      echo "Missing required dart define in $DART_DEFINES_FILE: $var_name" >&2
+      exit 1
+    fi
+  done
+fi
 
 device_state() {
   adb -s "$DEVICE_ID" get-state 2>/dev/null || true
@@ -66,9 +70,7 @@ if ! adb -s "$DEVICE_ID" shell pidof system_server >/dev/null; then
 fi
 
 cd "$ROOT_DIR"
+echo "Launching Flutter with normative configuration: $DART_DEFINES_FILE"
 exec flutter run -d "$DEVICE_ID" \
-  --dart-define="INSTAPAPER_CONSUMER_KEY=$INSTAPAPER_CONSUMER_KEY" \
-  --dart-define="INSTAPAPER_CONSUMER_SECRET=$INSTAPAPER_CONSUMER_SECRET" \
-  --dart-define="GOOGLE_SIGN_IN_CLIENT_ID=$GOOGLE_SIGN_IN_CLIENT_ID" \
-  --dart-define="GOOGLE_SIGN_IN_SERVER_CLIENT_ID=$GOOGLE_SIGN_IN_SERVER_CLIENT_ID" \
+  --dart-define-from-file="$DART_DEFINES_FILE" \
   "$@"

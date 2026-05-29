@@ -1,16 +1,21 @@
-/// Google account auth service for read-only Drive access.
+/// Google account auth service for selected-file and opt-in Drive access.
 library;
 
-import 'dart:convert';
 import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart' show PlatformException;
-import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
+import 'package:runthru/store/models.dart';
 
-/// Minimal read-only Drive scopes used by RunThru.
+/// Default Drive scope used for files explicitly chosen by the user.
+const List<String> googleDriveFileScopes = [
+  'https://www.googleapis.com/auth/drive.file',
+];
+
+/// Opt-in Drive scope used only for the full Drive browser.
 const List<String> googleDriveReadOnlyScopes = [
   'https://www.googleapis.com/auth/drive.readonly',
 ];
@@ -18,15 +23,10 @@ const List<String> googleDriveReadOnlyScopes = [
 const String _driveUserIdKey = 'google_drive_user_id';
 const String _driveUserEmailKey = 'google_drive_user_email';
 const String _driveUserNameKey = 'google_drive_user_name';
-const String _driveAccessTokenKey = 'google_drive_access_token';
-const String _driveRefreshTokenKey = 'google_drive_refresh_token';
-const String _driveTokenExpiryKey = 'google_drive_token_expiry';
-
-const _authorizationEndpoint =
-    'https://accounts.google.com/o/oauth2/v2/auth';
-const _tokenEndpoint = 'https://oauth2.googleapis.com/token';
-
-const _appAuth = FlutterAppAuth();
+const String _legacyDriveAccessTokenKey = 'google_drive_access_token';
+const String _legacyDriveRefreshTokenKey = 'google_drive_refresh_token';
+const String _legacyDriveTokenExpiryKey = 'google_drive_token_expiry';
+const String _googleOAuthClientIdSuffix = '.apps.googleusercontent.com';
 
 /// Authenticated Google Drive account metadata safe for UI.
 class GoogleDriveUser {
@@ -59,18 +59,8 @@ abstract class GoogleDriveTokenStore {
   /// Persists account metadata in secure storage.
   Future<void> saveUser(GoogleDriveUser user);
 
-  /// Clears saved account metadata.
+  /// Clears saved account metadata and any legacy OAuth token values.
   Future<void> clear();
-
-  /// Returns the stored OAuth access token if valid (Android PKCE flow).
-  Future<String?> readAccessToken() async => null;
-
-  /// Saves an OAuth access token (Android PKCE flow).
-  Future<void> saveAccessToken(
-    String accessToken, {
-    String? refreshToken,
-    DateTime? expiry,
-  }) async {}
 }
 
 /// Flutter secure storage implementation for Drive account metadata.
@@ -103,200 +93,268 @@ class SecureGoogleDriveTokenStore implements GoogleDriveTokenStore {
     await _storage.delete(key: _driveUserIdKey);
     await _storage.delete(key: _driveUserEmailKey);
     await _storage.delete(key: _driveUserNameKey);
-    await _storage.delete(key: _driveAccessTokenKey);
-    await _storage.delete(key: _driveRefreshTokenKey);
-    await _storage.delete(key: _driveTokenExpiryKey);
+    await _storage.delete(key: _legacyDriveAccessTokenKey);
+    await _storage.delete(key: _legacyDriveRefreshTokenKey);
+    await _storage.delete(key: _legacyDriveTokenExpiryKey);
+  }
+}
+
+/// Safe account metadata returned by the Drive sign-in adapter.
+abstract class GoogleDriveSignedInAccount {
+  /// Stable Google account ID.
+  String get id;
+
+  /// Account email address.
+  String get email;
+
+  /// Account display name, if available.
+  String? get displayName;
+}
+
+/// Injectable Google Sign-In surface used by [GoogleDriveAuthService].
+abstract class GoogleDriveSignInAdapter {
+  /// Initializes Google Sign-In before any other operation.
+  Future<void> initialize({String? clientId, String? serverClientId});
+
+  /// Whether this platform supports interactive sign-in.
+  bool supportsAuthenticate();
+
+  /// Attempts to restore a prior account without prompting.
+  Future<GoogleDriveSignedInAccount?> attemptLightweightAuthentication();
+
+  /// Starts an interactive sign-in flow.
+  Future<GoogleDriveSignedInAccount?> authenticate({
+    List<String> scopeHint = const <String>[],
+  });
+
+  /// Returns scoped REST authorization headers for [account].
+  Future<Map<String, String>?> authorizationHeaders(
+    GoogleDriveSignedInAccount account,
+    List<String> scopes, {
+    required bool promptIfNecessary,
+  });
+
+  /// Signs out the current Google account.
+  Future<void> signOut();
+
+  /// Disconnects/revokes the current Google account where supported.
+  Future<void> disconnect();
+}
+
+/// Production Google Sign-In adapter.
+class GoogleSignInDriveAdapter implements GoogleDriveSignInAdapter {
+  /// Creates a production Google Sign-In adapter.
+  GoogleSignInDriveAdapter([GoogleSignIn? signIn])
+    : _signIn = signIn ?? GoogleSignIn.instance;
+
+  final GoogleSignIn _signIn;
+
+  @override
+  Future<void> initialize({String? clientId, String? serverClientId}) {
+    return _signIn.initialize(
+      clientId: clientId,
+      serverClientId: serverClientId,
+    );
   }
 
-  /// Reads the stored access token for Android PKCE flow.
   @override
-  Future<String?> readAccessToken() async {
-    final expiry = await _storage.read(key: _driveTokenExpiryKey);
-    if (expiry != null) {
-      final expiryTime = DateTime.tryParse(expiry);
-      if (expiryTime != null && DateTime.now().isAfter(expiryTime)) {
-        return null; // expired
-      }
-    }
-    return _storage.read(key: _driveAccessTokenKey);
+  bool supportsAuthenticate() => _signIn.supportsAuthenticate();
+
+  @override
+  Future<GoogleDriveSignedInAccount?> attemptLightweightAuthentication() async {
+    final future = _signIn.attemptLightweightAuthentication();
+    final account = future == null ? null : await future;
+    return account == null ? null : _GoogleSignInAccountAdapter(account);
   }
 
-  /// Saves an access token from the Android PKCE flow.
   @override
-  Future<void> saveAccessToken(
-    String accessToken, {
-    String? refreshToken,
-    DateTime? expiry,
+  Future<GoogleDriveSignedInAccount?> authenticate({
+    List<String> scopeHint = const <String>[],
   }) async {
-    await _storage.write(key: _driveAccessTokenKey, value: accessToken);
-    if (refreshToken != null) {
-      await _storage.write(key: _driveRefreshTokenKey, value: refreshToken);
-    }
-    if (expiry != null) {
-      await _storage.write(
-        key: _driveTokenExpiryKey,
-        value: expiry.toIso8601String(),
-      );
-    }
+    final account = await _signIn.authenticate(scopeHint: scopeHint);
+    return _GoogleSignInAccountAdapter(account);
   }
+
+  @override
+  Future<Map<String, String>?> authorizationHeaders(
+    GoogleDriveSignedInAccount account,
+    List<String> scopes, {
+    required bool promptIfNecessary,
+  }) {
+    final googleAccount = (account as _GoogleSignInAccountAdapter)._account;
+    return googleAccount.authorizationClient.authorizationHeaders(
+      scopes,
+      promptIfNecessary: promptIfNecessary,
+    );
+  }
+
+  @override
+  Future<void> signOut() => _signIn.signOut();
+
+  @override
+  Future<void> disconnect() => _signIn.disconnect();
+}
+
+class _GoogleSignInAccountAdapter implements GoogleDriveSignedInAccount {
+  const _GoogleSignInAccountAdapter(this._account);
+
+  final GoogleSignInAccount _account;
+
+  @override
+  String get id => _account.id;
+
+  @override
+  String get email => _account.email;
+
+  @override
+  String? get displayName => _account.displayName;
 }
 
 /// Handles Google Sign-In initialization, restore, connect, and disconnect.
 class GoogleDriveAuthService {
   /// Creates a Google Drive auth service.
+  ///
+  /// [iosClientId] is the iOS-type OAuth client registered in Google Cloud
+  /// Console. It is used as `clientId` in `GoogleSignIn.initialize()` on iOS.
+  ///
+  /// [androidServerClientId] is the Web OAuth client ID used as
+  /// `serverClientId` on Android. If [androidUsesGoogleServicesJson] is true,
+  /// Android initialization may omit [androidServerClientId] and rely on the
+  /// web client configuration supplied through `google-services.json`.
   GoogleDriveAuthService({
-    GoogleSignIn? signIn,
+    GoogleDriveSignInAdapter? signInAdapter,
     GoogleDriveTokenStore tokenStore = const SecureGoogleDriveTokenStore(),
-    String? clientId,
-    String? serverClientId,
-  }) : _signIn = signIn ?? GoogleSignIn.instance,
+    bool? isAndroid,
+    bool? isIOS,
+    String? iosClientId,
+    String? androidServerClientId,
+    bool androidUsesGoogleServicesJson = false,
+  }) : _signIn = signInAdapter ?? GoogleSignInDriveAdapter(),
        _tokenStore = tokenStore,
-       _clientId = clientId,
-       _serverClientId = serverClientId;
+       _isAndroidOverride = isAndroid,
+       _isIOSOverride = isIOS,
+       _iosClientId = iosClientId,
+       _androidServerClientId = androidServerClientId,
+       _androidUsesGoogleServicesJson = androidUsesGoogleServicesJson;
 
-  final GoogleSignIn _signIn;
+  final GoogleDriveSignInAdapter _signIn;
   final GoogleDriveTokenStore _tokenStore;
-  final String? _clientId;
-  final String? _serverClientId;
+  final bool? _isAndroidOverride;
+  final bool? _isIOSOverride;
 
-  GoogleSignInAccount? _account;
+  /// iOS-type OAuth client ID (Google Cloud Console client type: iOS).
+  final String? _iosClientId;
+
+  /// Web OAuth client ID used as Android serverClientId.
+  final String? _androidServerClientId;
+
+  final bool _androidUsesGoogleServicesJson;
+
+  GoogleDriveSignedInAccount? _account;
   bool _initialized = false;
+  bool _androidConfigPresenceLogged = false;
+
+  bool get _isAndroid => _isAndroidOverride ?? Platform.isAndroid;
+
+  bool get _isIOS => _isIOSOverride ?? Platform.isIOS;
 
   /// Restores a lightweight Google Sign-In session if available.
   Future<GoogleDriveUser?> restoreSession() async {
-    if (Platform.isAndroid) {
-      final token = await _tokenStore.readAccessToken();
-      if (token == null) {
-        await _tokenStore.clear();
-        return null;
-      }
-      return _tokenStore.readUser();
-    }
     try {
       await _initialize();
       final restored = await _signIn.attemptLightweightAuthentication();
-      if (restored != null) {
-        _account = restored;
-        final user = _userFromAccount(restored);
-        await _tokenStore.saveUser(user);
-        return user;
+      if (restored == null) {
+        _account = null;
+        await _tokenStore.clear();
+        return null;
       }
-      await _tokenStore.clear();
-      return null;
-    } on GoogleSignInException catch (e) {
-      throw GoogleDriveException(
-        kind: _kindForSignInCode(e.code),
-        message: 'Google lightweight sign-in failed: ${e.code.name}',
+      _account = restored;
+      final user = _userFromAccount(restored);
+      await _tokenStore.saveUser(user);
+      return user;
+    } on GoogleDriveException catch (e) {
+      _logAuthFailure(
+        operation: 'drive_auth_restore',
+        classification: e.classification,
+        exception: e,
+        storageAction: e.shouldClearStoredCredentials ? 'cleared' : 'preserved',
       );
+      if (e.shouldClearStoredCredentials) {
+        await _tokenStore.clear();
+      }
+      rethrow;
+    } on Object catch (e) {
+      final failure = _exceptionToDriveException(
+        e,
+        fallbackKind: GoogleDriveFailureKind.unexpectedResponse,
+        fallbackMessage: 'Could not restore Google Drive.',
+      );
+      _logAuthFailure(
+        operation: 'drive_auth_restore',
+        classification: failure.classification,
+        exception: e,
+        storageAction: failure.shouldClearStoredCredentials
+            ? 'cleared'
+            : 'preserved',
+      );
+      if (failure.shouldClearStoredCredentials) {
+        await _tokenStore.clear();
+      }
+      throw failure;
     }
   }
 
-  /// Starts interactive Google Sign-In and asks for Drive read-only access.
-  Future<GoogleDriveUser> signIn() async {
-    if (Platform.isAndroid) {
-      return _signInAndroid();
-    }
-    await _initialize();
-    if (!_signIn.supportsAuthenticate()) {
-      throw const GoogleDriveException(
-        kind: GoogleDriveFailureKind.auth,
-        message: 'Google Sign-In is not available on this platform.',
-      );
-    }
+  /// Starts interactive Google Sign-In and asks for the selected Drive scope.
+  Future<GoogleDriveUser> signIn({
+    GoogleDriveAccessMode accessMode = GoogleDriveAccessMode.selectedFilesOnly,
+  }) async {
     try {
-      final account = await _signIn.authenticate(
-        scopeHint: googleDriveReadOnlyScopes,
-      );
-      final headers = await account.authorizationClient.authorizationHeaders(
-        googleDriveReadOnlyScopes,
+      await _initialize();
+      if (!_signIn.supportsAuthenticate()) {
+        throw const GoogleDriveException(
+          kind: GoogleDriveFailureKind.uiUnavailable,
+          message: 'Google Sign-In is not available on this platform.',
+          classification: GoogleDriveFailureClassification.missingConfig,
+        );
+      }
+      final scopes = _scopesForAccessMode(accessMode);
+      final account = await _signIn.authenticate(scopeHint: scopes);
+      if (account == null) {
+        throw const GoogleDriveException(
+          kind: GoogleDriveFailureKind.userCancelled,
+          message: 'Google Sign-In was cancelled.',
+          classification: GoogleDriveFailureClassification.permanent,
+        );
+      }
+      final headers = await _signIn.authorizationHeaders(
+        account,
+        scopes,
         promptIfNecessary: true,
       );
       if (headers == null) {
-        throw const GoogleDriveException(
+        throw GoogleDriveException(
           kind: GoogleDriveFailureKind.permission,
-          message: 'Drive read-only access was not granted.',
+          message: _authorizationDeniedMessage(accessMode),
+          classification: GoogleDriveFailureClassification.accessDenied,
         );
       }
       _account = account;
       final user = _userFromAccount(account);
       await _tokenStore.saveUser(user);
       return user;
-    } on GoogleSignInException catch (e) {
-      throw GoogleDriveException(
-        kind: _kindForSignInCode(e.code),
-        message: 'Google Sign-In failed: ${e.code.name}',
-      );
-    }
-  }
-
-  Future<GoogleDriveUser> _signInAndroid() async {
-    final clientId = (_clientId?.isNotEmpty ?? false) ? _clientId! : null;
-    if (clientId == null) {
-      throw const GoogleDriveException(
-        kind: GoogleDriveFailureKind.auth,
-        message: 'Google Sign-In client ID is not configured.',
-      );
-    }
-    try {
-      final redirectUri = _redirectUriForClientId(clientId);
-      final result = await _appAuth.authorizeAndExchangeCode(
-        AuthorizationTokenRequest(
-          clientId,
-          redirectUri,
-          serviceConfiguration: const AuthorizationServiceConfiguration(
-            authorizationEndpoint: _authorizationEndpoint,
-            tokenEndpoint: _tokenEndpoint,
-          ),
-          scopes: googleDriveReadOnlyScopes,
-          promptValues: ['select_account'],
-        ),
-      );
-      final accessToken = result.accessToken;
-      if (accessToken == null) {
-        throw const GoogleDriveException(
-          kind: GoogleDriveFailureKind.permission,
-          message: 'Drive read-only access was not granted.',
-        );
-      }
-      await _tokenStore.saveAccessToken(
-        accessToken,
-        refreshToken: result.refreshToken,
-        expiry: result.accessTokenExpirationDateTime,
-      );
-      final email = _emailFromIdToken(result.idToken) ?? 'unknown@drive';
-      final user = GoogleDriveUser(id: email, email: email);
-      await _tokenStore.saveUser(user);
-      return user;
-    } on PlatformException catch (e) {
-      final desc = (e.message ?? '').toLowerCase();
-      final isCancelled =
-          desc.contains('cancel') || desc.contains('user_cancelled');
-      appLog('google-drive-auth', 'android pkce error code=${e.code}');
-      throw GoogleDriveException(
-        kind: isCancelled
-            ? GoogleDriveFailureKind.userCancelled
-            : GoogleDriveFailureKind.uiUnavailable,
-        message: isCancelled
-            ? 'Google Sign-In was cancelled.'
-            : 'Google Sign-In could not open the sign-in page.',
-      );
     } on GoogleDriveException {
       rethrow;
-    } on Object {
-      appLog('google-drive-auth', 'android pkce unexpected error');
-      throw const GoogleDriveException(
-        kind: GoogleDriveFailureKind.auth,
-        message: 'Google Sign-In failed unexpectedly.',
+    } on Object catch (e) {
+      throw _exceptionToDriveException(
+        e,
+        fallbackKind: GoogleDriveFailureKind.auth,
+        fallbackMessage: 'Google Sign-In failed unexpectedly.',
       );
     }
   }
 
   /// Revokes the Drive connection and clears local metadata.
   Future<void> signOut() async {
-    if (Platform.isAndroid) {
-      await _tokenStore.clear();
-      return;
-    }
     await _initialize();
     try {
       await _signIn.disconnect();
@@ -309,62 +367,190 @@ class GoogleDriveAuthService {
   }
 
   /// Returns scoped authorization headers for Drive REST calls.
-  Future<Map<String, String>> authorizationHeaders() async {
-    if (Platform.isAndroid) {
-      final token = await _tokenStore.readAccessToken();
-      if (token == null) {
+  Future<Map<String, String>> authorizationHeaders({
+    GoogleDriveAccessMode accessMode = GoogleDriveAccessMode.selectedFilesOnly,
+    bool allowInteractivePrompt = false,
+  }) async {
+    try {
+      await _initialize();
+      var account = _account;
+      account ??= await _signIn.attemptLightweightAuthentication();
+      if (account == null) {
         throw const GoogleDriveException(
           kind: GoogleDriveFailureKind.authRequired,
           message: 'Not connected to Google Drive.',
+          classification: GoogleDriveFailureClassification.permanent,
+          shouldClearStoredCredentials: true,
         );
       }
-      return {'Authorization': 'Bearer $token'};
-    }
-    await _initialize();
-    var account = _account;
-    account ??= await _signIn.attemptLightweightAuthentication();
-    if (account == null) {
-      throw const GoogleDriveException(
-        kind: GoogleDriveFailureKind.authRequired,
-        message: 'Not connected to Google Drive.',
+      _account = account;
+      final scopes = _scopesForAccessMode(accessMode);
+      final silentHeaders = await _signIn.authorizationHeaders(
+        account,
+        scopes,
+        promptIfNecessary: false,
       );
-    }
-    _account = account;
-    final headers = await account.authorizationClient.authorizationHeaders(
-      googleDriveReadOnlyScopes,
-      promptIfNecessary: true,
-    );
-    if (headers == null) {
-      throw const GoogleDriveException(
-        kind: GoogleDriveFailureKind.expiredToken,
-        message: 'Drive authorization has expired or was revoked.',
+      if (silentHeaders != null) return silentHeaders;
+
+      if (!allowInteractivePrompt) {
+        throw GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message: _authorizationDeniedMessage(accessMode),
+          classification: GoogleDriveFailureClassification.insufficientScope,
+        );
+      }
+
+      final headers = await _signIn.authorizationHeaders(
+        account,
+        scopes,
+        promptIfNecessary: true,
       );
+      if (headers == null) {
+        throw GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message: _authorizationDeniedMessage(accessMode),
+          classification: GoogleDriveFailureClassification.accessDenied,
+        );
+      }
+      return headers;
+    } on GoogleDriveException catch (e) {
+      _logAuthFailure(
+        operation: 'drive_auth_headers',
+        classification: e.classification,
+        exception: e,
+        storageAction: e.shouldClearStoredCredentials ? 'cleared' : 'preserved',
+      );
+      if (e.shouldClearStoredCredentials) {
+        await _tokenStore.clear();
+      }
+      rethrow;
+    } on Object catch (e) {
+      final failure = _exceptionToDriveException(
+        e,
+        fallbackKind: GoogleDriveFailureKind.auth,
+        fallbackMessage: 'Could not authorize Google Drive.',
+      );
+      _logAuthFailure(
+        operation: 'drive_auth_headers',
+        classification: failure.classification,
+        exception: e,
+        storageAction: failure.shouldClearStoredCredentials
+            ? 'cleared'
+            : 'preserved',
+      );
+      if (failure.shouldClearStoredCredentials) {
+        await _tokenStore.clear();
+      }
+      throw failure;
     }
-    return headers;
   }
 
   Future<void> _initialize() async {
     if (_initialized) return;
+
+    final androidServerClientId = _androidServerClientId?.trim();
+    if (_isAndroid) {
+      _logAndroidConfigPresenceOnce(androidServerClientId);
+      final validationError = validateAndroidServerClientId(
+        androidServerClientId,
+        allowGoogleServicesJson: _androidUsesGoogleServicesJson,
+      );
+      if (validationError != null) {
+        appLog(
+          'google-drive-auth',
+          'operation=drive_auth_initialize platform=android '
+              'event=oauth_config_invalid '
+              'reason=${_androidServerClientIdValidationReason(androidServerClientId)} '
+              'classification=${validationError.classification.name}',
+        );
+        throw validationError;
+      }
+    }
+
     await _signIn.initialize(
-      clientId: _clientId,
-      serverClientId: _serverClientId,
+      clientId: _isIOS ? _emptyToNull(_iosClientId) : null,
+      serverClientId: _isAndroid ? _emptyToNull(androidServerClientId) : null,
     );
     _initialized = true;
   }
 
-  /// Builds the OAuth2 redirect URI for [clientId].
+  /// Validates the Web OAuth client ID used as Android `serverClientId`.
   ///
-  /// Google OAuth web clients use a reverse-domain scheme derived from the
-  /// client ID: `com.googleusercontent.apps.{id_without_suffix}:/oauth2redirect`.
-  static String _redirectUriForClientId(String clientId) {
-    const suffix = '.apps.googleusercontent.com';
-    final id = clientId.endsWith(suffix)
-        ? clientId.substring(0, clientId.length - suffix.length)
-        : clientId;
-    return 'com.googleusercontent.apps.$id:/oauth2redirect';
+  /// Returns a [GoogleDriveException] classified as [missingConfig] if the
+  /// client ID is absent or clearly wrong. Returns null if the ID passes format
+  /// checks, or if [allowGoogleServicesJson] permits a missing value.
+  static GoogleDriveException? validateAndroidServerClientId(
+    String? clientId, {
+    bool allowGoogleServicesJson = false,
+  }) {
+    final value = clientId?.trim();
+    if (value == null || value.isEmpty) {
+      if (allowGoogleServicesJson) return null;
+      return const GoogleDriveException(
+        kind: GoogleDriveFailureKind.auth,
+        message: 'Google web client ID is not configured.',
+        classification: GoogleDriveFailureClassification.missingConfig,
+      );
+    }
+
+    final normalizedLiteral = value.toUpperCase();
+    const literalPlaceholders = {
+      'GOOGLE_WEB_CLIENT_ID',
+      'YOUR_WEB_CLIENT_ID',
+      'YOUR_ANDROID_CLIENT_ID',
+      'GOOGLE_IOS_CLIENT_ID',
+      'YOUR_IOS_CLIENT_ID',
+    };
+    if (literalPlaceholders.contains(normalizedLiteral)) {
+      return const GoogleDriveException(
+        kind: GoogleDriveFailureKind.auth,
+        message:
+            'Google web client ID is misconfigured. Provide the Web OAuth client ID from Google Cloud Console.',
+        classification: GoogleDriveFailureClassification.missingConfig,
+      );
+    }
+
+    if (!value.endsWith(_googleOAuthClientIdSuffix)) {
+      return const GoogleDriveException(
+        kind: GoogleDriveFailureKind.auth,
+        message:
+            'Google web client ID is malformed. Expected a Google OAuth client ID ending in .apps.googleusercontent.com.',
+        classification: GoogleDriveFailureClassification.missingConfig,
+      );
+    }
+
+    final prefix = value.substring(
+      0,
+      value.length - _googleOAuthClientIdSuffix.length,
+    );
+    final lowerPrefix = prefix.toLowerCase();
+    if (prefix.isEmpty ||
+        _containsAny(prefix, const [' ', '/', ':', '_']) ||
+        _containsAny(lowerPrefix, const [
+          'your_',
+          'placeholder',
+          'replace',
+          'dummy',
+          'example',
+          'google_web_client_id',
+          'google_ios_client_id',
+          'your-web',
+          'your_web',
+          'web-client',
+          'web_client',
+        ])) {
+      return const GoogleDriveException(
+        kind: GoogleDriveFailureKind.auth,
+        message:
+            'Google web client ID is misconfigured. Provide the Web OAuth client ID from Google Cloud Console.',
+        classification: GoogleDriveFailureClassification.missingConfig,
+      );
+    }
+
+    return null;
   }
 
-  static GoogleDriveUser _userFromAccount(GoogleSignInAccount account) {
+  static GoogleDriveUser _userFromAccount(GoogleDriveSignedInAccount account) {
     return GoogleDriveUser(
       id: account.id,
       email: account.email,
@@ -372,19 +558,152 @@ class GoogleDriveAuthService {
     );
   }
 
-  static String? _emailFromIdToken(String? idToken) {
-    if (idToken == null) return null;
-    try {
-      final parts = idToken.split('.');
-      if (parts.length < 2) return null;
-      final payload = parts[1];
-      final normalized = base64Url.normalize(payload);
-      final decoded = utf8.decode(base64Url.decode(normalized));
-      final json = jsonDecode(decoded) as Map<String, dynamic>;
-      return json['email'] as String?;
-    } on Object {
-      return null;
+  static List<String> _scopesForAccessMode(GoogleDriveAccessMode accessMode) {
+    return switch (accessMode) {
+      GoogleDriveAccessMode.selectedFilesOnly => googleDriveFileScopes,
+      GoogleDriveAccessMode.fullDriveBrowser => googleDriveReadOnlyScopes,
+    };
+  }
+
+  static String _authorizationDeniedMessage(GoogleDriveAccessMode accessMode) {
+    return switch (accessMode) {
+      GoogleDriveAccessMode.selectedFilesOnly =>
+        'Drive selected-file access was not granted.',
+      GoogleDriveAccessMode.fullDriveBrowser =>
+        'Full Drive browser access was not granted.',
+    };
+  }
+
+  static GoogleDriveException _exceptionToDriveException(
+    Object exception, {
+    required GoogleDriveFailureKind fallbackKind,
+    required String fallbackMessage,
+  }) {
+    if (exception is GoogleDriveException) return exception;
+    if (exception is GoogleSignInException) {
+      final message = _signInExceptionSearchText(exception);
+      if (_isAdminPolicySignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message:
+              'Your Google Workspace admin may need to allow RunThru before you can use this Drive access mode.',
+          classification: GoogleDriveFailureClassification.adminPolicyBlocked,
+        );
+      }
+      if (_isThirdPartyAppBlockedSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message:
+              'Your Google Workspace admin may need to allow RunThru before you can use this Drive access mode.',
+          classification: GoogleDriveFailureClassification.thirdPartyAppBlocked,
+        );
+      }
+      if (_isRevokedGrantSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.auth,
+          message: 'The saved Google Drive connection is no longer valid.',
+          classification: GoogleDriveFailureClassification.permanent,
+          shouldClearStoredCredentials: true,
+        );
+      }
+      if (_isAccessDeniedSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message: 'Drive access was not granted.',
+          classification: GoogleDriveFailureClassification.accessDenied,
+        );
+      }
+      return GoogleDriveException(
+        kind: _kindForSignInCode(exception.code),
+        message: _safeMessageForSignInCode(exception.code),
+        classification: _classificationForSignInCode(exception.code),
+        shouldClearStoredCredentials:
+            exception.code == GoogleSignInExceptionCode.userMismatch,
+      );
     }
+    if (exception is PlatformException) {
+      final message = _platformExceptionSearchText(exception);
+      if (_isAdminPolicySignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message:
+              'Your Google Workspace admin may need to allow RunThru before you can use this Drive access mode.',
+          classification: GoogleDriveFailureClassification.adminPolicyBlocked,
+        );
+      }
+      if (_isThirdPartyAppBlockedSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message:
+              'Your Google Workspace admin may need to allow RunThru before you can use this Drive access mode.',
+          classification: GoogleDriveFailureClassification.thirdPartyAppBlocked,
+        );
+      }
+      if (_isRevokedGrantSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.auth,
+          message: 'The saved Google Drive connection is no longer valid.',
+          classification: GoogleDriveFailureClassification.permanent,
+          shouldClearStoredCredentials: true,
+        );
+      }
+      if (_isAccessDeniedSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.permission,
+          message: 'Drive access was not granted.',
+          classification: GoogleDriveFailureClassification.accessDenied,
+        );
+      }
+      if (_isCancellationSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.userCancelled,
+          message: 'Google Sign-In was cancelled.',
+          classification: GoogleDriveFailureClassification.permanent,
+        );
+      }
+      if (_isNetworkSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.network,
+          message: 'Network connection failed during Google Sign-In.',
+          classification: GoogleDriveFailureClassification.transient,
+        );
+      }
+      if (_isConfigSignal(message)) {
+        return const GoogleDriveException(
+          kind: GoogleDriveFailureKind.auth,
+          message: 'Google Sign-In configuration is invalid.',
+          classification: GoogleDriveFailureClassification.missingConfig,
+        );
+      }
+    }
+    return GoogleDriveException(
+      kind: fallbackKind,
+      message: fallbackMessage,
+      classification: GoogleDriveFailureClassification.transient,
+    );
+  }
+
+  static String _signInExceptionSearchText(GoogleSignInException exception) {
+    final values = <String>[exception.code.name];
+    final description = exception.description;
+    if (description != null && description.length <= 2000) {
+      values.add(description);
+    }
+    final details = exception.details;
+    if (details is String && details.length <= 2000) {
+      values.add(details);
+    } else if (details is Map<Object?, Object?>) {
+      for (final key in const [
+        'error',
+        'error_description',
+        'code',
+        'message',
+      ]) {
+        final value = details[key];
+        if (value is String && value.length <= 1000) values.add(value);
+      }
+    }
+    return values.join(' ').toLowerCase();
   }
 
   static GoogleDriveFailureKind _kindForSignInCode(
@@ -394,14 +713,207 @@ class GoogleDriveAuthService {
       GoogleSignInExceptionCode.canceled =>
         GoogleDriveFailureKind.userCancelled,
       GoogleSignInExceptionCode.interrupted ||
-      GoogleSignInExceptionCode.uiUnavailable =>
-        GoogleDriveFailureKind.uiUnavailable,
+      GoogleSignInExceptionCode.uiUnavailable ||
       GoogleSignInExceptionCode.providerConfigurationError =>
         GoogleDriveFailureKind.uiUnavailable,
       GoogleSignInExceptionCode.userMismatch =>
         GoogleDriveFailureKind.expiredToken,
-      GoogleSignInExceptionCode.clientConfigurationError ||
+      GoogleSignInExceptionCode.clientConfigurationError =>
+        GoogleDriveFailureKind.auth,
       GoogleSignInExceptionCode.unknownError => GoogleDriveFailureKind.auth,
     };
+  }
+
+  static GoogleDriveFailureClassification _classificationForSignInCode(
+    GoogleSignInExceptionCode code,
+  ) {
+    return switch (code) {
+      GoogleSignInExceptionCode.canceled =>
+        GoogleDriveFailureClassification.permanent,
+      GoogleSignInExceptionCode.providerConfigurationError ||
+      GoogleSignInExceptionCode.clientConfigurationError =>
+        GoogleDriveFailureClassification.missingConfig,
+      GoogleSignInExceptionCode.userMismatch =>
+        GoogleDriveFailureClassification.permanent,
+      GoogleSignInExceptionCode.interrupted ||
+      GoogleSignInExceptionCode.uiUnavailable ||
+      GoogleSignInExceptionCode.unknownError =>
+        GoogleDriveFailureClassification.transient,
+    };
+  }
+
+  static String _safeMessageForSignInCode(GoogleSignInExceptionCode code) {
+    return switch (code) {
+      GoogleSignInExceptionCode.canceled => 'Google Sign-In was cancelled.',
+      GoogleSignInExceptionCode.interrupted =>
+        'Google Sign-In did not complete. Try again.',
+      GoogleSignInExceptionCode.uiUnavailable ||
+      GoogleSignInExceptionCode.providerConfigurationError =>
+        'Google Sign-In is not available on this device.',
+      GoogleSignInExceptionCode.userMismatch =>
+        'The saved Google Drive connection expired. Connect again.',
+      GoogleSignInExceptionCode.clientConfigurationError =>
+        'Google Sign-In configuration is invalid.',
+      GoogleSignInExceptionCode.unknownError =>
+        'Google Sign-In failed unexpectedly.',
+    };
+  }
+
+  static String _platformExceptionSearchText(PlatformException exception) {
+    final values = <String>[exception.code];
+    final message = exception.message;
+    if (message != null) values.add(message);
+    final details = exception.details;
+    if (details is Map<Object?, Object?>) {
+      for (final key in const [
+        'error',
+        'error_description',
+        'code',
+        'message',
+      ]) {
+        final value = details[key];
+        if (value is String) values.add(value);
+      }
+    } else if (details is String && details.length <= 2000) {
+      values.add(details);
+    }
+    return values.join(' ').toLowerCase();
+  }
+
+  static String _androidServerClientIdValidationReason(String? clientId) {
+    final value = clientId?.trim();
+    if (value == null || value.isEmpty) return 'web_client_id_missing';
+    final lowerValue = value.toLowerCase();
+    if (_containsAny(lowerValue, const [
+      'google_web_client_id',
+      'google_ios_client_id',
+      'your_web',
+      'your_android',
+      'your_ios',
+      'placeholder',
+      'dummy',
+      'example',
+    ])) {
+      return 'web_client_id_placeholder';
+    }
+    if (!value.endsWith(_googleOAuthClientIdSuffix)) {
+      return 'web_client_id_malformed';
+    }
+    return 'web_client_id_invalid';
+  }
+
+  static bool _isCancellationSignal(String message) =>
+      _containsAny(message, const [
+        'cancel',
+        'canceled',
+        'cancelled',
+        'user_canceled',
+        'user_cancelled',
+        'user cancelled',
+        'user canceled',
+      ]);
+
+  static bool _isNetworkSignal(String message) => _containsAny(message, const [
+    'network',
+    'offline',
+    'socket',
+    'timeout',
+    'timed out',
+    'dns',
+    'host',
+    'service_unavailable',
+    'temporarily_unavailable',
+  ]);
+
+  static bool _isConfigSignal(String message) => _containsAny(message, const [
+    'invalid_client',
+    'invalid client',
+    'unauthorized_client',
+    'configuration',
+    'developer_error',
+    'sign_in_failed',
+  ]);
+
+  // Provider/platform auth errors do not expose a stable structured taxonomy
+  // for every Workspace policy block. These matchers are best-effort
+  // heuristics over bounded provider text; wording may change, unknown text
+  // must fall back to a generic safe auth error, and raw exception text must
+  // not be shown to users because it can contain OAuth payload details.
+  static bool _isAdminPolicySignal(String message) =>
+      _containsAny(message, const [
+        'admin_policy_enforced',
+        'admin policy',
+        'domain policy',
+        'blocked by admin',
+        'blocked by your administrator',
+        'administrator has blocked',
+      ]);
+
+  static bool _isThirdPartyAppBlockedSignal(String message) =>
+      _containsAny(message, const [
+        'third-party app',
+        'third party app',
+        'app access blocked',
+        'access to this app is blocked',
+      ]);
+
+  static bool _isAccessDeniedSignal(String message) =>
+      _containsAny(message, const [
+        'access_denied',
+        'access denied',
+        'permission denied',
+        'not granted',
+      ]);
+
+  static bool _isRevokedGrantSignal(String message) =>
+      _containsAny(message, const [
+        'invalid_grant',
+        'token has been expired or revoked',
+        'grant was revoked',
+        'revoked grant',
+      ]);
+
+  static bool _containsAny(String value, Iterable<String> needles) {
+    for (final needle in needles) {
+      if (value.contains(needle)) return true;
+    }
+    return false;
+  }
+
+  void _logAndroidConfigPresenceOnce(String? serverClientId) {
+    if (_androidConfigPresenceLogged) return;
+    _androidConfigPresenceLogged = true;
+    appLog(
+      'google-drive-auth',
+      'config GOOGLE_WEB_CLIENT_ID=${serverClientId?.trim().isNotEmpty == true ? 'present' : 'missing'} '
+          'googleServicesJson=${_androidUsesGoogleServicesJson ? 'selected' : 'notSelected'}',
+    );
+  }
+
+  static String? _emptyToNull(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  static void _logAuthFailure({
+    required String operation,
+    required GoogleDriveFailureClassification classification,
+    required Object exception,
+    required String storageAction,
+  }) {
+    final platformCode = exception is PlatformException
+        ? ' platformCode=${exception.code}'
+        : '';
+    final signInCode = exception is GoogleSignInException
+        ? ' signInCode=${exception.code.name}'
+        : '';
+    appLog(
+      'google-drive-auth',
+      'operation=$operation kind=${exception is GoogleDriveException ? exception.kind.name : 'unexpectedResponse'} '
+          'classification=${classification.name} '
+          'storage=$storageAction '
+          'exceptionType=${exception.runtimeType}'
+          '$platformCode$signInCode',
+    );
   }
 }

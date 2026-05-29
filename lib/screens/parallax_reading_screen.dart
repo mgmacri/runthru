@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -45,11 +45,37 @@ import 'package:runthru/widgets/reading_goal_presets.dart';
 import 'package:runthru/widgets/wpm_dial_3d.dart';
 import 'package:window_manager/window_manager.dart';
 
+/// Chooses the best local resume index for an imported document.
+///
+/// Drive can have both the legacy bookmark entry and the cross-source
+/// Continue Reading record. The most recent non-finished local record wins.
+@visibleForTesting
+int? bestImportedResumeIndex({
+  BookmarkData? bookmark,
+  ProgressRecord? driveProgress,
+}) {
+  if (driveProgress != null &&
+      !driveProgress.finished &&
+      driveProgress.wordIndex > 0) {
+    final bookmarkIndex = bookmark?.wordIndex ?? 0;
+    if (bookmarkIndex <= 0) return driveProgress.wordIndex;
+
+    final bookmarkTime = bookmark?.timestamp;
+    if (bookmarkTime != null &&
+        driveProgress.lastReadAt.isAfter(bookmarkTime)) {
+      return driveProgress.wordIndex;
+    }
+  }
+
+  return bookmark?.wordIndex;
+}
+
 class ParallaxReadingScreen extends ConsumerStatefulWidget {
   const ParallaxReadingScreen({
     super.key,
     required this.filePath,
     this.clipboardDocument,
+    this.contentSource = 'local',
     this.instapaperBookmarkId,
     this.instapaperInitialProgress = 0.0,
   });
@@ -58,6 +84,11 @@ class ParallaxReadingScreen extends ConsumerStatefulWidget {
 
   /// Optional clipboard document (Rule 28 — ephemeral, session-only).
   final ClipboardDocument? clipboardDocument;
+
+  /// Source classification for reading progress and shelf persistence.
+  ///
+  /// Supported values are `local`, `clipboard`, `instapaper`, and `drive`.
+  final String contentSource;
 
   /// Instapaper bookmark ID — when set, reading progress is synced back to
   /// Instapaper on pause/back and the bookmark is archived on completion.
@@ -130,8 +161,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Cached Instapaper notifier for optimistic list updates and queued sync.
   late final InstapaperBookmarks _instapaperBookmarks;
 
-  /// Session-scoped coalescer for Instapaper progress writes.
-  late final ReadingProgressSync _instapaperProgressSync;
+  /// Session-scoped coalescer for debounced progress writes.
+  late final ReadingProgressSync _progressSync;
 
   /// Cross-source Continue Reading store notifier, cached for safe use in
   /// lifecycle/dispose flushes (drives the library's Continue Reading shelf).
@@ -146,10 +177,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   final TextPainterPool _flatPainterPool = TextPainterPool();
 
   /// Whether this is an ephemeral clipboard reading session (Rule 28).
-  bool get _isClipboard => widget.clipboardDocument != null;
+  bool get _isClipboard => widget.contentSource == 'clipboard';
 
   /// Whether this session is reading an Instapaper article.
-  bool get _isInstapaper => widget.instapaperBookmarkId != null;
+  bool get _isInstapaper =>
+      widget.contentSource == 'instapaper' ||
+      widget.instapaperBookmarkId != null;
+
+  /// Whether this session is reading a Google Drive document.
+  bool get _isDrive =>
+      widget.contentSource == 'drive' || widget.filePath.startsWith('drive://');
 
   WordTimerState _lastTimerState = const WordTimerState();
   int _lastGlobalIndex = 0;
@@ -167,20 +204,26 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _bookmarkNotifier = ref.read(bookmarkProvider(widget.filePath).notifier);
     _instapaperBookmarks = ref.read(instapaperBookmarksProvider.notifier);
     _shelfProgress = ref.read(readingProgressProvider.notifier);
-    _instapaperProgressSync = ReadingProgressSync(
+    final instapaperBookmarkId = widget.instapaperBookmarkId;
+    _progressSync = ReadingProgressSync(
       writeLocalProgress: ({required contentId, required wordIndex}) async {
         if (!_isClipboard || _isInstapaper) {
           _bookmarkNotifier.updateIndex(wordIndex);
           await _bookmarkNotifier.save();
         }
       },
-      writeRemoteProgress: ({required bookmarkId, required progress}) =>
-          _instapaperBookmarks.syncProgress(
-            bookmarkId: bookmarkId,
-            progress: progress,
-          ),
+      remoteWriter: instapaperBookmarkId == null
+          ? null
+          : InstapaperReadingProgressRemoteWriter(
+              bookmarkId: instapaperBookmarkId,
+              writeProgress: ({required bookmarkId, required progress}) =>
+                  _instapaperBookmarks.syncProgress(
+                    bookmarkId: bookmarkId,
+                    progress: progress,
+                  ),
+            ),
       onError: (error, stackTrace) {
-        appLog('instapaper', 'progress sync failed: $error');
+        appLog('progress-sync', 'progress sync failed');
       },
     );
     final initWpm =
@@ -204,16 +247,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       appLog('ParallaxReadingScreen', 'post-frame: loading document');
       if (!mounted) return;
       // Start motion tracking (reduced motion + desktop detected at runtime).
-      final config =
-          ref.read(configProvider).valueOrNull ?? const AppConfig();
+      final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
       if (config.parallaxIntensity != ParallaxIntensity.none) {
         _motionCtrl.start(
           reducedMotion: isReducedMotion(context),
           isDesktop: _isDesktop,
         );
       }
-      if (_isClipboard) {
-        _initClipboardReading();
+      if (widget.clipboardDocument != null) {
+        unawaited(_initClipboardReading());
       } else {
         _initReading();
       }
@@ -225,7 +267,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _endAnalyticsSession();
     _recordShelfProgress();
     unawaited(_flushInstapaperProgress());
-    _instapaperProgressSync.cancelTimers();
+    unawaited(_progressSync.dispose());
     _restartFlashTimer?.cancel();
     _sentenceGapTimer?.cancel();
     _hintController.dispose();
@@ -266,20 +308,18 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// Records current reading position for throttled Instapaper progress sync.
   void _recordInstapaperProgress(WordTimerState timerState, int globalIndex) {
-    final bookmarkId = widget.instapaperBookmarkId;
-    if (bookmarkId == null) return;
+    if (widget.instapaperBookmarkId == null) return;
 
     final totalWords = _allDocWords.isNotEmpty
         ? _allDocWords.length
         : timerState.totalWords;
     final progress = totalWords > 0 ? globalIndex / totalWords : 0.0;
-    _instapaperProgressSync.record(
+    _progressSync.record(
       ReadingProgressSnapshot(
         contentId: widget.filePath,
         wordIndex: globalIndex,
         totalWordCount: totalWords,
         progress: progress,
-        instapaperBookmarkId: bookmarkId,
       ),
     );
   }
@@ -308,7 +348,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     unawaited(
       _shelfProgress.record(
         contentId: widget.filePath,
-        source: _isInstapaper ? 'instapaper' : 'local',
+        source: _progressSource,
         title: _shelfTitle,
         wordIndex: _lastGlobalIndex,
         totalWords: total,
@@ -322,11 +362,17 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     unawaited(_shelfProgress.markFinished(widget.filePath));
   }
 
+  String get _progressSource {
+    if (_isInstapaper) return 'instapaper';
+    if (_isDrive) return 'drive';
+    return 'local';
+  }
+
   /// Flush current reading position to local storage and Instapaper queue.
   Future<void> _flushInstapaperProgress() async {
     if (!_isInstapaper) return;
     _recordInstapaperProgress(_lastTimerState, _lastGlobalIndex);
-    await _instapaperProgressSync.flush(contentId: widget.filePath);
+    await _progressSync.flush(contentId: widget.filePath);
   }
 
   void _cacheTimerPosition(int localIndex) {
@@ -414,7 +460,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// Initialize reading from a clipboard document (Rule 28 — ephemeral).
   /// Skips the preprocessing queue and loads the document directly.
-  void _initClipboardReading() {
+  Future<void> _initClipboardReading() async {
     final clipDoc = widget.clipboardDocument;
     if (clipDoc == null || clipDoc.words.isEmpty) {
       appLog('ParallaxReadingScreen', 'WARN: clipboard document empty');
@@ -424,6 +470,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       'ParallaxReadingScreen',
       '_initClipboardReading: ${clipDoc.words.length} words',
     );
+    if (_isDrive) {
+      await ref.read(readingProgressProvider.future);
+      await ref.read(configProvider.future);
+      if (!mounted) return;
+    }
     _loadClipboardDocument(clipDoc.document);
   }
 
@@ -437,19 +488,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
 
-    // Resume preference for Instapaper: local bookmark (most recent on-device
-    // position) takes priority over the API's coarse 0..1 progress. The local
-    // bookmark is keyed by widget.filePath (stable bookmarkId) and is what we
-    // continually write while reading. Fall back to API progress only when no
-    // local bookmark exists yet.
+    // Resume preference for imported sources: local bookmark (most recent
+    // on-device position) takes priority. Instapaper can then fall back to the
+    // API's coarse 0..1 progress when no local bookmark exists yet.
     final initialProgress = widget.instapaperInitialProgress;
     int startIndex = 0;
     if (_words.isNotEmpty) {
-      final localBookmark = _isInstapaper
-          ? config.bookmarks[widget.filePath]
-          : null;
-      if (localBookmark != null && localBookmark.wordIndex > 0) {
-        startIndex = localBookmark.wordIndex.clamp(0, _words.length - 1);
+      final localProgressIndex = _bestImportedResumeIndex(config);
+      if (localProgressIndex != null && localProgressIndex > 0) {
+        startIndex = localProgressIndex.clamp(0, _words.length - 1);
       } else if (initialProgress > 0) {
         startIndex = (initialProgress * _words.length).round().clamp(
           0,
@@ -470,6 +517,17 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     appLog(
       'ParallaxReadingScreen',
       'clipboard timer.play() wpm=${config.defaultWpm} startIndex=$startIndex initialProgress=$initialProgress',
+    );
+  }
+
+  int? _bestImportedResumeIndex(AppConfig config) {
+    if (!_isInstapaper && !_isDrive) return null;
+
+    return bestImportedResumeIndex(
+      bookmark: config.bookmarks[widget.filePath],
+      driveProgress: _isDrive
+          ? _shelfProgress.getRecord(widget.filePath)
+          : null,
     );
   }
 
@@ -603,8 +661,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
               .read(bookmarkProvider(widget.filePath).notifier)
               .save()
               .catchError((Object e) {
-            appLog('bookmark', 'save failed on pause: $e');
-          }),
+                appLog('bookmark', 'save failed on pause: $e');
+              }),
         );
       }
       _recordShelfProgress();
@@ -759,10 +817,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       // Fire-and-forget: BookmarkNotifier is not auto-disposed, so the async
       // save completes even after this widget is popped.
       unawaited(
-        ref
-            .read(bookmarkProvider(widget.filePath).notifier)
-            .save()
-            .catchError((Object e) {
+        ref.read(bookmarkProvider(widget.filePath).notifier).save().catchError((
+          Object e,
+        ) {
           appLog('bookmark', 'save failed on back: $e');
         }),
       );
@@ -1342,9 +1399,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                             !isPlaying && _words.isNotEmpty,
                                         wpm: wpm,
                                         onResume: _togglePause,
-                                        showUpgradeTip: config.parallaxIntensity ==
+                                        showUpgradeTip:
+                                            config.parallaxIntensity ==
                                             ParallaxIntensity.none,
-                                        onUpgradeTap: config.parallaxIntensity ==
+                                        onUpgradeTap:
+                                            config.parallaxIntensity ==
                                                 ParallaxIntensity.none
                                             ? () => context.push('/settings')
                                             : null,
@@ -1695,10 +1754,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                               }
 
                               return ValueListenableBuilder<Offset>(
-                                valueListenable:
-                                    _motionCtrl.positionNotifier,
-                                builder: (context, headPos, _) =>
-                                    ParallaxRoom(
+                                valueListenable: _motionCtrl.positionNotifier,
+                                builder: (context, headPos, _) => ParallaxRoom(
                                   headX: headPos.dx,
                                   headY: headPos.dy,
                                   // Hide RSVP word during ContextReveal
@@ -1711,8 +1768,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                   fontFamily: config.fontFamily,
                                   wpm: wpm,
                                   intervalMs: (60000 / wpm).round(),
-                                  parallaxIntensity:
-                                      config.parallaxIntensity,
+                                  parallaxIntensity: config.parallaxIntensity,
                                   child: overlayStack,
                                 ),
                               );

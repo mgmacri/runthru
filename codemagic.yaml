@@ -10,7 +10,7 @@ workflows:
       xcode: latest
       groups:
         - instapaper_credentials  # Codemagic env group: INSTAPAPER_CONSUMER_KEY, INSTAPAPER_CONSUMER_SECRET
-        - google_signin_credentials  # Codemagic env group: GOOGLE_SIGN_IN_CLIENT_ID (iOS OAuth client), GOOGLE_SIGN_IN_SERVER_CLIENT_ID
+        - google_signin_credentials  # Codemagic env group: GOOGLE_IOS_CLIENT_ID (iOS OAuth client), GOOGLE_WEB_CLIENT_ID (Web OAuth client for Android serverClientId)
     scripts:
       # CFBundleVersion must strictly increase for App Store Connect.
       # Never rely on the +N in pubspec.yaml being manually bumped.
@@ -42,8 +42,7 @@ workflows:
             --no-codesign \
             --dart-define=INSTAPAPER_CONSUMER_KEY="$INSTAPAPER_CONSUMER_KEY" \
             --dart-define=INSTAPAPER_CONSUMER_SECRET="$INSTAPAPER_CONSUMER_SECRET" \
-            --dart-define=GOOGLE_SIGN_IN_CLIENT_ID="$GOOGLE_SIGN_IN_CLIENT_ID" \
-            --dart-define=GOOGLE_SIGN_IN_SERVER_CLIENT_ID="$GOOGLE_SIGN_IN_SERVER_CLIENT_ID"
+            --dart-define=GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID" \
       - name: Apply signing profiles (after Flutter migration)
         script: |
           xcode-project use-profiles
@@ -89,7 +88,7 @@ workflows:
         PACKAGE_NAME: com.runthru.app
       groups:
         - instapaper_credentials  # Codemagic env group: INSTAPAPER_CONSUMER_KEY, INSTAPAPER_CONSUMER_SECRET
-        - google_signin_credentials  # Codemagic env group: GOOGLE_SIGN_IN_SERVER_CLIENT_ID (Android Web OAuth client)
+        - google_signin_credentials  # Codemagic env group: GOOGLE_WEB_CLIENT_ID (Web OAuth client for Android serverClientId)
         - google_play_credentials # GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
     scripts:
       - name: Get Flutter packages
@@ -114,7 +113,7 @@ workflows:
             --release \
             --dart-define=INSTAPAPER_CONSUMER_KEY="$INSTAPAPER_CONSUMER_KEY" \
             --dart-define=INSTAPAPER_CONSUMER_SECRET="$INSTAPAPER_CONSUMER_SECRET" \
-            --dart-define=GOOGLE_SIGN_IN_SERVER_CLIENT_ID="$GOOGLE_SIGN_IN_SERVER_CLIENT_ID"
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID"
     artifacts:
       - build/app/outputs/bundle/release/app-release.aab
       - build/app/outputs/logs/*.log

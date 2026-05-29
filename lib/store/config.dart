@@ -32,6 +32,15 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
+  /// Sets the Google Drive access mode without requesting new OAuth scopes.
+  Future<void> setGoogleDriveAccessMode(GoogleDriveAccessMode mode) =>
+      _synchronized(() async {
+        final config = state.valueOrNull ?? const AppConfig();
+        final updated = config.copyWith(googleDriveAccessMode: mode);
+        state = AsyncData<AppConfig>(updated);
+        await _persist(updated);
+      });
+
   /// Serializes concurrent read-modify-write cycles to prevent data loss.
   Completer<void>? _lock;
 

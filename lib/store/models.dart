@@ -13,6 +13,15 @@ enum ReadingGoalPreset { deepRead, comfortable, quickScan }
 // P18 Grade B — ORP display condition for anchor character
 enum OrpCondition { orpBoldColor, orpColorOnly, centerAligned }
 
+/// User-selected Google Drive access mode.
+enum GoogleDriveAccessMode {
+  /// Use only files the user explicitly chooses.
+  selectedFilesOnly,
+
+  /// Allow a Drive-wide browser after explicit opt-in.
+  fullDriveBrowser,
+}
+
 class BookmarkData {
   const BookmarkData({
     required this.wordIndex,
@@ -82,6 +91,7 @@ class AppConfig {
     this.letterSpacing = 0.0,
     this.wordSpacing = 0.0,
     this.readingRulerEnabled = false,
+    this.googleDriveAccessMode = GoogleDriveAccessMode.selectedFilesOnly,
   });
 
   factory AppConfig.fromJson(Map<String, Object?> json) {
@@ -107,6 +117,11 @@ class AppConfig {
         OrpCondition.values.asNameMap()[orpConditionStr] ??
         OrpCondition.orpBoldColor;
 
+    final googleDriveAccessModeStr = json['googleDriveAccessMode'] as String?;
+    final googleDriveAccessMode =
+        GoogleDriveAccessMode.values.asNameMap()[googleDriveAccessModeStr] ??
+        GoogleDriveAccessMode.selectedFilesOnly;
+
     return AppConfig(
       defaultWpm: json['defaultWpm'] as int? ?? 300,
       pdfFolderPath: json['pdfFolderPath'] as String?,
@@ -129,6 +144,7 @@ class AppConfig {
       letterSpacing: (json['letterSpacing'] as num?)?.toDouble() ?? 0.0,
       wordSpacing: (json['wordSpacing'] as num?)?.toDouble() ?? 0.0,
       readingRulerEnabled: json['readingRulerEnabled'] as bool? ?? false,
+      googleDriveAccessMode: googleDriveAccessMode,
     );
   }
 
@@ -158,6 +174,9 @@ class AppConfig {
   /// Whether the reading ruler overlay is enabled.
   final bool readingRulerEnabled;
 
+  /// Google Drive access mode selected by the user.
+  final GoogleDriveAccessMode googleDriveAccessMode;
+
   AppConfig copyWith({
     int? defaultWpm,
     String? pdfFolderPath,
@@ -177,6 +196,7 @@ class AppConfig {
     double? letterSpacing,
     double? wordSpacing,
     bool? readingRulerEnabled,
+    GoogleDriveAccessMode? googleDriveAccessMode,
   }) {
     return AppConfig(
       defaultWpm: defaultWpm ?? this.defaultWpm,
@@ -200,6 +220,8 @@ class AppConfig {
       letterSpacing: letterSpacing ?? this.letterSpacing,
       wordSpacing: wordSpacing ?? this.wordSpacing,
       readingRulerEnabled: readingRulerEnabled ?? this.readingRulerEnabled,
+      googleDriveAccessMode:
+          googleDriveAccessMode ?? this.googleDriveAccessMode,
     );
   }
 
@@ -220,5 +242,6 @@ class AppConfig {
     'letterSpacing': letterSpacing,
     'wordSpacing': wordSpacing,
     'readingRulerEnabled': readingRulerEnabled,
+    'googleDriveAccessMode': googleDriveAccessMode.name,
   };
 }

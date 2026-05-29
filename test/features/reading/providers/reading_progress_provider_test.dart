@@ -15,6 +15,28 @@ void main() {
   }
 
   group('ReadingProgress.record', () {
+    test('stores Drive progress under drive:// file identity', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+
+      await container.read(readingProgressProvider.future);
+      final notifier = container.read(readingProgressProvider.notifier);
+
+      await notifier.record(
+        contentId: 'drive://file-123',
+        source: 'drive',
+        title: 'Drive Doc',
+        wordIndex: 42,
+        totalWords: 300,
+      );
+
+      final record = notifier.getRecord('drive://file-123');
+      expect(record, isNotNull);
+      expect(record!.contentId, 'drive://file-123');
+      expect(record.source, 'drive');
+      expect(record.wordIndex, 42);
+    });
+
     test('adds a new entry and makes it available via getRecord', () async {
       final container = makeContainer();
       addTearDown(container.dispose);
@@ -97,6 +119,39 @@ void main() {
   });
 
   group('ReadingProgress.markFinished', () {
+    test('marks a Drive item finished without creating duplicates', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+
+      await container.read(readingProgressProvider.future);
+      final notifier = container.read(readingProgressProvider.notifier);
+
+      await notifier.record(
+        contentId: 'drive://same-file',
+        source: 'drive',
+        title: 'Original Title',
+        wordIndex: 60,
+        totalWords: 100,
+      );
+      await notifier.record(
+        contentId: 'drive://same-file',
+        source: 'drive',
+        title: 'Renamed Title',
+        wordIndex: 100,
+        totalWords: 100,
+      );
+
+      await notifier.markFinished('drive://same-file');
+
+      final all = container.read(readingProgressProvider).valueOrNull ?? [];
+      final matching = all
+          .where((record) => record.contentId == 'drive://same-file')
+          .toList();
+      expect(matching.length, 1);
+      expect(matching.single.finished, isTrue);
+      expect(notifier.shelf, isEmpty);
+    });
+
     test('marks item finished so it leaves the shelf', () async {
       final container = makeContainer();
       addTearDown(container.dispose);
@@ -119,6 +174,89 @@ void main() {
   });
 
   group('ReadingProgress.shelf', () {
+    test('includes in-progress Drive records', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+
+      await container.read(readingProgressProvider.future);
+      final notifier = container.read(readingProgressProvider.notifier);
+
+      await notifier.record(
+        contentId: 'drive://doc-on-shelf',
+        source: 'drive',
+        title: 'Shelf Doc',
+        wordIndex: 12,
+        totalWords: 120,
+      );
+
+      final shelf = notifier.shelf;
+      expect(shelf, hasLength(1));
+      expect(shelf.single.contentId, 'drive://doc-on-shelf');
+      expect(shelf.single.source, 'drive');
+    });
+
+    test(
+      'does not collapse Drive and local records with the same title',
+      () async {
+        final container = makeContainer();
+        addTearDown(container.dispose);
+
+        await container.read(readingProgressProvider.future);
+        final notifier = container.read(readingProgressProvider.notifier);
+
+        await notifier.record(
+          contentId: '/books/report.pdf',
+          source: 'local',
+          title: 'Report',
+          wordIndex: 10,
+          totalWords: 100,
+        );
+        await notifier.record(
+          contentId: 'drive://report-file',
+          source: 'drive',
+          title: 'Report',
+          wordIndex: 20,
+          totalWords: 100,
+        );
+
+        final shelf = notifier.shelf;
+        expect(shelf, hasLength(2));
+        expect(shelf.map((record) => record.contentId), {
+          '/books/report.pdf',
+          'drive://report-file',
+        });
+      },
+    );
+
+    test('reopening the same Drive file updates one shelf record', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+
+      await container.read(readingProgressProvider.future);
+      final notifier = container.read(readingProgressProvider.notifier);
+
+      await notifier.record(
+        contentId: 'drive://same-file',
+        source: 'drive',
+        title: 'Original Title',
+        wordIndex: 10,
+        totalWords: 100,
+      );
+      await notifier.record(
+        contentId: 'drive://same-file',
+        source: 'drive',
+        title: 'Renamed Title',
+        wordIndex: 44,
+        totalWords: 100,
+      );
+
+      final shelf = notifier.shelf;
+      expect(shelf, hasLength(1));
+      expect(shelf.single.contentId, 'drive://same-file');
+      expect(shelf.single.title, 'Renamed Title');
+      expect(shelf.single.wordIndex, 44);
+    });
+
     test('excludes items with wordIndex == 0', () async {
       final container = makeContainer();
       addTearDown(container.dispose);
@@ -209,86 +347,96 @@ void main() {
   });
 
   group('ReadingProgress duplicate handling', () {
-    test('shelf collapses legacy duplicate records sharing a contentId', () async {
-      // Simulate a store written by an older build that persisted the same
-      // item twice (the bug behind duplicate Continue Reading entries).
-      ProgressRecord dup(DateTime at, int wordIndex) => ProgressRecord(
-            contentId: 'file:///dupe.pdf',
-            source: 'local',
-            title: 'Dupe',
-            wordIndex: wordIndex,
-            totalWords: 100,
-            lastReadAt: at,
-          );
-      SharedPreferences.setMockInitialValues({
-        'runthru_reading_progress': jsonEncode([
-          dup(DateTime(2025, 1, 1), 10).toJson(),
-          dup(DateTime(2025, 1, 2), 25).toJson(),
-        ]),
-      });
+    test(
+      'shelf collapses legacy duplicate records sharing a contentId',
+      () async {
+        // Simulate a store written by an older build that persisted the same
+        // item twice (the bug behind duplicate Continue Reading entries).
+        ProgressRecord dup(DateTime at, int wordIndex) => ProgressRecord(
+          contentId: 'file:///dupe.pdf',
+          source: 'local',
+          title: 'Dupe',
+          wordIndex: wordIndex,
+          totalWords: 100,
+          lastReadAt: at,
+        );
+        SharedPreferences.setMockInitialValues({
+          'runthru_reading_progress': jsonEncode([
+            dup(DateTime(2025, 1, 1), 10).toJson(),
+            dup(DateTime(2025, 1, 2), 25).toJson(),
+          ]),
+        });
 
-      final container = makeContainer();
-      addTearDown(container.dispose);
+        final container = makeContainer();
+        addTearDown(container.dispose);
 
-      await container.read(readingProgressProvider.future);
-      final notifier = container.read(readingProgressProvider.notifier);
+        await container.read(readingProgressProvider.future);
+        final notifier = container.read(readingProgressProvider.notifier);
 
-      final shelf = notifier.shelf;
-      expect(shelf.length, 1, reason: 'duplicates must collapse to one entry');
-      // The most recently read instance wins.
-      expect(shelf.first.wordIndex, 25);
-    });
+        final shelf = notifier.shelf;
+        expect(
+          shelf.length,
+          1,
+          reason: 'duplicates must collapse to one entry',
+        );
+        // The most recently read instance wins.
+        expect(shelf.first.wordIndex, 25);
+      },
+    );
 
-    test('record heals pre-existing duplicates and persists a single entry', () async {
-      // Start from a store that already holds a duplicate, then record new
-      // progress for that item. The collapse must survive the round-trip to
-      // SharedPreferences, not just the in-memory view.
-      ProgressRecord dup(int wordIndex) => ProgressRecord(
-            contentId: 'file:///heal.pdf',
-            source: 'local',
-            title: 'Heal',
-            wordIndex: wordIndex,
-            totalWords: 100,
-            lastReadAt: DateTime(2025, 1, 1),
-          );
-      SharedPreferences.setMockInitialValues({
-        'runthru_reading_progress': jsonEncode([
-          dup(10).toJson(),
-          dup(15).toJson(),
-        ]),
-      });
+    test(
+      'record heals pre-existing duplicates and persists a single entry',
+      () async {
+        // Start from a store that already holds a duplicate, then record new
+        // progress for that item. The collapse must survive the round-trip to
+        // SharedPreferences, not just the in-memory view.
+        ProgressRecord dup(int wordIndex) => ProgressRecord(
+          contentId: 'file:///heal.pdf',
+          source: 'local',
+          title: 'Heal',
+          wordIndex: wordIndex,
+          totalWords: 100,
+          lastReadAt: DateTime(2025, 1, 1),
+        );
+        SharedPreferences.setMockInitialValues({
+          'runthru_reading_progress': jsonEncode([
+            dup(10).toJson(),
+            dup(15).toJson(),
+          ]),
+        });
 
-      final container = makeContainer();
-      addTearDown(container.dispose);
+        final container = makeContainer();
+        addTearDown(container.dispose);
 
-      await container.read(readingProgressProvider.future);
-      final notifier = container.read(readingProgressProvider.notifier);
+        await container.read(readingProgressProvider.future);
+        final notifier = container.read(readingProgressProvider.notifier);
 
-      await notifier.record(
-        contentId: 'file:///heal.pdf',
-        source: 'local',
-        title: 'Heal',
-        wordIndex: 30,
-        totalWords: 100,
-      );
+        await notifier.record(
+          contentId: 'file:///heal.pdf',
+          source: 'local',
+          title: 'Heal',
+          wordIndex: 30,
+          totalWords: 100,
+        );
 
-      // In-memory view is clean.
-      expect(
-        notifier.shelf.where((r) => r.contentId == 'file:///heal.pdf').length,
-        1,
-      );
+        // In-memory view is clean.
+        expect(
+          notifier.shelf.where((r) => r.contentId == 'file:///heal.pdf').length,
+          1,
+        );
 
-      // And the persisted JSON now holds exactly one record for that item.
-      final prefs = await SharedPreferences.getInstance();
-      final persisted =
-          jsonDecode(prefs.getString('runthru_reading_progress')!) as List;
-      final persistedForId = persisted
-          .whereType<Map<String, Object?>>()
-          .where((m) => m['contentId'] == 'file:///heal.pdf')
-          .toList();
-      expect(persistedForId.length, 1);
-      expect(persistedForId.single['wordIndex'], 30);
-    });
+        // And the persisted JSON now holds exactly one record for that item.
+        final prefs = await SharedPreferences.getInstance();
+        final persisted =
+            jsonDecode(prefs.getString('runthru_reading_progress')!) as List;
+        final persistedForId = persisted
+            .whereType<Map<String, Object?>>()
+            .where((m) => m['contentId'] == 'file:///heal.pdf')
+            .toList();
+        expect(persistedForId.length, 1);
+        expect(persistedForId.single['wordIndex'], 30);
+      },
+    );
   });
 
   group('ProgressRecord', () {

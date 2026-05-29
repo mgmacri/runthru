@@ -6,7 +6,7 @@ part of 'reading_progress_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$readingProgressHash() => r'6eedcc7d0c79fbea6b2be5b100ba58ff081adc02';
+String _$readingProgressHash() => r'c8bdad7e96dd39407853f8f146a813d7517bbac0';
 
 /// Notifier managing the per-item progress store.
 ///

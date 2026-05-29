@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "repoCanonicalMemory": {
+      "type": "stdio",
+      "command": "/home/matt/.local/bin/uv",
+      "args": [
+        "run",
+        "--offline",
+        "--with",
+        "mcp",
+        "python",
+        "/home/matt/dev/speedy-boyv3/tools/mcp/repo_canonical_memory.py"
+      ],
+      "env": {}
+    },
+    "openaiDeveloperDocs": {
+      "type": "http",
+      "url": "https://developers.openai.com/mcp"
+    }
+  }
+}

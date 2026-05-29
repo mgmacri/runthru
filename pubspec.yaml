@@ -23,7 +23,6 @@ dependencies:
   crypto: ^3.0.3
   http: ^1.2.1
   google_sign_in: ^7.1.1
-  flutter_appauth: ^8.0.0
   flutter_secure_storage: ^9.2.4
   xml: ^6.5.0
   archive: ^4.0.9

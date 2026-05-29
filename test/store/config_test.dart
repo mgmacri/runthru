@@ -8,6 +8,10 @@ void main() {
       expect(config.defaultWpm, 300);
       expect(config.pdfFolderPath, isNull);
       expect(config.bookmarks, isEmpty);
+      expect(
+        config.googleDriveAccessMode,
+        GoogleDriveAccessMode.selectedFilesOnly,
+      );
     });
 
     test('roundtrip JSON serialization', () {
@@ -17,6 +21,7 @@ void main() {
         bookmarks: {
           '/test.pdf': BookmarkData(wordIndex: 42, timestamp: DateTime(2026)),
         },
+        googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
       );
 
       final json = config.toJson();
@@ -25,12 +30,31 @@ void main() {
       expect(restored.defaultWpm, 500);
       expect(restored.pdfFolderPath, '/docs');
       expect(restored.bookmarks['/test.pdf']?.wordIndex, 42);
+      expect(
+        restored.googleDriveAccessMode,
+        GoogleDriveAccessMode.fullDriveBrowser,
+      );
     });
 
     test('fromJson handles missing fields gracefully', () {
       final config = AppConfig.fromJson({});
       expect(config.defaultWpm, 300);
       expect(config.pdfFolderPath, isNull);
+      expect(
+        config.googleDriveAccessMode,
+        GoogleDriveAccessMode.selectedFilesOnly,
+      );
+    });
+
+    test('corrupt Google Drive access mode defaults to selected files', () {
+      final config = AppConfig.fromJson({
+        'googleDriveAccessMode': 'workspaceReadOnly',
+      });
+
+      expect(
+        config.googleDriveAccessMode,
+        GoogleDriveAccessMode.selectedFilesOnly,
+      );
     });
 
     test('v3 fields default safely when JSON keys missing', () {

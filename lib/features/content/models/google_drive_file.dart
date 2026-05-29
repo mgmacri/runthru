@@ -4,6 +4,9 @@ library;
 /// Google Drive MIME type for Google Docs documents.
 const String googleDocsMimeType = 'application/vnd.google-apps.document';
 
+/// Google Drive MIME type for folders.
+const String googleDriveFolderMimeType = 'application/vnd.google-apps.folder';
+
 /// PDF MIME type.
 const String pdfMimeType = 'application/pdf';
 
@@ -61,6 +64,9 @@ class GoogleDriveFile {
 
   /// Whether RunThru can import this file.
   bool get isSupported => supportedDriveMimeTypes.contains(mimeType);
+
+  /// Whether this item is a Drive folder.
+  bool get isFolder => mimeType == googleDriveFolderMimeType;
 
   /// Whether this file must be exported instead of downloaded.
   bool get isGoogleDoc => mimeType == googleDocsMimeType;

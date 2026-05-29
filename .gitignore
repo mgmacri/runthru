@@ -69,3 +69,8 @@ dart_defines/*.json
 .dart_skills/
 
 .fake
+# Build orchestrator (private config + run artifacts)
+tools/orchestrator/orchestrator.env
+tools/orchestrator/runs/
+tools/orchestrator/MANUAL_TESTING_QUEUE.md
+tools/orchestrator/.done_tasks

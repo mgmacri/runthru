@@ -35,7 +35,7 @@ void main() {
         configProvider.overrideWith(
           () => throw UnimplementedError('config not needed'),
         ),
-        pdfListProvider.overrideWith((ref) => Future.value(initialEntries)),
+        pdfListProvider.overrideWith((ref) async => initialEntries),
       ],
     );
   }
