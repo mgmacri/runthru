@@ -96,7 +96,7 @@ List<PolicyBlock> parsePolicyMarkdown(String source) {
 String _stripEmphasis(String text) => text.replaceAll('**', '');
 
 /// Shows the privacy policy bundled with this version of the app.
-class PrivacyPolicyScreen extends StatelessWidget {
+class PrivacyPolicyScreen extends StatefulWidget {
   /// Creates the screen. [loader] is injectable for tests.
   const PrivacyPolicyScreen({super.key, this.loader});
 
@@ -104,8 +104,16 @@ class PrivacyPolicyScreen extends StatelessWidget {
   final Future<String> Function()? loader;
 
   @override
+  State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
+}
+
+class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
+  // Loaded once so rebuilds (e.g. text-scale changes) do not blank the page.
+  late final Future<String> _policy =
+      (widget.loader ?? () => rootBundle.loadString(privacyPolicyAsset))();
+
+  @override
   Widget build(BuildContext context) {
-    final load = loader ?? () => rootBundle.loadString(privacyPolicyAsset);
     return Scaffold(
       backgroundColor: RunThruTokens.shellBase,
       body: SafeArea(
@@ -127,7 +135,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               ),
               Expanded(
                 child: FutureBuilder<String>(
-                  future: load(),
+                  future: _policy,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return Center(

@@ -1,6 +1,6 @@
 # Tests tagged `screenshots` generate store assets and are slow; they are
 # skipped by default. Run them explicitly:
-#   flutter test --tags screenshots test/screenshots
+#   flutter test --tags screenshots --run-skipped test/screenshots
 tags:
   screenshots:
     skip: "store-screenshot generator; run with --tags screenshots"

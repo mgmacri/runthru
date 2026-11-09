@@ -1,6 +1,6 @@
 /// Store-screenshot generator, not a gate test. Excluded from the default
 /// `flutter test` run via `dart_test.yaml`. Generate with:
-///   flutter test --tags screenshots test/screenshots
+///   flutter test --tags screenshots --run-skipped test/screenshots
 @Tags(['screenshots'])
 library;
 
