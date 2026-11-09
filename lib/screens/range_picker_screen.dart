@@ -77,9 +77,13 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
   /// O(1) page → end word index lookup (built once).
   Map<int, int> _pageEndWordIndex = {};
 
+  /// Cached in [initState]: `ref` is unusable inside [dispose].
+  late final PreprocessingQueue _queue;
+
   @override
   void initState() {
     super.initState();
+    _queue = ref.read(preprocessingQueueProvider.notifier);
     _buttonAnimController = RunThruAnimations.createController(
       vsync: this,
       duration: RunThruAnimations.dialEmergeDuration,
@@ -93,9 +97,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
   @override
   void dispose() {
     // Drop the materialized document — the text stays in PdfCache.
-    ref
-        .read(preprocessingQueueProvider.notifier)
-        .releaseDocument(widget.filePath);
+    _queue.releaseDocument(widget.filePath);
     _buttonAnimController.dispose();
     _debounceTimer?.cancel();
     _phaseNotifier.dispose();
