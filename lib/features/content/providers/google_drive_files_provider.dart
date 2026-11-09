@@ -573,7 +573,10 @@ class GoogleDriveImport extends _$GoogleDriveImport {
         document: document,
         origin: origin,
       );
-      appLog('google-drive-import', 'served from local copy name=${local.name}');
+      appLog(
+        'google-drive-import',
+        'served from local copy name=${local.name}',
+      );
       return true;
     } on Object catch (e) {
       appLog('google-drive-import', 'local copy import failed: $e');

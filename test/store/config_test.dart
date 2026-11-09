@@ -205,6 +205,51 @@ void main() {
     );
   });
 
+  // R-01: RunThru 2.0 ships free. Parallax and presets are no longer
+  // clamped to ParallaxIntensity.none for non-premium users.
+  group('ConfigNotifier free release (R-01)', () {
+    test('setParallaxIntensity applies the chosen intensity', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(configProvider.future);
+
+      await container
+          .read(configProvider.notifier)
+          .setParallaxIntensity(ParallaxIntensity.subtle);
+
+      expect(
+        container.read(configProvider).requireValue.parallaxIntensity,
+        ParallaxIntensity.subtle,
+      );
+    });
+
+    test('applyReadingGoalPreset applies the preset parallax', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(configProvider.future);
+      final goal = readingGoalConfigs.first;
+
+      await container
+          .read(configProvider.notifier)
+          .applyReadingGoalPreset(goal);
+
+      final config = container.read(configProvider).requireValue;
+      expect(config.parallaxIntensity, goal.parallaxIntensity);
+      expect(config.defaultWpm, goal.wpm);
+    });
+
+    test('legacy hasPremium key in stored JSON is ignored', () {
+      final config = AppConfig.fromJson({
+        'hasPremium': true,
+        'defaultWpm': 250,
+      });
+      expect(config.defaultWpm, 250);
+      expect(config.toJson().containsKey('hasPremium'), isFalse);
+    });
+  });
+
   group('BookmarkData', () {
     test('roundtrip JSON', () {
       final bookmark = BookmarkData(

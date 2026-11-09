@@ -217,9 +217,7 @@ class GoogleDriveClient {
       }
     } while (pageToken != null && pageToken.isNotEmpty);
 
-    return files.length > maxResults
-        ? files.sublist(0, maxResults)
-        : files;
+    return files.length > maxResults ? files.sublist(0, maxResults) : files;
   }
 
   /// Fetches metadata for one Drive file.
@@ -274,10 +272,7 @@ class GoogleDriveClient {
   /// Streams a Drive blob file to [target] on disk. Memory footprint is
   /// O(stream buffer), not O(file size) — a 200 MB PDF never lands in RAM
   /// (BK-9). Returns [target].
-  Future<File> downloadSelectedFileTo(
-    GoogleDriveFile file,
-    File target,
-  ) async {
+  Future<File> downloadSelectedFileTo(GoogleDriveFile file, File target) async {
     if (file.isGoogleDoc) {
       throw const GoogleDriveException(
         kind: GoogleDriveFailureKind.unsupportedMimeType,

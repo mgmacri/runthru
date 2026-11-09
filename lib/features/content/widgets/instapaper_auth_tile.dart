@@ -404,7 +404,9 @@ class _ConnectedTile extends StatelessWidget {
             width: 34,
             height: 34,
             alignment: Alignment.center,
-            decoration: RunThruDecorations.designerRaisedSmall(borderRadius: 10),
+            decoration: RunThruDecorations.designerRaisedSmall(
+              borderRadius: 10,
+            ),
             child: const Icon(
               Icons.logout_rounded,
               size: 16,
@@ -517,7 +519,8 @@ class _SourceRow extends StatelessWidget {
                   color: RunThruTokens.shellTealTint,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: iconWidget ??
+                child:
+                    iconWidget ??
                     Icon(icon, size: 20, color: RunThruTokens.shellAccent),
               ),
               const SizedBox(width: 13),

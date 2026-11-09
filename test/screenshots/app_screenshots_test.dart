@@ -112,10 +112,7 @@ void main() {
       outputDir,
       '07-range-picker.png',
       const RangePickerScreen(filePath: 'clipboard://screenshot'),
-      config: const AppConfig(
-        hasPremium: true,
-        hasSeenReadingGoalOnboarding: true,
-      ),
+      config: const AppConfig(hasSeenReadingGoalOnboarding: true),
     );
 
     // Unmount and drain timers left by the reading screen (hints, autosave).
@@ -131,7 +128,6 @@ Future<void> _capture(
   Widget screen, {
   AppConfig config = const AppConfig(
     hasSeenReadingGoalOnboarding: true,
-    hasPremium: true,
     googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
   ),
   bool settle = true,

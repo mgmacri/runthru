@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/design/design.dart';
@@ -9,10 +8,6 @@ import 'package:runthru/screens/analytics_screen.dart';
 import 'package:runthru/screens/library_screen.dart';
 import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/screens/sources_screen.dart';
-import 'package:runthru/services/purchase_service.dart';
-import 'package:runthru/store/config.dart';
-import 'package:runthru/store/models.dart';
-import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Shell that wraps the four main tabs in a [PageView] with a bottom
 /// navigation bar. Swipe left/right to move between pages.
@@ -176,7 +171,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               container: true,
               explicitChildNodes: true,
               label: 'Analytics screen',
-              child: const _AnalyticsTab(),
+              child: const AnalyticsScreen(),
             ),
           ),
           _KeepAlivePage(
@@ -536,55 +531,5 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
-  }
-}
-
-/// Analytics tab with premium gate. Shows [AnalyticsScreen] for premium
-/// users, an upsell prompt for free users.
-class _AnalyticsTab extends ConsumerWidget {
-  const _AnalyticsTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
-    if (config.hasPremium || kDebugMode) return const AnalyticsScreen();
-
-    return Scaffold(
-      backgroundColor: RunThruTokens.shellBase,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.lock_outline,
-                size: 48,
-                color: RunThruTokens.shellTextSecondary,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Reading Analytics is a premium feature',
-                style: RunThruTypography.title,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Upgrade to track reading time, streaks, and gentle progress notes.',
-                style: RunThruTypography.body,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              RunThruPrimaryButton(
-                icon: Icons.lock_open,
-                label: 'Unlock Premium',
-                onPressed: () =>
-                    ref.read(purchaseServiceProvider).purchasePremium(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

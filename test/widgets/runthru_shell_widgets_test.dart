@@ -127,9 +127,7 @@ void main() {
 
     // WCAG 2.2 AA — interactive shell widgets must meet tap-target,
     // contrast, and labeling guidelines.
-    testWidgets('shell controls meet accessibility guidelines', (
-      tester,
-    ) async {
+    testWidgets('shell controls meet accessibility guidelines', (tester) async {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(
         _harness(

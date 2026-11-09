@@ -1032,7 +1032,9 @@ class _MockedReaderTourState extends State<MockedReaderTour> {
                   child: IgnorePointer(
                     child: ExcludeSemantics(
                       child: KeyedSubtree(
-                        key: ValueKey('mock-tour-highlight-${step.target.name}'),
+                        key: ValueKey(
+                          'mock-tour-highlight-${step.target.name}',
+                        ),
                         child: TweenAnimationBuilder<Rect?>(
                           tween: RectTween(begin: _holeRect, end: _holeRect),
                           duration: reduced

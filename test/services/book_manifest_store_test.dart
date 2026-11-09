@@ -61,21 +61,32 @@ void main() {
   });
 
   group('chunked-extraction progress', () {
-    test('per-chunk commits persist and resume after a simulated crash', () async {
-      final book = writeBook('big.pdf');
-      await store.setPageCount(book.path, 600);
+    test(
+      'per-chunk commits persist and resume after a simulated crash',
+      () async {
+        final book = writeBook('big.pdf');
+        await store.setPageCount(book.path, 600);
 
-      // Chunks commit 25 pages at a time.
-      await store.setProgress(book.path, lastCompletedPage: 25, pageCount: 600);
-      await store.setProgress(book.path, lastCompletedPage: 50, pageCount: 600);
+        // Chunks commit 25 pages at a time.
+        await store.setProgress(
+          book.path,
+          lastCompletedPage: 25,
+          pageCount: 600,
+        );
+        await store.setProgress(
+          book.path,
+          lastCompletedPage: 50,
+          pageCount: 600,
+        );
 
-      // "Crash": a brand-new store instance (fresh process) reads the
-      // committed progress — extraction resumes at page 50, not page 3.
-      final afterCrash = BookManifestStore();
-      final entry = await afterCrash.entryFor(book.path);
-      expect(entry!.lastCompletedPage, 50);
-      expect(entry.pageCount, 600);
-    });
+        // "Crash": a brand-new store instance (fresh process) reads the
+        // committed progress — extraction resumes at page 50, not page 3.
+        final afterCrash = BookManifestStore();
+        final entry = await afterCrash.entryFor(book.path);
+        expect(entry!.lastCompletedPage, 50);
+        expect(entry.pageCount, 600);
+      },
+    );
 
     test('setPageCount with the same count preserves chunk progress', () async {
       final book = writeBook('same.pdf');

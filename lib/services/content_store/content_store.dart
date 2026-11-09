@@ -130,8 +130,7 @@ class ContentStore {
       final bytes = await file.readAsBytes();
       final section = await Isolate.run(() {
         final json =
-            jsonDecode(utf8.decode(gzip.decode(bytes)))
-                as Map<String, Object?>;
+            jsonDecode(utf8.decode(gzip.decode(bytes))) as Map<String, Object?>;
         return Section.fromJson(json);
       });
       _memory[memKey] = section;
@@ -208,9 +207,7 @@ class ContentStore {
       final bytes = await Isolate.run(
         () => gzip.encode(utf8.encode(jsonEncode(updated.toJson()))),
       );
-      await File(
-        '$dir/${_sectionFileName(sectionIndex)}',
-      ).writeAsBytes(bytes);
+      await File('$dir/${_sectionFileName(sectionIndex)}').writeAsBytes(bytes);
       _memory['$bookId#$sectionIndex'] = updated;
       return true;
     } on Object catch (e) {
@@ -223,10 +220,7 @@ class ContentStore {
 
   /// Persists an extracted document under its identity. Idempotent: a book
   /// whose manifest already exists at the current schema version is skipped.
-  Future<void> putDocument(
-    BookIdentity identity,
-    ExtractedDocument doc,
-  ) async {
+  Future<void> putDocument(BookIdentity identity, ExtractedDocument doc) async {
     if (identity.isProvisional) {
       appLog(_tag, 'refusing provisional identity ${identity.contentHash}');
       return;
@@ -250,13 +244,8 @@ class ContentStore {
         (e) => _IndexEntry(lastReadAt: DateTime.now(), sizeBytes: sizeBytes),
       );
       // Drop stale in-memory sections for this book.
-      _memory.removeWhere(
-        (k, _) => k.startsWith('${identity.contentHash}#'),
-      );
-      appLog(
-        _tag,
-        'ingested book=${identity.displayName} bytes=$sizeBytes',
-      );
+      _memory.removeWhere((k, _) => k.startsWith('${identity.contentHash}#'));
+      appLog(_tag, 'ingested book=${identity.displayName} bytes=$sizeBytes');
     } on Object catch (e) {
       appLog(_tag, 'ingest failed book=${identity.displayName}: $e');
     }
@@ -349,10 +338,8 @@ class ContentStore {
   Future<void> touchLastRead(String bookId) {
     return _updateIndex(
       bookId,
-      (e) => _IndexEntry(
-        lastReadAt: DateTime.now(),
-        sizeBytes: e?.sizeBytes ?? 0,
-      ),
+      (e) =>
+          _IndexEntry(lastReadAt: DateTime.now(), sizeBytes: e?.sizeBytes ?? 0),
     );
   }
 
@@ -461,8 +448,7 @@ class ContentStore {
       final json =
           jsonDecode(await file.readAsString()) as Map<String, Object?>;
       return json.map(
-        (k, v) =>
-            MapEntry(k, _IndexEntry.fromJson(v as Map<String, Object?>)),
+        (k, v) => MapEntry(k, _IndexEntry.fromJson(v as Map<String, Object?>)),
       );
     } on Object {
       return {};

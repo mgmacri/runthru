@@ -132,21 +132,10 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
-  Future<void> setHasPremium(bool value) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
-    final updated = config.copyWith(hasPremium: value);
-    state = AsyncData<AppConfig>(updated);
-    await _persist(updated);
-  });
-
   Future<void> setParallaxIntensity(ParallaxIntensity intensity) =>
       _synchronized(() async {
         final config = state.valueOrNull ?? const AppConfig();
-        // Gate 3D parallax behind premium — free users always get flat
-        final effectiveIntensity = config.hasPremium
-            ? intensity
-            : ParallaxIntensity.none;
-        final updated = config.copyWith(parallaxIntensity: effectiveIntensity);
+        final updated = config.copyWith(parallaxIntensity: intensity);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
       });
@@ -207,13 +196,9 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   Future<void> applyReadingGoalPreset(ReadingGoalConfig goal) =>
       _synchronized(() async {
         final config = state.valueOrNull ?? const AppConfig();
-        // Gate 3D parallax behind premium — free users always get flat
-        final effectiveParallax = config.hasPremium
-            ? goal.parallaxIntensity
-            : ParallaxIntensity.none;
         final updated = config.copyWith(
           defaultWpm: goal.wpm,
-          parallaxIntensity: effectiveParallax,
+          parallaxIntensity: goal.parallaxIntensity,
           readingGoalPreset: goal.preset,
         );
         state = AsyncData<AppConfig>(updated);

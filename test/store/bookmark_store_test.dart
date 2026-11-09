@@ -59,8 +59,10 @@ void main() {
       // path lookup misses, but the content hash matches. (The hash for the
       // new path resolves to the same value; we exercise resolve's hash
       // fallback by injecting the data directly.)
-      final resolvedByHash = store
-          .resolveByContentHash('hash-of-book', adoptPath: '/new/import/book.pdf');
+      final resolvedByHash = store.resolveByContentHash(
+        'hash-of-book',
+        adoptPath: '/new/import/book.pdf',
+      );
       expect(resolvedByHash, isNotNull);
       expect(resolvedByHash!.wordIndex, 512);
 
@@ -91,34 +93,34 @@ void main() {
       expect(prefs.getString('runthru_config'), jsonEncode(legacyConfig));
     });
 
-    test('prune removes orphaned local entries, keeps remote + active', () async {
-      SharedPreferences.setMockInitialValues({});
-      final container = createContainer();
-      final store = container.read(bookmarkStoreProvider.notifier);
-      await container.read(bookmarkStoreProvider.future);
+    test(
+      'prune removes orphaned local entries, keeps remote + active',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = createContainer();
+        final store = container.read(bookmarkStoreProvider.notifier);
+        await container.read(bookmarkStoreProvider.future);
 
-      await store.save('/active.pdf', const BookmarkData(wordIndex: 1));
-      await store.save('/gone.pdf', const BookmarkData(wordIndex: 2));
-      await store.save(
-        '/moved.pdf',
-        const BookmarkData(wordIndex: 3, contentHash: 'still-here'),
-      );
-      await store.save(
-        'instapaper://123',
-        const BookmarkData(wordIndex: 4),
-      );
+        await store.save('/active.pdf', const BookmarkData(wordIndex: 1));
+        await store.save('/gone.pdf', const BookmarkData(wordIndex: 2));
+        await store.save(
+          '/moved.pdf',
+          const BookmarkData(wordIndex: 3, contentHash: 'still-here'),
+        );
+        await store.save('instapaper://123', const BookmarkData(wordIndex: 4));
 
-      final pruned = await store.pruneMissingLocal(
-        activePaths: {'/active.pdf'},
-        activeHashes: {'still-here'},
-      );
+        final pruned = await store.pruneMissingLocal(
+          activePaths: {'/active.pdf'},
+          activeHashes: {'still-here'},
+        );
 
-      expect(pruned, 1);
-      expect(store.resolve('/active.pdf'), isNotNull);
-      expect(store.resolve('/gone.pdf'), isNull);
-      expect(store.resolve('/moved.pdf'), isNotNull, reason: 'hash active');
-      expect(store.resolve('instapaper://123'), isNotNull, reason: 'remote');
-    });
+        expect(pruned, 1);
+        expect(store.resolve('/active.pdf'), isNotNull);
+        expect(store.resolve('/gone.pdf'), isNull);
+        expect(store.resolve('/moved.pdf'), isNotNull, reason: 'hash active');
+        expect(store.resolve('instapaper://123'), isNotNull, reason: 'remote');
+      },
+    );
   });
 
   group('ReadingProgress hardening', () {
@@ -144,9 +146,7 @@ void main() {
       // The oldest records fell off; the newest survive.
       expect(progress.getRecord('/book0.pdf'), isNull);
       expect(
-        progress.getRecord(
-          '/book${ReadingProgress.maxRecords + 24}.pdf',
-        ),
+        progress.getRecord('/book${ReadingProgress.maxRecords + 24}.pdf'),
         isNotNull,
       );
     });

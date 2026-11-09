@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/sample_document.dart';
-import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/models/drive_content_identity.dart';
 import 'package:runthru/navigation/cube_transition.dart';
 import 'package:runthru/navigation/wall_fold_transition.dart';
@@ -14,9 +12,6 @@ import 'package:runthru/screens/range_picker_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
 import 'package:runthru/screens/settings_sources_screen.dart';
 import 'package:runthru/services/models.dart';
-import 'package:runthru/services/purchase_service.dart';
-import 'package:runthru/store/config.dart';
-import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
 
 final appRouter = GoRouter(
@@ -48,7 +43,7 @@ final appRouter = GoRouter(
         return wallFoldTransitionPage(
           key: state.pageKey,
           child: ReadingEntryOnboardingGate(
-            child: _PremiumReadGuard(filePath: filePath),
+            child: ParallaxReadingScreen(filePath: filePath),
           ),
         );
       },
@@ -72,7 +67,7 @@ final appRouter = GoRouter(
         final filePath = state.uri.queryParameters['path'] ?? '';
         return cubeTransitionPage(
           key: state.pageKey,
-          child: _PremiumRangePickerGuard(filePath: filePath),
+          child: RangePickerScreen(filePath: filePath),
         );
       },
     ),
@@ -227,102 +222,4 @@ bool _isValidDriveSourceId(String? sourceId) {
   final trimmed = sourceId.trim();
   if (!trimmed.startsWith('drive://')) return false;
   return trimmed.substring('drive://'.length).trim().isNotEmpty;
-}
-
-/// Routes to the appropriate reading screen based on configuration.
-///
-/// All users now use [ParallaxReadingScreen] which handles every
-/// [ParallaxIntensity] mode — including `none` (flat 2D viewport).
-/// This ensures ContextReveal gestures are available regardless of
-/// premium status.
-class _PremiumReadGuard extends ConsumerWidget {
-  const _PremiumReadGuard({required this.filePath});
-
-  final String filePath;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ParallaxReadingScreen(filePath: filePath);
-  }
-}
-
-/// Gates range-picker behind premium. Free users see the upsell screen.
-class _PremiumRangePickerGuard extends ConsumerWidget {
-  const _PremiumRangePickerGuard({required this.filePath});
-
-  final String filePath;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(configProvider).valueOrNull ?? const AppConfig();
-    if (config.hasPremium) {
-      return RangePickerScreen(filePath: filePath);
-    }
-    return const _RangePickerUpsellScreen();
-  }
-}
-
-/// Upsell screen shown when free users navigate to the range picker.
-class _RangePickerUpsellScreen extends ConsumerWidget {
-  const _RangePickerUpsellScreen();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: RunThruTokens.shellBase,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.auto_stories,
-                size: 48,
-                color: RunThruTokens.shellTextSecondary,
-              ),
-              const SizedBox(height: 16),
-              const Text('Reading Ranges', style: RunThruTypography.title),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  'Select exactly which pages to read — perfect for '
-                  'assigned chapters or focused review. Available with Premium.',
-                  style: RunThruTypography.body.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: RunThruTokens.shellAccent,
-                  foregroundColor: RunThruTokens.shellBase,
-                ),
-                onPressed: () =>
-                    ref.read(purchaseServiceProvider).purchasePremium(),
-                child: Text(
-                  'Upgrade',
-                  style: RunThruTypography.body.copyWith(
-                    color: RunThruTokens.shellBase,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => context.pop(),
-                child: Text(
-                  'Back to Library',
-                  style: RunThruTypography.body.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

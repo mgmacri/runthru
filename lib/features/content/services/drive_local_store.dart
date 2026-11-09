@@ -32,10 +32,7 @@ class DriveLocalCopy {
   });
 
   /// Rebuilds a record from JSON (the local path is derived, not stored).
-  factory DriveLocalCopy.fromJson(
-    Map<String, Object?> json,
-    String dirPath,
-  ) {
+  factory DriveLocalCopy.fromJson(Map<String, Object?> json, String dirPath) {
     final hash = json['contentHash'] as String? ?? '';
     final ext = json['ext'] as String? ?? 'bin';
     return DriveLocalCopy(

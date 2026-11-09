@@ -135,10 +135,8 @@ class BookManifestStore {
       }
       final json = jsonDecode(raw) as Map<String, Object?>;
       _cache = json.map(
-        (k, v) => MapEntry(
-          k,
-          BookManifestEntry.fromJson(v as Map<String, Object?>),
-        ),
+        (k, v) =>
+            MapEntry(k, BookManifestEntry.fromJson(v as Map<String, Object?>)),
       );
     } on Object catch (e) {
       appLog('book_manifest', 'load failed: $e');

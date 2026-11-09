@@ -35,8 +35,7 @@ class SpacingControls extends ConsumerWidget {
                 inactiveTrackColor: RunThruTokens.shellDarkShadow,
                 thumbColor: RunThruTokens.shellTextPrimary,
                 overlayColor: RunThruTokens.shellAccent.withAlpha(51),
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 10),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
                 trackHeight: 5,
               ),
               child: Column(
@@ -57,8 +56,10 @@ class SpacingControls extends ConsumerWidget {
                           onChanged: notifier.setLetterSpacing,
                         ),
                         Padding(
-                          padding:
-                              const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                          padding: const EdgeInsets.only(
+                            left: 8.0,
+                            bottom: 8.0,
+                          ),
                           child: Text(
                             'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
                             style: RunThruTypography.body,
@@ -84,8 +85,10 @@ class SpacingControls extends ConsumerWidget {
                           onChanged: notifier.setWordSpacing,
                         ),
                         Padding(
-                          padding:
-                              const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                          padding: const EdgeInsets.only(
+                            left: 8.0,
+                            bottom: 8.0,
+                          ),
                           child: Text(
                             'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
                             style: RunThruTypography.body,
@@ -105,7 +108,8 @@ class SpacingControls extends ConsumerWidget {
                 children: [
                   Switch.adaptive(
                     value: config.readingRulerEnabled,
-                    activeThumbColor: RunThruTokens.shellAccent, activeTrackColor: RunThruTokens.shellAccent,
+                    activeThumbColor: RunThruTokens.shellAccent,
+                    activeTrackColor: RunThruTokens.shellAccent,
                     onChanged: notifier.setReadingRulerEnabled,
                   ),
                   const SizedBox(width: 8),

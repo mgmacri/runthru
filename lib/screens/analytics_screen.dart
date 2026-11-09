@@ -56,53 +56,53 @@ class AnalyticsScreen extends ConsumerWidget {
             title: 'Reading Wins',
             subtitle: 'Reading wins and rhythm',
           ),
-        _EncouragementCard(stats: stats),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Reading time',
-                  value: _formatReadingTime(stats.totalReadingTime),
-                  icon: Icons.schedule,
-                  iconColor: RunThruTokens.shellAccent,
+          _EncouragementCard(stats: stats),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Reading time',
+                    value: _formatReadingTime(stats.totalReadingTime),
+                    icon: Icons.schedule,
+                    iconColor: RunThruTokens.shellAccent,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _StatCard(
-                  label: 'Streak',
-                  value: _formatStreak(stats.streak),
-                  icon: Icons.local_fire_department,
-                  iconColor: RunThruTokens.shellProcessing,
+                Expanded(
+                  child: _StatCard(
+                    label: 'Streak',
+                    value: _formatStreak(stats.streak),
+                    icon: Icons.local_fire_department,
+                    iconColor: RunThruTokens.shellProcessing,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Today',
-                  value: _formatReadingTime(stats.todayReadingTime),
-                  icon: Icons.today_outlined,
-                  iconColor: RunThruTokens.shellReady,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Today',
+                    value: _formatReadingTime(stats.todayReadingTime),
+                    icon: Icons.today_outlined,
+                    iconColor: RunThruTokens.shellReady,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _StatCard(
-                  label: 'This week',
-                  value: _formatReadingTime(stats.weekReadingTime),
-                  icon: Icons.calendar_view_week_outlined,
-                  iconColor: RunThruTokens.shellAccent,
+                Expanded(
+                  child: _StatCard(
+                    label: 'This week',
+                    value: _formatReadingTime(stats.weekReadingTime),
+                    icon: Icons.calendar_view_week_outlined,
+                    iconColor: RunThruTokens.shellAccent,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
           _RhythmCard(history: stats.readingTimeHistory),
           _FeelGoodCard(stats: stats),
         ],

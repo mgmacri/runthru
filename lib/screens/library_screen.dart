@@ -381,9 +381,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         final displayEntry = processedEntry ?? entry;
 
         final bookmark = tileRef.watch(
-          bookmarkStoreProvider.select(
-            (s) => s.valueOrNull?[entry.filePath],
-          ),
+          bookmarkStoreProvider.select((s) => s.valueOrNull?[entry.filePath]),
         );
         final range = bookmark?.readingRange;
         double readingProgress = 0.0;

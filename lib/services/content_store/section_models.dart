@@ -132,8 +132,7 @@ class Section {
   String? _rawText;
 
   /// Flat word list in reading order (computed once, cached).
-  List<String> get words =>
-      _words ??= [for (final s in sentences) ...s.words];
+  List<String> get words => _words ??= [for (final s in sentences) ...s.words];
 
   /// Joined text of the section — model input shape.
   String get rawText => _rawText ??= words.join(' ');

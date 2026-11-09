@@ -7,7 +7,6 @@ import 'package:runthru/core/wcag_contrast.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/settings/widgets/pacing_panel.dart';
 import 'package:runthru/features/settings/widgets/spacing_controls.dart';
-import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
@@ -149,7 +148,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final configAsync = ref.watch(configProvider);
     final config = configAsync.valueOrNull ?? const AppConfig();
     final notifier = ref.read(configProvider.notifier);
-    final hasPremium = config.hasPremium;
 
     return Scaffold(
       backgroundColor: RunThruTokens.shellBase,
@@ -180,7 +178,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     selected: config.readingGoalPreset,
                     currentWpm: config.defaultWpm,
                     currentParallax: config.parallaxIntensity,
-                    hasPremium: hasPremium,
                     onChanged: notifier.applyReadingGoalPreset,
                   ),
                 ],
@@ -331,206 +328,175 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
 
-            // ── 3D Mode (Premium only — ALL platforms) ──
-            if (hasPremium)
-              NeumorphicCard(
-                surface: RunThruSurface.shell,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('3D Room Mode', style: RunThruTypography.title),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Controls the 3D room depth and parallax effect.',
-                      style: RunThruTypography.caption.copyWith(
-                        color: RunThruTokens.shellTextSecondary,
-                      ),
+            // ── 3D Mode ──
+            NeumorphicCard(
+              surface: RunThruSurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('3D Room Mode', style: RunThruTypography.title),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Controls the 3D room depth and parallax effect.',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
                     ),
-                    const SizedBox(height: 12),
-                    _ParallaxIntensitySelector(
-                      selected: config.parallaxIntensity,
-                      onChanged: notifier.setParallaxIntensity,
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  _ParallaxIntensitySelector(
+                    selected: config.parallaxIntensity,
+                    onChanged: notifier.setParallaxIntensity,
+                  ),
+                ],
               ),
+            ),
 
-            // ── Anchor Color (Premium only) ──
-            if (hasPremium)
-              NeumorphicCard(
-                surface: RunThruSurface.shell,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Anchor Letter Color',
-                      style: RunThruTypography.title,
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: List.generate(
-                        RunThruTokens.anchorColors.length,
-                        (i) {
-                          final color = RunThruTokens.anchorColors[i];
-                          final selected = config.anchorColorIndex == i;
-                          return GestureDetector(
-                            onTap: () => notifier.setAnchorColorIndex(i),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: color,
-                                shape: BoxShape.circle,
-                                border: selected
-                                    ? Border.all(
+            // ── Anchor Color ──
+            NeumorphicCard(
+              surface: RunThruSurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Anchor Letter Color',
+                    style: RunThruTypography.title,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: List.generate(RunThruTokens.anchorColors.length, (
+                      i,
+                    ) {
+                      final color = RunThruTokens.anchorColors[i];
+                      final selected = config.anchorColorIndex == i;
+                      return Semantics(
+                        button: true,
+                        selected: selected,
+                        label:
+                            'Select: anchor color '
+                            '${RunThruTokens.anchorColorNames[i]}',
+                        excludeSemantics: true,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => notifier.setAnchorColorIndex(i),
+                          child: SizedBox.square(
+                            dimension: RunThruA11y.minTapTarget,
+                            child: Center(
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                  border: selected
+                                      ? Border.all(
+                                          color: RunThruTokens.shellTextPrimary,
+                                          width: 3,
+                                        )
+                                      : null,
+                                  boxShadow: selected
+                                      ? [
+                                          BoxShadow(
+                                            color: color.withAlpha(120),
+                                            blurRadius: 8,
+                                            spreadRadius: 2,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: selected
+                                    ? const Icon(
+                                        Icons.check,
                                         color: RunThruTokens.shellTextPrimary,
-                                        width: 3,
+                                        size: 20,
                                       )
                                     : null,
-                                boxShadow: selected
-                                    ? [
-                                        BoxShadow(
-                                          color: color.withAlpha(120),
-                                          blurRadius: 8,
-                                          spreadRadius: 2,
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                              child: selected
-                                  ? const Icon(
-                                      Icons.check,
-                                      color: RunThruTokens.shellTextPrimary,
-                                      size: 20,
-                                    )
-                                  : null,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      RunThruTokens.anchorColorNames[config.anchorColorIndex
-                          .clamp(0, RunThruTokens.anchorColorNames.length - 1)],
-                      style: RunThruTypography.caption,
-                    ),
-                    // P14 Grade C — live preview of anchor color on stage surface
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: const BoxDecoration(
-                        color: RunThruTokens.stageBase,
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                      ),
-                      child: Center(
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'rea',
-                                style: RunThruTypography.readingWord(24),
-                              ),
-                              TextSpan(
-                                text: 'd',
-                                style: RunThruTypography.readingAnchor(
-                                  24,
-                                  color:
-                                      RunThruTokens.anchorColors[config
-                                          .anchorColorIndex
-                                          .clamp(
-                                            0,
-                                            RunThruTokens.anchorColors.length -
-                                                1,
-                                          )],
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'ing',
-                                style: RunThruTypography.readingWord(24),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // P14 Grade C — contrast warning tiers
-                    Builder(
-                      builder: (context) {
-                        final anchorColor =
-                            RunThruTokens.anchorColors[config.anchorColorIndex
-                                .clamp(
-                                  0,
-                                  RunThruTokens.anchorColors.length - 1,
-                                )];
-                        final ratio = WcagContrast.contrastRatio(
-                          anchorColor,
-                          RunThruTokens.stageBase,
-                        );
-                        if (ratio >= 4.5) return const SizedBox.shrink();
-                        final isDanger = ratio < 3.0;
-                        return Semantics(
-                          liveRegion: true,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              isDanger
-                                  ? 'This color is very hard to see — consider a darker option'
-                                  : 'This color may be hard to see at speed',
-                              style: RunThruTypography.caption.copyWith(
-                                color: isDanger
-                                    ? RunThruTokens.shellError
-                                    : RunThruTokens.shellProcessing,
                               ),
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    RunThruTokens.anchorColorNames[config.anchorColorIndex
+                        .clamp(0, RunThruTokens.anchorColorNames.length - 1)],
+                    style: RunThruTypography.caption,
+                  ),
+                  // P14 Grade C — live preview of anchor color on stage surface
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: const BoxDecoration(
+                      color: RunThruTokens.stageBase,
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
                     ),
-                  ],
-                ),
-              ),
-
-            // ── Upgrade to Premium (free users only) ──
-            if (!hasPremium)
-              NeumorphicCard(
-                surface: RunThruSurface.shell,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Unlock 3D Reading',
-                      style: RunThruTypography.title,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Get the immersive 3D cube viewport, head-tracking '
-                      'parallax, custom fonts, and reading range selection.',
-                      style: RunThruTypography.body.copyWith(
-                        color: RunThruTokens.shellTextSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: RunThruTokens.shellAccent,
-                        foregroundColor: RunThruTokens.shellBase,
-                      ),
-                      onPressed: () =>
-                          ref.read(purchaseServiceProvider).purchasePremium(),
-                      child: Text(
-                        'Upgrade',
-                        style: RunThruTypography.body.copyWith(
-                          color: RunThruTokens.shellBase,
+                    child: Center(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'rea',
+                              style: RunThruTypography.readingWord(24),
+                            ),
+                            TextSpan(
+                              text: 'd',
+                              style: RunThruTypography.readingAnchor(
+                                24,
+                                color:
+                                    RunThruTokens.anchorColors[config
+                                        .anchorColorIndex
+                                        .clamp(
+                                          0,
+                                          RunThruTokens.anchorColors.length - 1,
+                                        )],
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'ing',
+                              style: RunThruTypography.readingWord(24),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  // P14 Grade C — contrast warning tiers
+                  Builder(
+                    builder: (context) {
+                      final anchorColor =
+                          RunThruTokens.anchorColors[config.anchorColorIndex
+                              .clamp(0, RunThruTokens.anchorColors.length - 1)];
+                      final ratio = WcagContrast.contrastRatio(
+                        anchorColor,
+                        RunThruTokens.stageBase,
+                      );
+                      if (ratio >= 4.5) return const SizedBox.shrink();
+                      final isDanger = ratio < 3.0;
+                      return Semantics(
+                        liveRegion: true,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            isDanger
+                                ? 'This color is very hard to see — consider a darker option'
+                                : 'This color may be hard to see at speed',
+                            style: RunThruTypography.caption.copyWith(
+                              color: isDanger
+                                  ? RunThruTokens.shellError
+                                  : RunThruTokens.shellProcessing,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
+            ),
 
             // ── App Info (inset) ──
             const NeumorphicCard(
@@ -745,14 +711,12 @@ class _ReadingGoalSelector extends StatefulWidget {
     required this.selected,
     required this.currentWpm,
     required this.currentParallax,
-    required this.hasPremium,
     required this.onChanged,
   });
 
   final ReadingGoalPreset? selected;
   final int currentWpm;
   final ParallaxIntensity currentParallax;
-  final bool hasPremium;
   final void Function(ReadingGoalConfig) onChanged;
 
   @override
@@ -770,10 +734,7 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
       (c) =>
           c.preset == widget.selected &&
           c.wpm == widget.currentWpm &&
-          // Skip parallax check for free users — parallax is gated to none
-          (widget.hasPremium
-              ? c.parallaxIntensity == widget.currentParallax
-              : true),
+          c.parallaxIntensity == widget.currentParallax,
     );
     return match.isEmpty;
   }

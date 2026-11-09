@@ -89,7 +89,6 @@ class AppConfig {
     this.bookmarks = const {},
     this.anchorColorIndex = 0,
     this.fontScale = 1.0,
-    this.hasPremium = false,
     this.parallaxIntensity = ParallaxIntensity.none,
     this.readingGoalPreset,
     this.orpCondition = OrpCondition.orpBoldColor,
@@ -138,7 +137,6 @@ class AppConfig {
       bookmarks: bookmarks,
       anchorColorIndex: json['anchorColorIndex'] as int? ?? 0,
       fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
-      hasPremium: json['hasPremium'] as bool? ?? false,
       parallaxIntensity: parallaxIntensity,
       readingGoalPreset: readingGoalPreset,
       orpCondition: orpCondition,
@@ -165,7 +163,6 @@ class AppConfig {
   final Map<String, BookmarkData> bookmarks;
   final int anchorColorIndex;
   final double fontScale;
-  final bool hasPremium;
   final ParallaxIntensity parallaxIntensity;
   final ReadingGoalPreset? readingGoalPreset;
   final OrpCondition orpCondition;
@@ -201,7 +198,6 @@ class AppConfig {
     Map<String, BookmarkData>? bookmarks,
     int? anchorColorIndex,
     double? fontScale,
-    bool? hasPremium,
     ParallaxIntensity? parallaxIntensity,
     ReadingGoalPreset? readingGoalPreset,
     bool clearReadingGoalPreset = false,
@@ -224,7 +220,6 @@ class AppConfig {
       bookmarks: bookmarks ?? this.bookmarks,
       anchorColorIndex: anchorColorIndex ?? this.anchorColorIndex,
       fontScale: fontScale ?? this.fontScale,
-      hasPremium: hasPremium ?? this.hasPremium,
       parallaxIntensity: parallaxIntensity ?? this.parallaxIntensity,
       readingGoalPreset: clearReadingGoalPreset
           ? null
@@ -250,7 +245,6 @@ class AppConfig {
     'bookmarks': bookmarks.map((key, value) => MapEntry(key, value.toJson())),
     'anchorColorIndex': anchorColorIndex,
     'fontScale': fontScale,
-    'hasPremium': hasPremium,
     'parallaxIntensity': parallaxIntensity.name,
     'readingGoalPreset': readingGoalPreset?.name,
     'orpCondition': orpCondition.name,

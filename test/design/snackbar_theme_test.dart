@@ -37,7 +37,9 @@ void main() {
   });
 
   group('Rendered normal SnackBar resolves the theme', () {
-    testWidgets('content uses themed style, not root textTheme', (tester) async {
+    testWidgets('content uses themed style, not root textTheme', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: theme,
@@ -119,9 +121,7 @@ void main() {
       expect(text.style!.fontWeight, RunThruTypography.body.fontWeight);
 
       // Coral error icon accent.
-      final icon = tester.widget<Icon>(
-        find.byIcon(Icons.error_outline),
-      );
+      final icon = tester.widget<Icon>(find.byIcon(Icons.error_outline));
       expect(icon.color, RunThruTokens.shellError);
 
       // Coral left-edge accent bar.

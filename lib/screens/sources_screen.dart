@@ -525,9 +525,7 @@ class _LibrarySourceRow extends StatelessWidget {
         ? 'Imported copy · stored in app'
         : source.locator;
     return _SourceRow(
-      icon: isFolder
-          ? Icons.folder_outlined
-          : Icons.insert_drive_file_outlined,
+      icon: isFolder ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
       title: source.displayName,
       detail: detail,
       showDivider: showDivider,

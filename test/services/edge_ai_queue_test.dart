@@ -105,24 +105,27 @@ void main() {
       expect(await queue.pending(), isEmpty);
     });
 
-    test('retryable failures keep the request; permanent ones drop it', () async {
-      final processor = _RecordingProcessor()
-        ..throwOnce = const RetryableModelException('model still loading');
-      final queue = EdgeAiQueue(store: store, processor: processor);
-      const request = SectionProcessingRequest(
-        bookId: 'edgebook01',
-        sectionIndex: 0,
-        task: 'summarize',
-      );
+    test(
+      'retryable failures keep the request; permanent ones drop it',
+      () async {
+        final processor = _RecordingProcessor()
+          ..throwOnce = const RetryableModelException('model still loading');
+        final queue = EdgeAiQueue(store: store, processor: processor);
+        const request = SectionProcessingRequest(
+          bookId: 'edgebook01',
+          sectionIndex: 0,
+          task: 'summarize',
+        );
 
-      await queue.enqueue(request);
-      expect((await queue.pending()).map((r) => r.key), [request.key]);
+        await queue.enqueue(request);
+        expect((await queue.pending()).map((r) => r.key), [request.key]);
 
-      // Permanent failure on the retained op → dropped.
-      processor.throwOnce = StateError('unsupported model');
-      await queue.drain();
-      expect(await queue.pending(), isEmpty);
-    });
+        // Permanent failure on the retained op → dropped.
+        processor.throwOnce = StateError('unsupported model');
+        await queue.drain();
+        expect(await queue.pending(), isEmpty);
+      },
+    );
 
     test('requests for evicted sections are dropped, not retried', () async {
       final processor = _RecordingProcessor();

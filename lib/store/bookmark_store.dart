@@ -130,10 +130,7 @@ class BookmarkStoreNotifier extends AsyncNotifier<Map<String, BookmarkData>> {
     map[filePath] = stamped;
     state = AsyncData(map);
     return _serialise((prefs) async {
-      await prefs.setString(
-        '$_kPrefix$filePath',
-        jsonEncode(stamped.toJson()),
-      );
+      await prefs.setString('$_kPrefix$filePath', jsonEncode(stamped.toJson()));
     });
   }
 
@@ -168,11 +165,7 @@ class BookmarkStoreNotifier extends AsyncNotifier<Map<String, BookmarkData>> {
     return doomed.length;
   }
 
-  Future<void> _rekey(
-    String oldPath,
-    String newPath,
-    BookmarkData data,
-  ) async {
+  Future<void> _rekey(String oldPath, String newPath, BookmarkData data) async {
     final map = Map<String, BookmarkData>.from(state.valueOrNull ?? const {});
     map.remove(oldPath);
     map[newPath] = data;

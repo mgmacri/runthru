@@ -143,23 +143,26 @@ void main() {
       expect(loaded!.allWords, doc.allWords);
     });
 
-    test('crash mid-ingest (no manifest) → book absent, re-run heals', () async {
-      final doc = bigDoc();
-      await store.putDocument(identity, doc);
+    test(
+      'crash mid-ingest (no manifest) → book absent, re-run heals',
+      () async {
+        final doc = bigDoc();
+        await store.putDocument(identity, doc);
 
-      // Simulate a crash that lost the manifest after sections were written.
-      File(
-        '${tempDir.path}/content_store/${identity.contentHash}/manifest.json',
-      ).deleteSync();
+        // Simulate a crash that lost the manifest after sections were written.
+        File(
+          '${tempDir.path}/content_store/${identity.contentHash}/manifest.json',
+        ).deleteSync();
 
-      expect(await store.hasBook(identity.contentHash), isFalse);
-      expect(await store.getDocument(identity.contentHash), isNull);
+        expect(await store.hasBook(identity.contentHash), isFalse);
+        expect(await store.getDocument(identity.contentHash), isNull);
 
-      // Re-running the (idempotent) ingestion restores the book fully.
-      await store.putDocument(identity, doc);
-      final loaded = await store.getDocument(identity.contentHash);
-      expect(loaded!.allWords, doc.allWords);
-    });
+        // Re-running the (idempotent) ingestion restores the book fully.
+        await store.putDocument(identity, doc);
+        final loaded = await store.getDocument(identity.contentHash);
+        expect(loaded!.allWords, doc.allWords);
+      },
+    );
 
     test('dry run reports books pending migration without migrating', () async {
       final contentDir = Directory('${tempDir.path}/files')..createSync();
@@ -192,28 +195,31 @@ void main() {
   });
 
   group('eviction', () {
-    test('budget pressure evicts LRU book sections but keeps manifests', () async {
-      const old = BookIdentity(
-        contentHash: 'older0000',
-        sourceId: 'local',
-        displayName: 'Old Book',
-      );
-      await store.putDocument(old, bigDoc());
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      await store.putDocument(identity, bigDoc());
-      await store.touchLastRead(identity.contentHash);
+    test(
+      'budget pressure evicts LRU book sections but keeps manifests',
+      () async {
+        const old = BookIdentity(
+          contentHash: 'older0000',
+          sourceId: 'local',
+          displayName: 'Old Book',
+        );
+        await store.putDocument(old, bigDoc());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await store.putDocument(identity, bigDoc());
+        await store.touchLastRead(identity.contentHash);
 
-      // Budget that fits roughly one book.
-      final oneBook = await store.totalUsageBytes() ~/ 2;
-      await store.enforceBudget(oneBook + 1024);
+        // Budget that fits roughly one book.
+        final oneBook = await store.totalUsageBytes() ~/ 2;
+        await store.enforceBudget(oneBook + 1024);
 
-      // Old book: sections gone, metadata still served.
-      expect(await store.getMetadata(old.contentHash), isNotNull);
-      expect(await store.getSection(old.contentHash, 0), isNull);
+        // Old book: sections gone, metadata still served.
+        expect(await store.getMetadata(old.contentHash), isNotNull);
+        expect(await store.getSection(old.contentHash, 0), isNull);
 
-      // Recently read book intact.
-      expect(await store.getSection(identity.contentHash, 0), isNotNull);
-    });
+        // Recently read book intact.
+        expect(await store.getSection(identity.contentHash, 0), isNotNull);
+      },
+    );
 
     test('no eviction under budget', () async {
       await store.putDocument(identity, bigDoc());

@@ -38,9 +38,7 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     contentIdentityProvider,
   );
 
-  late final BookManifestStore _manifest = _ref.read(
-    bookManifestStoreProvider,
-  );
+  late final BookManifestStore _manifest = _ref.read(bookManifestStoreProvider);
 
   /// Pages (or EPUB chapters) extracted per phase-2 chunk. Each chunk gets
   /// its own timeout and durable commit. Mutable for tests/tuning.
@@ -979,9 +977,8 @@ final pdfProgressProvider = Provider.family<double, String>((ref, filePath) {
 final pdfFailedCountProvider = Provider<int>((ref) {
   return ref.watch(
     preprocessingQueueProvider.select(
-      (m) => m.values
-          .where((e) => e.status == PdfStatus.permanentlyFailed)
-          .length,
+      (m) =>
+          m.values.where((e) => e.status == PdfStatus.permanentlyFailed).length,
     ),
   );
 });

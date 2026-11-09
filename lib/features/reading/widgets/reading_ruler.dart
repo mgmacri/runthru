@@ -65,7 +65,10 @@ class _RulerPainter extends CustomPainter {
 
     canvas.drawLine(Offset(0, topLine), Offset(size.width, topLine), paint);
     canvas.drawLine(
-        Offset(0, bottomLine), Offset(size.width, bottomLine), paint);
+      Offset(0, bottomLine),
+      Offset(size.width, bottomLine),
+      paint,
+    );
   }
 
   @override

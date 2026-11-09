@@ -708,9 +708,7 @@ void main() {
     test('imports HTML files and normalises content', () async {
       const html = '<p>First sentence.</p><p>Second sentence.</p>';
       final container = _container(
-        client: _FakeGoogleDriveClient(
-          downloadedBytes: html.codeUnits,
-        ),
+        client: _FakeGoogleDriveClient(downloadedBytes: html.codeUnits),
       );
       addTearDown(container.dispose);
       final subscription = container.listen(
@@ -814,14 +812,16 @@ void main() {
       );
       addTearDown(subscription.close);
 
-      await container.read(googleDriveImportProvider.notifier).importFile(
-        const GoogleDriveFile(
-          id: 'huge',
-          name: 'Scanned.pdf',
-          mimeType: pdfMimeType,
-          sizeBytes: GoogleDriveImport.maxPdfImportBytes + 1,
-        ),
-      );
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'huge',
+              name: 'Scanned.pdf',
+              mimeType: pdfMimeType,
+              sizeBytes: GoogleDriveImport.maxPdfImportBytes + 1,
+            ),
+          );
 
       final state = container.read(googleDriveImportProvider);
       expect(state, isA<GoogleDriveImportError>());
@@ -849,14 +849,16 @@ void main() {
       );
       addTearDown(subscription.close);
 
-      await container.read(googleDriveImportProvider.notifier).importFile(
-        const GoogleDriveFile(
-          id: 'ok-pdf',
-          name: 'Fine.pdf',
-          mimeType: pdfMimeType,
-          sizeBytes: GoogleDriveImport.maxPdfImportBytes - 1,
-        ),
-      );
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'ok-pdf',
+              name: 'Fine.pdf',
+              mimeType: pdfMimeType,
+              sizeBytes: GoogleDriveImport.maxPdfImportBytes - 1,
+            ),
+          );
 
       expect(
         container.read(googleDriveImportProvider),
@@ -878,11 +880,13 @@ void main() {
           googleDriveAuthProvider.overrideWith(
             () => _FakeGoogleDriveAuth(_connected),
           ),
-          configProvider.overrideWith(() => _FakeConfigNotifier(
-            const AppConfig(
-              googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+          configProvider.overrideWith(
+            () => _FakeConfigNotifier(
+              const AppConfig(
+                googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+              ),
             ),
-          )),
+          ),
           googleDriveClientProvider.overrideWithValue(
             _FakeGoogleDriveClient(downloadedBytes: [1, 2, 3]),
           ),
@@ -915,13 +919,15 @@ void main() {
       );
       addTearDown(subscription.close);
 
-      await container.read(googleDriveImportProvider.notifier).importFile(
-        const GoogleDriveFile(
-          id: 'clean1',
-          name: 'Tidy.pdf',
-          mimeType: pdfMimeType,
-        ),
-      );
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'clean1',
+              name: 'Tidy.pdf',
+              mimeType: pdfMimeType,
+            ),
+          );
 
       expect(
         container.read(googleDriveImportProvider),
@@ -943,11 +949,13 @@ void main() {
           googleDriveAuthProvider.overrideWith(
             () => _FakeGoogleDriveAuth(_connected),
           ),
-          configProvider.overrideWith(() => _FakeConfigNotifier(
-            const AppConfig(
-              googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+          configProvider.overrideWith(
+            () => _FakeConfigNotifier(
+              const AppConfig(
+                googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+              ),
             ),
-          )),
+          ),
           googleDriveClientProvider.overrideWithValue(
             _FakeGoogleDriveClient(downloadedBytes: [1, 2, 3]),
           ),
@@ -976,13 +984,15 @@ void main() {
       );
       addTearDown(subscription.close);
 
-      await container.read(googleDriveImportProvider.notifier).importFile(
-        const GoogleDriveFile(
-          id: 'fail1',
-          name: 'Broken.pdf',
-          mimeType: pdfMimeType,
-        ),
-      );
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'fail1',
+              name: 'Broken.pdf',
+              mimeType: pdfMimeType,
+            ),
+          );
 
       expect(
         container.read(googleDriveImportProvider),

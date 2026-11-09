@@ -2292,9 +2292,7 @@ class _ContextSentencePanel extends StatelessWidget {
                 children: [
                   for (var i = 0; i < words.length; i++)
                     TextSpan(
-                      text: i == words.length - 1
-                          ? words[i]
-                          : '${words[i]} ',
+                      text: i == words.length - 1 ? words[i] : '${words[i]} ',
                       style: i == highlightIndex ? inked : faint,
                     ),
                 ],

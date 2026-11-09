@@ -37,7 +37,7 @@ Widget _harness(AppConfig config) {
 void main() {
   group('ParallaxIntensitySelector', () {
     testWidgets('shows 4 segments in correct order', (tester) async {
-      await tester.pumpWidget(_harness(const AppConfig(hasPremium: true)));
+      await tester.pumpWidget(_harness(const AppConfig()));
       await tester.pumpAndSettle();
 
       // Scroll to the 3D Room Mode section (it's below the fold in ListView)
@@ -57,12 +57,7 @@ void main() {
 
     testWidgets('tapping a segment updates selection', (tester) async {
       await tester.pumpWidget(
-        _harness(
-          const AppConfig(
-            hasPremium: true,
-            parallaxIntensity: ParallaxIntensity.subtle,
-          ),
-        ),
+        _harness(const AppConfig(parallaxIntensity: ParallaxIntensity.subtle)),
       );
       await tester.pumpAndSettle();
 
@@ -94,12 +89,7 @@ void main() {
 
     testWidgets('each segment has semantics label and hint', (tester) async {
       await tester.pumpWidget(
-        _harness(
-          const AppConfig(
-            hasPremium: true,
-            parallaxIntensity: ParallaxIntensity.subtle,
-          ),
-        ),
+        _harness(const AppConfig(parallaxIntensity: ParallaxIntensity.subtle)),
       );
       await tester.pumpAndSettle();
 
