@@ -26,10 +26,10 @@ and not on the critical path gets hidden or removed, not fixed.
 
 | Decision | Why |
 |----------|-----|
-| **Ship free. Remove the premium gate and the purchase stub.** | P-4 stub grants premium unconditionally and would fail store review. Real IAP is weeks of work. Monetisation returns in 2.1. |
+| **One-time purchase: RunThru Unlock (owner decision 2026-11-09).** | Real non-consumable IAP via `in_app_purchase`, product `runthru_unlock`. Unlocks Reading Wins, page ranges, 3D room. Reading, all modes, sources and legibility settings stay free. Client-side entitlement only; server receipt validation and refund revocation are 2.1. |
 | **Remove the Discover / OPDS "Free Bookstore" tab.** | Planned M1.6 removal. Less surface, fewer third-party failure modes. |
 | **Google Drive ships only if the OAuth dart-defines are wired in Codemagic and the iOS URL scheme is set; otherwise hide the source.** | Code is done and tested but non-functional without runtime config. A visible broken source is worse than no source. |
-| **Sentence mode: hide it if it cannot be aligned with the design reference in one lane-day.** | Paragraph and Full Page are rebuilt; Sentence is not. |
+| **Sentence mode ships (owner decision 2026-11-09).** | Aligned with the design reference's karaoke line. |
 | **AI integration does not block release.** | Plumbing is safe to ship dormant. See `AI_INTEGRATION.md`. |
 | **Drop the Android `CAMERA` permission.** | Head tracking uses gyro only; the permission invites Play review questions. |
 | **Keep `/read-legacy`.** | Deep-link fallback, zero user-facing cost. |
@@ -88,7 +88,7 @@ Steps are ordered. Steps 2–5 run as parallel swarm lanes.
 
 ## After release (2.1 backlog, not now)
 
-- Real IAP (StoreKit 2 / Play Billing) with server-side receipt validation.
+- Server-side receipt validation and refund revocation for RunThru Unlock.
 - AI section summaries and difficulty hints (`AI_INTEGRATION.md`).
 - P-8 range picker positional selection.
 - Remove `/read-legacy` after one release of field data.

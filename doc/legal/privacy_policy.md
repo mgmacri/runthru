@@ -68,6 +68,12 @@ connected. Sign-in uses OAuth; your Instapaper password is exchanged directly
 with Instapaper for an access token, which is stored in your device's secure
 storage. Logging out deletes the stored token.
 
+### Purchasing RunThru Unlock
+RunThru Unlock is a one-time in-app purchase handled entirely by the App Store
+or Google Play. RunThru never sees your payment details. The store tells the
+app only whether this account owns RunThru Unlock, and the app remembers that
+on your device. Restoring a purchase asks the store the same question again.
+
 ### Shared web links
 When you share a web link into RunThru, the app downloads that page over an
 encrypted (HTTPS) connection to extract its readable text on your device. The
@@ -84,7 +90,8 @@ extracted text is treated like any other local reading content.
 - **No ads.** RunThru shows no advertising and shares no data with ad
   networks.
 - **No accounts.** RunThru itself has no account system and no server that
-  stores your data.
+  stores your data. Purchases go through your App Store or Google Play
+  account.
 - **No sale or sharing of data.** RunThru has nothing to sell or share —
   your data is not collected in the first place.
 

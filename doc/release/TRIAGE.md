@@ -10,7 +10,7 @@ Severity: **P0** crash or blocks reading · **P1** feature visibly wrong · **P2
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
-| R-01 | Remove premium gate and `PurchaseService` stub; app ships free | P0 | done | claude | `lib/services/purchase_service.dart`, `lib/navigation/app_router.dart` (`_PremiumReadGuard`), `lib/store/config.dart` (`hasPremium`), settings purchase UI, related tests | 2ef8768 — also unlocked anchor colours (gained Semantics + 48dp) |
+| R-01 | Remove the placeholder `PurchaseService` stub that granted premium for free | P0 | done | claude | `lib/services/purchase_service.dart` | 2ef8768 — superseded by R-11 (owner wants a one-time purchase) |
 | R-02 | Remove Discover / OPDS tab | P1 | done | claude | `lib/screens/discover_screen.dart`, `lib/services/opds_service.dart`, `lib/screens/home_shell.dart` tabs, router redirects, tests | ab21e38 — files were already orphaned |
 | R-03 | Drop `CAMERA` permission from Android manifest | P1 | done | claude | `android/app/src/main/AndroidManifest.xml` | 7068e65 — also iOS purpose string + Podfile PERMISSION_CAMERA macro; privacy policy updated |
 | R-04 | Hide Google Drive source when OAuth client IDs are empty at runtime | P1 | done | claude | `lib/features/content/widgets/google_drive_source_panel.dart`, `lib/screens/sources_screen.dart`, `lib/features/content/providers/google_drive_auth_provider.dart` | fdb4c4d — googleDriveAvailableProvider gates Sources panel, add action, Settings card |
@@ -32,7 +32,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
-| R-05 | Sentence mode: align with design reference or hide it from the mode switcher | P1 | done | claude | `lib/features/reading/widgets/sentence_mode_view.dart`, `lib/features/reading/widgets/mode_switcher.dart`, `lib/features/reading/providers/reading_mode_provider.dart` | 36688ee — hidden via availableReadingModes; code kept |
+| R-05 | Sentence mode aligned with the design reference (karaoke line, edge fade) and shipped | P1 | done | claude | `lib/features/reading/widgets/sentence_mode_view.dart`, `reading_focus_chrome.dart` | 945e407 — owner needs Sentence mode |
 | R-06 | 60 fps word-flash check on low-end Android with `FpsProbe` | P1 | todo | | `lib/debug/fps_probe.dart`, `lib/screens/parallax_reading_screen.dart` (only if a regression is found) | probe log pasted in row |
 
 ## Store readiness (lane `store`)
@@ -43,6 +43,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | R-08 | Store listing copy + screenshots + feature graphic | P0 | in-progress | claude | `doc/release/store/` (new), `screenshots/` | copy in doc/release/store/listing.md. OWNER: 6.9" screenshots, feature graphic, console entry |
 | R-09 | Version bump to `2.0.0+16`, release notes | P0 | done | claude | `pubspec.yaml`, `doc/release/CHANGELOG.md` (new) | 31bd936 — Android versionCode now auto-increments in Codemagic |
 | R-10 | Verify Codemagic env groups and signing (keystore, ASC key) | P0 | todo | | `codemagic.yaml` (read only) | green TestFlight + internal builds from `main` |
+| R-11 | RunThru Unlock one-time IAP (`runthru_unlock`): store purchase, restore, gates on Reading Wins / page ranges / 3D room | P0 | done | claude | `lib/services/purchase_service.dart`, `lib/widgets/unlock_sheet.dart`, gates in home shell / router / settings | be22190 — OWNER: create product in both consoles, set price, sandbox-test on device |
 
 ## AI lane (non-blocking, see `AI_INTEGRATION.md`)
 
