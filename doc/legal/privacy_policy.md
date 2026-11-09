@@ -1,6 +1,6 @@
 # RunThru Privacy Policy
 
-**Effective date: June 10, 2026**
+**Effective date: November 9, 2026**
 
 RunThru is a paced reading app. This policy explains exactly what data the app
 touches, where that data goes, and what never leaves your device. It is written
@@ -123,6 +123,7 @@ that applies to it.
 
 ## Contact
 
-Questions about this policy are welcome.
+Questions about this policy are welcome. Email mattmacri89@gmail.com.
 
-<!-- TODO: add support contact -->
+The current version of this policy is also published at
+https://runthruapp.com/privacy.

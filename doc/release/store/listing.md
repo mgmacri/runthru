@@ -75,11 +75,11 @@ rsvp,speed reading,adhd,dyslexia,focus,pdf reader,epub,instapaper,accessibility,
 
 Primary: Education. Secondary (App Store): Productivity.
 
-## Contact and policy (owner to fill)
+## Contact and policy
 
-- Support email: TODO (also replace the TODO in `doc/legal/privacy_policy.md`)
-- Privacy policy URL: TODO (host `doc/legal/privacy_policy.md`, e.g. GitHub Pages)
-- Marketing URL: optional
+- Support email: mattmacri89@gmail.com (same address the runthruapp.com footer uses)
+- Privacy policy URL: https://runthruapp.com/privacy (gh-pages `privacy/index.html`, rendered from `doc/legal/privacy_policy.md`)
+- Marketing URL: https://runthruapp.com/
 
 ## Screenshots
 

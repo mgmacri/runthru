@@ -39,7 +39,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
-| R-07 | Privacy policy: real contact, hosted URL, linked from Settings | P0 | blocked | claude → owner | `doc/legal/privacy_policy.md`, `lib/screens/settings_screen.dart` | 5a5186b in-app screen done. OWNER: support email in policy + hosted URL |
+| R-07 | Privacy policy: real contact, hosted URL, linked from Settings | P0 | in-progress | claude | `doc/legal/privacy_policy.md`, `lib/screens/settings_screen.dart` | 5a5186b in-app screen done. OWNER: support email in policy + hosted URL |
 | R-08 | Store listing copy + screenshots + feature graphic | P0 | in-progress | claude | `doc/release/store/` (new), `screenshots/` | copy in doc/release/store/listing.md. OWNER: 6.9" screenshots, feature graphic, console entry |
 | R-09 | Version bump to `2.0.0+16`, release notes | P0 | done | claude | `pubspec.yaml`, `doc/release/CHANGELOG.md` (new) | 31bd936 — Android versionCode now auto-increments in Codemagic |
 | R-10 | Verify Codemagic env groups and signing (keystore, ASC key) | P0 | todo | | `codemagic.yaml` (read only) | green TestFlight + internal builds from `main` |
