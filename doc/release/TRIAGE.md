@@ -24,22 +24,21 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | B-01 | Screenshot generator hung `flutter test` (toImage under fake async + window_manager channel + pending timers). Now tagged `screenshots`, skipped by default via `dart_test.yaml`; run with `flutter test --tags screenshots --run-skipped test/screenshots` | P0 | done | claude | `test/screenshots/app_screenshots_test.dart`, `dart_test.yaml` | 1943eea |
 | B-02 | Range picker `dispose()` called `ref.read` (throws on unmount in Riverpod 2.6), skipping the rest of dispose and leaking controllers | P0 | done | claude | `lib/screens/range_picker_screen.dart`, `test/screens/range_picker_screen_test.dart` | a603151 |
 | B-03 | Google Drive source panel title row overflowed 44px at 390pt width (iPhone 14) | P1 | done | claude | `lib/features/content/widgets/google_drive_source_panel.dart` | 838dce8 |
-| B-04 | | | todo | | | |
+| B-04 | Primary button announced its label twice and exposed no semantic tap | P1 | done | claude | `lib/widgets/runthru_shell_widgets.dart` | cfe365b |
 | B-05 | Gate script wrote analyzer/test output to fixed `/tmp` files shared by every worktree, so parallel swarm gates reported each other's failures | P1 | done | claude | `scripts/verify_release_readiness.sh` | per-run `mktemp` logs |
-| B-06 | | | todo | | | |
 
 ## Reading screen (lane `reading`)
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
 | R-05 | Sentence mode aligned with the design reference (karaoke line, edge fade) and shipped | P1 | done | claude | `lib/features/reading/widgets/sentence_mode_view.dart`, `reading_focus_chrome.dart` | 945e407 — owner needs Sentence mode |
-| R-06 | 60 fps word-flash check on low-end Android with `FpsProbe` | P1 | todo | | `lib/debug/fps_probe.dart`, `lib/screens/parallax_reading_screen.dart` (only if a regression is found) | probe log pasted in row |
+| R-06 | 60 fps word-flash check on low-end Android with `FpsProbe` | P1 | blocked | claude → owner | `lib/debug/fps_probe.dart`, `lib/screens/parallax_reading_screen.dart` (only if a regression is found) | needs a physical low-end Android (none attached); run on the Play internal-track build and paste the probe log here |
 
 ## Store readiness (lane `store`)
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
-| R-07 | Privacy policy: real contact, hosted URL, linked from Settings | P0 | in-progress | claude | `doc/legal/privacy_policy.md`, `lib/screens/settings_screen.dart` | 5a5186b in-app screen done. OWNER: support email in policy + hosted URL |
+| R-07 | Privacy policy: real contact, hosted URL, linked from Settings | P0 | in-progress | claude | `doc/legal/privacy_policy.md`, `lib/screens/settings_screen.dart`, gh-pages `privacy/index.html` | a5a6686 contact + URL in policy; 5a5186b in-app screen. Page committed on local gh-pages (9a22a0a); live at runthruapp.com/privacy once pushed. OWNER: paste URL into both store consoles |
 | R-08 | Store listing copy + screenshots + feature graphic | P0 | in-progress | claude | `doc/release/store/` (new), `screenshots/` | copy in doc/release/store/listing.md. OWNER: 6.9" screenshots, feature graphic, console entry |
 | R-09 | Version bump to `2.0.0+16`, release notes | P0 | done | claude | `pubspec.yaml`, `doc/release/CHANGELOG.md` (new) | 31bd936 — Android versionCode now auto-increments in Codemagic |
 | R-10 | Verify Codemagic env groups and signing (keystore, ASC key) | P0 | in-progress | claude | `codemagic.yaml` | static check OK (export compliance set, build numbers monotonic, groups referenced); Flutter pinned to 3.41.2. Remaining: green TestFlight + internal builds after push to `main` |
@@ -50,8 +49,8 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
 | A-01 | Define `summarize` and `difficulty` tasks + annotation schema | P2 | done | swarm/A-01 | `lib/services/edge_ai_queue.dart`, `lib/services/content_store/section_models.dart` | c45ca7f |
-| A-02 | Implement a `ModelProcessor` behind an opt-in flag (default off) | P2 | todo | | `lib/services/edge_ai_queue.dart`, new `lib/services/ai/` | unit tests with fake transport |
-| A-03 | Consent + settings toggle; privacy policy addendum draft | P2 | todo | | `lib/screens/settings_screen.dart`, `doc/legal/privacy_policy.md` | a11y guideline tests |
+| A-02 | Implement a `ModelProcessor` behind an opt-in flag (default off) | P2 | deferred |  | `lib/services/edge_ai_queue.dart`, new `lib/services/ai/` | 2.1 per RELEASE_PLAN "After release"; AI lane does not block 2.0 |
+| A-03 | Consent + settings toggle; privacy policy addendum draft | P2 | deferred |  | `lib/screens/settings_screen.dart`, `doc/legal/privacy_policy.md` | 2.1 per RELEASE_PLAN "After release"; AI lane does not block 2.0 |
 
 ## Deferred
 
@@ -59,3 +58,4 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 |----|-------|--------|
 | P-8 | Range picker picks first occurrence of duplicate word | needs pdfrx positional data; edge case |
 | LEG | Remove `/read-legacy` + `ReadingScreen` | keep as deep-link fallback for one release |
+| AIQ | `SectionProcessingRequest.fromJson` uses `as` casts; a wrongly typed persisted entry throws `TypeError` that `_decode` does not catch | nothing enqueues in 2.0 (A-02 deferred); fix before A-02 lands |
