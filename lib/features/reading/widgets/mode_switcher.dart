@@ -33,7 +33,7 @@ class ModeSwitcher extends ConsumerWidget {
         onSelected: (selected) =>
             ref.read(readingModeNotifierProvider.notifier).setMode(selected),
         itemBuilder: (context) => [
-          for (final itemMode in ReadingMode.values)
+          for (final itemMode in availableReadingModes)
             PopupMenuItem<ReadingMode>(
               value: itemMode,
               padding: const EdgeInsets.symmetric(vertical: 1),

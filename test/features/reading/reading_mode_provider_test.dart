@@ -14,16 +14,14 @@ void main() {
       container.dispose();
     });
 
-    test('swipe-up order cycles through all reading modes', () {
+    // R-05: Sentence mode is hidden for 2.0, so cycling skips it.
+    test('swipe-up order cycles through the available reading modes', () {
       final notifier = container.read(readingModeNotifierProvider.notifier);
 
       expect(
         container.read(readingModeNotifierProvider),
         ReadingMode.singleWord,
       );
-
-      notifier.cycleMode();
-      expect(container.read(readingModeNotifierProvider), ReadingMode.sentence);
 
       notifier.cycleMode();
       expect(
@@ -44,13 +42,29 @@ void main() {
     test('swipe-down order reverses and wraps', () {
       final notifier = container.read(readingModeNotifierProvider.notifier);
 
-      notifier.setMode(ReadingMode.sentence);
+      notifier.setMode(ReadingMode.paragraph);
       notifier.cycleModeReverse();
       expect(
         container.read(readingModeNotifierProvider),
         ReadingMode.singleWord,
       );
 
+      notifier.cycleModeReverse();
+      expect(container.read(readingModeNotifierProvider), ReadingMode.fullPage);
+    });
+
+    test('Sentence mode is not offered and cycling leaves it', () {
+      expect(availableReadingModes, isNot(contains(ReadingMode.sentence)));
+
+      final notifier = container.read(readingModeNotifierProvider.notifier);
+      notifier.setMode(ReadingMode.sentence);
+      notifier.cycleMode();
+      expect(
+        container.read(readingModeNotifierProvider),
+        ReadingMode.singleWord,
+      );
+
+      notifier.setMode(ReadingMode.sentence);
       notifier.cycleModeReverse();
       expect(container.read(readingModeNotifierProvider), ReadingMode.fullPage);
     });

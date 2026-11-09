@@ -17,6 +17,17 @@ enum ReadingMode {
   fullPage,
 }
 
+/// Modes offered in the mode menu and by swipe cycling, in cycle order.
+///
+/// [ReadingMode.sentence] is hidden for the 2.0 release (R-05): it has not
+/// been aligned with the design reference's re-centering karaoke line. Its
+/// view code stays in place; add it back here once it matches the design.
+const List<ReadingMode> availableReadingModes = [
+  ReadingMode.singleWord,
+  ReadingMode.paragraph,
+  ReadingMode.fullPage,
+];
+
 /// Backwards-compatible display and parsing helpers for [ReadingMode].
 extension ReadingModeX on ReadingMode {
   /// User-facing mode label.
@@ -49,15 +60,17 @@ class ReadingModeNotifier extends _$ReadingModeNotifier {
     state = mode;
   }
 
-  /// Cycle to the next mode:
-  /// singleWord → sentence → paragraph → fullPage → singleWord.
-  void cycleMode() {
-    state = ReadingMode.values[(state.index + 1) % ReadingMode.values.length];
-  }
+  /// Cycle forward through [availableReadingModes], wrapping.
+  void cycleMode() => _step(1);
 
-  /// Cycle to the previous mode:
-  /// fullPage → paragraph → sentence → singleWord → fullPage.
-  void cycleModeReverse() {
-    state = ReadingMode.values[(state.index - 1) % ReadingMode.values.length];
+  /// Cycle backward through [availableReadingModes], wrapping.
+  void cycleModeReverse() => _step(-1);
+
+  void _step(int delta) {
+    const modes = availableReadingModes;
+    final i = modes.indexOf(state);
+    // A hidden mode (i == -1) steps to the first or last available mode.
+    final from = i < 0 ? (delta > 0 ? -1 : 0) : i;
+    state = modes[(from + delta) % modes.length];
   }
 }
