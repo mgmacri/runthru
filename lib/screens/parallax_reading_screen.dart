@@ -1527,6 +1527,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                       fontFamily: config
                                                           .readingFontFamily,
                                                       fontSize: fontSize,
+                                                      wpm: wpm,
                                                     ),
                                                   ReadingMode.paragraph =>
                                                     ParagraphModeView(

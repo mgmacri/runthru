@@ -19,11 +19,12 @@ enum ReadingMode {
 
 /// Modes offered in the mode menu and by swipe cycling, in cycle order.
 ///
-/// [ReadingMode.sentence] is hidden for the 2.0 release (R-05): it has not
-/// been aligned with the design reference's re-centering karaoke line. Its
-/// view code stays in place; add it back here once it matches the design.
+/// Sentence mode was briefly hidden (R-05) and is back now that it matches
+/// the design's re-centering karaoke line. Remove a mode here to hide it
+/// without deleting its view.
 const List<ReadingMode> availableReadingModes = [
   ReadingMode.singleWord,
+  ReadingMode.sentence,
   ReadingMode.paragraph,
   ReadingMode.fullPage,
 ];

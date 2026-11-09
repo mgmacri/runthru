@@ -14,7 +14,6 @@ void main() {
       container.dispose();
     });
 
-    // R-05: Sentence mode is hidden for 2.0, so cycling skips it.
     test('swipe-up order cycles through the available reading modes', () {
       final notifier = container.read(readingModeNotifierProvider.notifier);
 
@@ -22,6 +21,9 @@ void main() {
         container.read(readingModeNotifierProvider),
         ReadingMode.singleWord,
       );
+
+      notifier.cycleMode();
+      expect(container.read(readingModeNotifierProvider), ReadingMode.sentence);
 
       notifier.cycleMode();
       expect(
@@ -42,7 +44,7 @@ void main() {
     test('swipe-down order reverses and wraps', () {
       final notifier = container.read(readingModeNotifierProvider.notifier);
 
-      notifier.setMode(ReadingMode.paragraph);
+      notifier.setMode(ReadingMode.sentence);
       notifier.cycleModeReverse();
       expect(
         container.read(readingModeNotifierProvider),
@@ -53,20 +55,8 @@ void main() {
       expect(container.read(readingModeNotifierProvider), ReadingMode.fullPage);
     });
 
-    test('Sentence mode is not offered and cycling leaves it', () {
-      expect(availableReadingModes, isNot(contains(ReadingMode.sentence)));
-
-      final notifier = container.read(readingModeNotifierProvider.notifier);
-      notifier.setMode(ReadingMode.sentence);
-      notifier.cycleMode();
-      expect(
-        container.read(readingModeNotifierProvider),
-        ReadingMode.singleWord,
-      );
-
-      notifier.setMode(ReadingMode.sentence);
-      notifier.cycleModeReverse();
-      expect(container.read(readingModeNotifierProvider), ReadingMode.fullPage);
+    test('every reading mode is offered, Sentence included', () {
+      expect(availableReadingModes, ReadingMode.values);
     });
 
     test('parses old and invalid persisted names safely', () {

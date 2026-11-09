@@ -239,14 +239,14 @@ class MaskedReadingView extends StatelessWidget {
                                 for (final word in line.words) ...[
                                   if (word.spaceBefore > 0)
                                     SizedBox(width: word.spaceBefore),
-                                  _KaraokeWord(
+                                  KaraokeWord(
                                     word: word.word,
                                     globalIndex: word.globalIndex,
                                     state: word.globalIndex == safeIndex
-                                        ? _WordState.active
+                                        ? KaraokeWordState.active
                                         : word.globalIndex < safeIndex
-                                        ? _WordState.done
-                                        : _WordState.next,
+                                        ? KaraokeWordState.done
+                                        : KaraokeWordState.next,
                                     faintStyle: faintStyle,
                                     inkedStyle: inkedStyle,
                                     sweepDuration: _sweepDuration,
@@ -514,102 +514,6 @@ List<List<_WindowWord>> _windowParagraphs(List<String> words, int wordIndex) {
 
 bool _isParagraphBoundary(String word) {
   return word.trim().isEmpty || word.startsWith('\n');
-}
-
-enum _WordState { done, active, next }
-
-/// Karaoke color-sync word: read words are inked with the ORP letter
-/// accented; the active word fills left→right over its dwell time with an
-/// accent underline; upcoming words stay faint.
-class _KaraokeWord extends StatelessWidget {
-  const _KaraokeWord({
-    required this.word,
-    required this.globalIndex,
-    required this.state,
-    required this.faintStyle,
-    required this.inkedStyle,
-    required this.sweepDuration,
-    required this.reduced,
-  });
-
-  final String word;
-  final int globalIndex;
-  final _WordState state;
-  final TextStyle faintStyle;
-  final TextStyle inkedStyle;
-  final Duration sweepDuration;
-  final bool reduced;
-
-  @override
-  Widget build(BuildContext context) {
-    switch (state) {
-      case _WordState.next:
-        return Text(
-          word,
-          style: faintStyle,
-          softWrap: false,
-          textScaler: TextScaler.noScaling,
-        );
-      case _WordState.done:
-        return RichText(
-          textScaler: TextScaler.noScaling,
-          softWrap: false,
-          text: TextSpan(children: anchoredWordSpans(word, inkedStyle)),
-        );
-      case _WordState.active:
-        final inked = RichText(
-          textScaler: TextScaler.noScaling,
-          softWrap: false,
-          text: TextSpan(children: anchoredWordSpans(word, inkedStyle)),
-        );
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Text(
-              word,
-              style: faintStyle,
-              softWrap: false,
-              textScaler: TextScaler.noScaling,
-            ),
-            // Inked overlay wipes in left→right over the word's dwell time.
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey('karaoke-fill-$globalIndex'),
-                tween: Tween(begin: 0, end: 1),
-                duration: reduced ? Duration.zero : sweepDuration,
-                curve: Curves.linear,
-                child: inked,
-                builder: (context, value, child) {
-                  return ClipRect(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: value,
-                      child: child,
-                    ),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              key: ValueKey('paragraph-word-highlight-$globalIndex'),
-              left: 0,
-              right: 0,
-              bottom: -3,
-              height: 2.5,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: RunThruTokens.shellAccent.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ],
-        );
-    }
-  }
 }
 
 class _WindowWord {

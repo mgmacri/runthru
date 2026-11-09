@@ -493,6 +493,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                 wordSpacing: config.wordSpacing,
                 fontFamily: config.readingFontFamily,
                 fontSize: fontSize,
+                wpm: timerState.wpm,
               ),
               ReadingMode.paragraph => ParagraphModeView(
                 key: const ValueKey('paragraph'),

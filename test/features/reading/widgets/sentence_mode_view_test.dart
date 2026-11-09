@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:runthru/features/reading/widgets/reading_focus_chrome.dart';
 import 'package:runthru/features/reading/widgets/sentence_mode_view.dart';
 
 void main() {
@@ -7,6 +8,7 @@ void main() {
     required List<String> words,
     required int currentIndex,
     bool reducedMotion = false,
+    int wpm = 300,
   }) {
     return MaterialApp(
       home: MediaQuery(
@@ -26,12 +28,25 @@ void main() {
               wordSpacing: 0,
               fontFamily: 'AtkinsonHyperlegible',
               fontSize: 40,
+              wpm: wpm,
             ),
           ),
         ),
       ),
     );
   }
+
+  // R-05 (design alignment): the active word is a karaoke word, a faint base
+  // plus an inked overlay that fills in. The inked overlay is the last
+  // RichText under the current-word key.
+  RichText inkedCurrent(WidgetTester tester) => tester.widget<RichText>(
+    find
+        .descendant(
+          of: find.byKey(SentenceModeView.currentWordKey),
+          matching: find.byType(RichText),
+        )
+        .last,
+  );
 
   double translationX(WidgetTester tester) {
     final transform = tester.widget<Transform>(
@@ -48,16 +63,11 @@ void main() {
         buildView(words: 'The quick brown fox.'.split(' '), currentIndex: 1),
       );
 
-      final richText = tester.widget<RichText>(
-        find.descendant(
-          of: find.byKey(SentenceModeView.currentWordKey),
-          matching: find.byType(RichText),
-        ),
-      );
+      final richText = inkedCurrent(tester);
       expect(richText.text.toPlainText(), 'quick');
       final root = richText.text as TextSpan;
-      expect(root.style?.fontWeight, FontWeight.bold);
       expect(root.children, isNotNull);
+      expect(root.children!.first.style?.fontWeight, FontWeight.w600);
     });
 
     testWidgets('sentence strip translates as current index advances', (
@@ -107,13 +117,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final richText = tester.widget<RichText>(
-        find.descendant(
-          of: find.byKey(SentenceModeView.currentWordKey),
-          matching: find.byType(RichText),
-        ),
-      );
-      final root = richText.text as TextSpan;
+      final root = inkedCurrent(tester).text as TextSpan;
       expect(root.children?[1].toPlainText(), 'n');
       expect(find.byKey(SentenceModeView.fixedGuideKey), findsOneWidget);
     });
@@ -123,17 +127,12 @@ void main() {
       await tester.pumpWidget(buildView(words: words, currentIndex: 4));
       await tester.pumpAndSettle();
 
-      expect(find.text('New'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byKey(SentenceModeView.currentWordKey),
-          matching: find.byType(RichText),
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('starts.'), findsOneWidget);
-      expect(find.text('One'), findsNothing);
-      expect(find.text('ends.'), findsNothing);
+      // Read words are inked RichText, so match rich text too.
+      expect(find.text('New', findRichText: true), findsOneWidget);
+      expect(find.byKey(SentenceModeView.currentWordKey), findsOneWidget);
+      expect(find.text('starts.', findRichText: true), findsOneWidget);
+      expect(find.text('One', findRichText: true), findsNothing);
+      expect(find.text('ends.', findRichText: true), findsNothing);
     });
 
     testWidgets('reduced motion disables sliding duration', (tester) async {
@@ -163,14 +162,54 @@ void main() {
         buildView(words: 'The quick brown fox.'.split(' '), currentIndex: 99),
       );
 
-      final richText = tester.widget<RichText>(
-        find.descendant(
-          of: find.byKey(SentenceModeView.currentWordKey),
-          matching: find.byType(RichText),
+      expect(inkedCurrent(tester).text.toPlainText(), 'fox.');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('read words are inked and upcoming words are faint', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildView(
+          words: 'The quick brown fox.'.split(' '),
+          currentIndex: 2,
+          reducedMotion: true,
         ),
       );
-      expect(richText.text.toPlainText(), 'fox.');
-      expect(tester.takeException(), isNull);
+
+      final done = tester.widget<KaraokeWord>(
+        find.byKey(const ValueKey('sentence-mode-word-0')),
+      );
+      final next = tester.widget<KaraokeWord>(
+        find.byKey(const ValueKey('sentence-mode-word-3')),
+      );
+      expect(done.state, KaraokeWordState.done);
+      expect(next.state, KaraokeWordState.next);
+      expect(
+        tester
+            .widget<KaraokeWord>(find.byKey(SentenceModeView.currentWordKey))
+            .state,
+        KaraokeWordState.active,
+      );
+      expect(done.inkedStyle.color!.a, greaterThan(done.faintStyle.color!.a));
+    });
+
+    testWidgets('edges fade out and the fill follows reading speed', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildView(
+          words: 'The quick brown fox.'.split(' '),
+          currentIndex: 1,
+          wpm: 240,
+        ),
+      );
+
+      expect(find.byKey(SentenceModeView.edgeFadeKey), findsOneWidget);
+      final active = tester.widget<KaraokeWord>(
+        find.byKey(SentenceModeView.currentWordKey),
+      );
+      expect(active.sweepDuration, const Duration(milliseconds: 250));
     });
   });
 }

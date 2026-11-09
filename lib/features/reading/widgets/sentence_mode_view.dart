@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:runthru/core/orp.dart';
 import 'package:runthru/core/sentence_resolver.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/reading/widgets/reading_focus_chrome.dart';
 
-/// Displays the active sentence as a right-to-left flowing horizontal strip.
+/// Sentence mode: karaoke colour-sync on one re-centering line.
 ///
-/// This is still left-to-right text. The strip translates under a fixed center
-/// anchor so the current word stays near the reader's focal point.
+/// Matches the design reference (`modes-views.jsx` SentenceView): the active
+/// sentence sits on a single line that slides under fixed fixation ticks so
+/// the eyes stay put. Read words are inked with the ORP letter accented, the
+/// active word fills left to right over its dwell time, upcoming words are
+/// faint, and both edges fade out. The line centres on the active word's ORP
+/// letter so it lines up with the single-word RSVP focal point.
 class SentenceModeView extends StatelessWidget {
   /// Creates a [SentenceModeView].
   const SentenceModeView({
@@ -17,6 +22,7 @@ class SentenceModeView extends StatelessWidget {
     required this.wordSpacing,
     required this.fontFamily,
     required this.fontSize,
+    this.wpm = 300,
   });
 
   /// All words in the current document/slice.
@@ -37,11 +43,23 @@ class SentenceModeView extends StatelessWidget {
   /// Dynamic font size.
   final double fontSize;
 
+  /// Current reading speed; times the active word's karaoke fill.
+  final int wpm;
+
+  /// Fraction of the width faded at each edge (design: 16%).
+  static const double edgeFade = 0.16;
+
   static const Key stripKey = ValueKey('sentence-mode-strip');
   static const Key currentWordKey = ValueKey('sentence-mode-current-word');
   static const Key slideBuilderKey = ValueKey('sentence-mode-slide-builder');
   static const Key transformKey = ValueKey('sentence-mode-transform');
   static const Key fixedGuideKey = ValueKey('sentence-mode-fixed-guide');
+  static const Key edgeFadeKey = ValueKey('sentence-mode-edge-fade');
+
+  Duration get _sweepDuration {
+    final safeWpm = wpm.clamp(30, 1000);
+    return Duration(milliseconds: (60000 / safeWpm).round());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,19 +75,17 @@ class SentenceModeView extends StatelessWidget {
 
     final sentence = words.sublist(bounds.start, bounds.end + 1);
     final sentenceCurrentIndex = safeIndex - bounds.start;
-    final baseStyle = RunThruTypography.body.copyWith(
-      color: RunThruTokens.stageText,
+    // One weight for every state so measurement and render agree and the
+    // line never shifts when a word changes state.
+    final faintStyle = RunThruTypography.body.copyWith(
+      color: RunThruTokens.stageText.withValues(alpha: 0.25),
       letterSpacing: letterSpacing,
       fontFamily: fontFamily,
       fontSize: fontSize,
+      fontWeight: FontWeight.w600,
       height: 1.15,
     );
-    final currentStyle = baseStyle.copyWith(
-      fontWeight: FontWeight.bold,
-      decoration: TextDecoration.underline,
-      decorationColor: RunThruTokens.shellAccent,
-      decorationThickness: 1.5,
-    );
+    final inkedStyle = faintStyle.copyWith(color: RunThruTokens.stageText);
 
     return Semantics(
       label: 'Flowing sentence mode. Current word: ${words[safeIndex]}',
@@ -78,8 +94,7 @@ class SentenceModeView extends StatelessWidget {
           final metrics = _measureSentence(
             sentence,
             currentIndex: sentenceCurrentIndex,
-            baseStyle: baseStyle,
-            currentStyle: currentStyle,
+            style: faintStyle,
             textDirection: Directionality.of(context),
           );
           final anchorX = constraints.maxWidth / 2;
@@ -126,14 +141,17 @@ class SentenceModeView extends StatelessWidget {
                           textDirection: TextDirection.ltr,
                           children: _buildWordStrip(
                             sentence,
+                            sentenceStart: bounds.start,
                             currentIndex: sentenceCurrentIndex,
-                            baseStyle: baseStyle,
-                            currentStyle: currentStyle,
+                            faintStyle: faintStyle,
+                            inkedStyle: inkedStyle,
                             spaceWidth: metrics.spaceWidth,
+                            reduced: reducedMotion,
                           ),
                         ),
                       ),
                     ),
+                    const IgnorePointer(child: _EdgeFade(key: edgeFadeKey)),
                     const IgnorePointer(
                       child: _FixedGuideLines(key: fixedGuideKey),
                     ),
@@ -149,30 +167,33 @@ class SentenceModeView extends StatelessWidget {
 
   List<Widget> _buildWordStrip(
     List<String> sentence, {
+    required int sentenceStart,
     required int currentIndex,
-    required TextStyle baseStyle,
-    required TextStyle currentStyle,
+    required TextStyle faintStyle,
+    required TextStyle inkedStyle,
     required double spaceWidth,
+    required bool reduced,
   }) {
     final children = <Widget>[];
     for (var i = 0; i < sentence.length; i++) {
-      final isCurrent = i == currentIndex;
+      final state = i == currentIndex
+          ? KaraokeWordState.active
+          : i < currentIndex
+          ? KaraokeWordState.done
+          : KaraokeWordState.next;
       children.add(
-        isCurrent
-            ? _AnchoredWord(
-                key: currentWordKey,
-                word: sentence[i],
-                baseStyle: currentStyle,
-              )
-            : Text(
-                sentence[i],
-                key: ValueKey('sentence-mode-word-$i'),
-                style: baseStyle.copyWith(
-                  color: RunThruTokens.stageText.withValues(alpha: 0.28),
-                ),
-                softWrap: false,
-                overflow: TextOverflow.visible,
-              ),
+        KaraokeWord(
+          key: i == currentIndex
+              ? currentWordKey
+              : ValueKey('sentence-mode-word-$i'),
+          word: sentence[i],
+          globalIndex: sentenceStart + i,
+          state: state,
+          faintStyle: faintStyle,
+          inkedStyle: inkedStyle,
+          sweepDuration: _sweepDuration,
+          reduced: reduced,
+        ),
       );
       if (i < sentence.length - 1) {
         children.add(SizedBox(width: spaceWidth));
@@ -184,17 +205,14 @@ class SentenceModeView extends StatelessWidget {
   _SentenceMetrics _measureSentence(
     List<String> sentence, {
     required int currentIndex,
-    required TextStyle baseStyle,
-    required TextStyle currentStyle,
+    required TextStyle style,
     required TextDirection textDirection,
   }) {
-    final spaceWidth =
-        _measureText(' ', baseStyle, textDirection) + wordSpacing;
+    final spaceWidth = _measureText(' ', style, textDirection) + wordSpacing;
     var cursorX = 0.0;
     var currentAnchorX = 0.0;
 
     for (var i = 0; i < sentence.length; i++) {
-      final style = i == currentIndex ? currentStyle : baseStyle;
       final word = sentence[i];
       final width = _measureText(word, style, textDirection);
       if (i == currentIndex) {
@@ -240,40 +258,31 @@ class SentenceModeView extends StatelessWidget {
   }
 }
 
-class _AnchoredWord extends StatelessWidget {
-  const _AnchoredWord({super.key, required this.word, required this.baseStyle});
-
-  final String word;
-  final TextStyle baseStyle;
+/// Fades both ends of the line into the stage, as in the design's
+/// 16%/84% horizontal mask, so the sentence reads as one centred line.
+class _EdgeFade extends StatelessWidget {
+  const _EdgeFade({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final anchorIndex = _anchorIndexForWord(word);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: RunThruTokens.shellAccent.withValues(alpha: 0.84),
-            width: 2.4,
+    final clear = RunThruTokens.stageBase.withValues(alpha: 0);
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              RunThruTokens.stageBase,
+              clear,
+              clear,
+              RunThruTokens.stageBase,
+            ],
+            stops: const [
+              0,
+              SentenceModeView.edgeFade,
+              1 - SentenceModeView.edgeFade,
+              1,
+            ],
           ),
-        ),
-      ),
-      child: RichText(
-        textScaler: TextScaler.noScaling,
-        text: TextSpan(
-          style: baseStyle.copyWith(decoration: TextDecoration.none),
-          children: [
-            TextSpan(text: word.substring(0, anchorIndex)),
-            TextSpan(
-              text: word.substring(anchorIndex, anchorIndex + 1),
-              style: baseStyle.copyWith(
-                color: RunThruTokens.stageFocalRed,
-                decoration: TextDecoration.none,
-              ),
-            ),
-            TextSpan(text: word.substring(anchorIndex + 1)),
-          ],
         ),
       ),
     );
