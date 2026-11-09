@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/semantics.dart';
+import 'package:runthru/design/design.dart';
 import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
@@ -19,6 +21,11 @@ class FakeConfigNotifier extends AsyncNotifier<AppConfig>
   @override
   Future<void> setParallaxIntensity(ParallaxIntensity value) async {
     state = AsyncData(state.requireValue.copyWith(parallaxIntensity: value));
+  }
+
+  @override
+  Future<void> setAnchorColorIndex(int index) async {
+    state = AsyncData(state.requireValue.copyWith(anchorColorIndex: index));
   }
 
   // No-op stubs for other ConfigNotifier methods — only parallax is tested.
@@ -127,5 +134,37 @@ void main() {
         ),
       );
     });
+  });
+
+  // R-01 made the anchor picker visible to everyone. Screen-reader users must
+  // be able to activate a swatch, not just hear it announced.
+  testWidgets('anchor colour swatches are activatable via semantics', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(_harness(const AppConfig()));
+    await tester.pumpAndSettle();
+
+    final name = RunThruTokens.anchorColorNames[2];
+    final swatch = find.bySemanticsLabel('Select: anchor color $name');
+    await tester.scrollUntilVisible(
+      swatch,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final node = tester.getSemantics(swatch);
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    expect(tester.getSize(swatch).shortestSide, greaterThanOrEqualTo(48));
+
+    tester.semantics.tap(find.semantics.byLabel('Select: anchor color $name'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsScreen)),
+    );
+    expect(container.read(configProvider).requireValue.anchorColorIndex, 2);
+    handle.dispose();
   });
 }

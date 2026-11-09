@@ -380,6 +380,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label:
                             'Select: anchor color '
                             '${RunThruTokens.anchorColorNames[i]}',
+                        // excludeSemantics drops the child's tap action, so
+                        // the semantic tap must be supplied here.
+                        onTap: () => notifier.setAnchorColorIndex(i),
                         excludeSemantics: true,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
