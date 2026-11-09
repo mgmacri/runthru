@@ -45,6 +45,7 @@ flutter:
 
   assets:
     - assets/fonts/
+    - doc/legal/privacy_policy.md
 
   fonts:
     - family: HankenGrotesk

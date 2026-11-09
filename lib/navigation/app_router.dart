@@ -8,6 +8,7 @@ import 'package:runthru/navigation/cube_transition.dart';
 import 'package:runthru/navigation/wall_fold_transition.dart';
 import 'package:runthru/screens/home_shell.dart';
 import 'package:runthru/screens/parallax_reading_screen.dart';
+import 'package:runthru/screens/privacy_policy_screen.dart';
 import 'package:runthru/screens/range_picker_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
 import 'package:runthru/screens/settings_sources_screen.dart';
@@ -80,6 +81,11 @@ final appRouter = GoRouter(
         key: state.pageKey,
         child: const SettingsSourcesScreen(),
       ),
+    ),
+    GoRoute(
+      path: '/settings/privacy',
+      pageBuilder: (context, state) =>
+          MaterialPage(key: state.pageKey, child: const PrivacyPolicyScreen()),
     ),
     GoRoute(
       path: '/read-sample',

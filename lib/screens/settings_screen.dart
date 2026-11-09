@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
 import 'package:runthru/core/wcag_contrast.dart';
@@ -513,10 +514,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Text('Version 2.0.0', style: RunThruTypography.caption),
                   SizedBox(height: 4),
                   Text(
-                    'Speed reading with 3D depth.',
+                    'Paced reading for focus.',
                     style: RunThruTypography.caption,
                   ),
                 ],
+              ),
+            ),
+
+            // ── Privacy policy (store requirement, R-07) ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => context.push('/settings/privacy'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(
+                      RunThruA11y.minTapTarget,
+                      RunThruA11y.minTapTarget,
+                    ),
+                  ),
+                  icon: const Icon(
+                    Icons.privacy_tip_outlined,
+                    size: 16,
+                    color: RunThruTokens.shellTextSecondary,
+                  ),
+                  label: Text(
+                    'Privacy Policy',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
+                    ),
+                  ),
+                ),
               ),
             ),
 
