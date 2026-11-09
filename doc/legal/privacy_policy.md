@@ -95,9 +95,8 @@ extracted text is treated like any other local reading content.
 - **Internet** — used only for the optional connections above (Google Drive,
   Instapaper, shared web links).
 - **Notifications** (Android 13+) — used only if you enable reading reminders.
-- **Camera** — declared for optional head-tracking experiments; the camera is
-  not required, and the feature works without it. No images are stored or
-  transmitted.
+- **Motion sensors** — the 3D reading room reads the gyroscope and
+  accelerometer on-device to tilt the view. RunThru does not use the camera.
 
 ---
 

@@ -45,8 +45,6 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>RunThru uses your camera to track head position for the 3D parallax reading experience. The camera feed is processed on-device and never recorded or transmitted.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>RunThru may access your photo library to let you import images for use within the app.</string>
 	<key>NSDocumentsFolderUsageDescription</key>

@@ -1,16 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Camera permission for head tracking (face detection) -->
-    <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- Required for Android 13+ (API 33) to post notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Declare camera features as NOT required — app falls back gracefully -->
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <application
         android:label="RunThru"
