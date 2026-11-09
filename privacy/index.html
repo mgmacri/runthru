@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RunThru Privacy Policy</title>
+  <meta name="description" content="What data the RunThru reading app touches, where it goes, and what never leaves your device." />
+  <link rel="canonical" href="https://runthruapp.com/privacy" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg:#EDE3D2; --text:#2E272A; --text-secondary:#625D5D; --accent:#4C7E86; --rule:#DDD5C7; }
+    *, *::before, *::after { box-sizing:border-box; }
+    body { margin:0; font-family:'Bricolage Grotesque', system-ui, sans-serif; background:var(--bg); color:var(--text); line-height:1.6; -webkit-font-smoothing:antialiased; }
+    header, main, footer { width:min(720px, 100% - 2rem); margin-inline:auto; }
+    header { padding:24px 0 0; font-weight:700; font-size:1.25rem; }
+    header a { color:inherit; text-decoration:none; }
+    header span, a { color:var(--accent); }
+    main { padding:16px 0 48px; }
+    h1 { font-size:clamp(1.8rem, 5vw, 2.4rem); line-height:1.15; margin:24px 0 8px; }
+    h2 { font-size:1.35rem; margin:32px 0 8px; }
+    h3 { font-size:1.05rem; margin:24px 0 4px; }
+    p, li { font-size:1.0625rem; }
+    ul { padding-left:1.25rem; }
+    hr { border:0; border-top:1px solid var(--rule); margin:32px 0; }
+    footer { padding:24px 0 40px; color:var(--text-secondary); font-size:.9rem; border-top:1px solid var(--rule); }
+  </style>
+</head>
+<body>
+  <header><a href="https://runthruapp.com/">Run<span>Thru</span></a></header>
+  <main>
+<h1>RunThru Privacy Policy</h1>
+<p><strong>Effective date: November 9, 2026</strong></p>
+<p>RunThru is a paced reading app. This policy explains exactly what data the app
+touches, where that data goes, and what never leaves your device. It is written
+in plain language because you deserve to understand it without a lawyer.</p>
+<p>The short version: <strong>your reading content stays on your device.</strong> The only
+service that ever receives information about your reading activity is
+Instapaper, and only if you connect an Instapaper account yourself.</p>
+<hr />
+<h2>What stays on your device</h2>
+<h3>Clipboard text</h3>
+<p>When you paste or share text into RunThru, the app reads it locally, splits it
+into words, and shows it to you. Clipboard reading sessions are ephemeral: the
+text is held in memory for the session and is not transmitted anywhere. The
+app checks the clipboard only when it is opened or resumed, and only to offer
+you the option to read what you copied — it never sends clipboard contents off
+the device.</p>
+<h3>Local files (PDF and EPUB)</h3>
+<p>Files you open from your device are read locally. RunThru extracts the text and
+stores that extracted text in the app's private cache on your device so the
+file opens faster next time. Nothing from your files is uploaded.</p>
+<h3>Reading positions, settings, and stats</h3>
+<p>Your bookmarks, reading speed, reading goals, display preferences, and local
+reading statistics (words read, session lengths) are stored on your device
+only.</p>
+<h3>Diagnostic logs</h3>
+<p>RunThru keeps a small, on-device log of technical events (for example, "a file
+failed to open") to help diagnose problems. These logs do not contain the text
+you read, are never transmitted automatically, and are overwritten regularly.</p>
+<hr />
+<h2>Services you can choose to connect</h2>
+<p>RunThru works fully without any account. Two optional connections exist, and
+each one activates only when you sign in to it yourself.</p>
+<h3>Google Drive (inbound only)</h3>
+<p>If you connect Google Drive, RunThru asks Google for permission to list and
+download the documents you pick. The file content travels from Google to your
+device for import; RunThru does not upload anything to Drive and does not store
+your documents on any server. Your Google sign-in token is stored in your
+device's secure storage. Disconnecting Drive in Settings deletes the stored
+token.</p>
+<h3>Instapaper (the only outbound connection)</h3>
+<p>If you connect Instapaper, RunThru:</p>
+<ul>
+<li>fetches your bookmark list from the Instapaper API and caches it on your
+  device;</li>
+<li>sends your reading progress for an article back to Instapaper — this happens
+  when you pause, leave an article, or finish it, so your position stays in
+  sync with your Instapaper account;</li>
+<li>archives an article in your Instapaper account when you finish reading it.</li>
+</ul>
+<p>This is the only situation in which information about your reading activity
+leaves your device, and it goes only to Instapaper, under the account you
+connected. Sign-in uses OAuth; your Instapaper password is exchanged directly
+with Instapaper for an access token, which is stored in your device's secure
+storage. Logging out deletes the stored token.</p>
+<h3>Purchasing RunThru Unlock</h3>
+<p>RunThru Unlock is a one-time in-app purchase handled entirely by the App Store
+or Google Play. RunThru never sees your payment details. The store tells the
+app only whether this account owns RunThru Unlock, and the app remembers that
+on your device. Restoring a purchase asks the store the same question again.</p>
+<h3>Shared web links</h3>
+<p>When you share a web link into RunThru, the app downloads that page over an
+encrypted (HTTPS) connection to extract its readable text on your device. The
+extracted text is treated like any other local reading content.</p>
+<hr />
+<h2>What RunThru does not do</h2>
+<ul>
+<li><strong>No analytics services.</strong> The app contains no third-party analytics,
+  tracking, or advertising SDKs.</li>
+<li><strong>No crash-reporting services.</strong> There is no crash-analytics SDK; diagnostic
+  logs stay on the device as described above.</li>
+<li><strong>No ads.</strong> RunThru shows no advertising and shares no data with ad
+  networks.</li>
+<li><strong>No accounts.</strong> RunThru itself has no account system and no server that
+  stores your data. Purchases go through your App Store or Google Play
+  account.</li>
+<li><strong>No sale or sharing of data.</strong> RunThru has nothing to sell or share —
+  your data is not collected in the first place.</li>
+</ul>
+<hr />
+<h2>Permissions the app requests</h2>
+<ul>
+<li><strong>Internet</strong> — used only for the optional connections above (Google Drive,
+  Instapaper, shared web links).</li>
+<li><strong>Notifications</strong> (Android 13+) — used only if you enable reading reminders.</li>
+<li><strong>Motion sensors</strong> — the 3D reading room reads the gyroscope and
+  accelerometer on-device to tilt the view. RunThru does not use the camera.</li>
+</ul>
+<hr />
+<h2>Children</h2>
+<p>RunThru does not collect personal data from anyone, including children.</p>
+<hr />
+<h2>Changes to this policy</h2>
+<p>When this policy changes, the new version ships with the app update and the
+effective date above is revised. Each version of the app contains the policy
+that applies to it.</p>
+<hr />
+<h2>Contact</h2>
+<p>Questions about this policy are welcome. Email <a href="mailto:mattmacri89@gmail.com">mattmacri89@gmail.com</a>.</p>
+<p>The current version of this policy is also published at
+<a href="https://runthruapp.com/privacy">runthruapp.com/privacy</a>.</p>
+  </main>
+  <footer>&copy; 2026 RunThru · <a href="https://runthruapp.com/">Home</a></footer>
+</body>
+</html>
