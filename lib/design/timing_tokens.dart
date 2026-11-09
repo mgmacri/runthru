@@ -92,20 +92,6 @@ abstract final class RunThruTiming {
   // P1 Grade C — underdamped spring for satisfying bounce
   static const double jiggleDampingRatio = 0.5;
 
-  // ── v4: WPM Dial (P2 Grade C) ──
-
-  /// Inactivity timeout before the WPM dial auto-dismisses in milliseconds.
-  // P2 Grade C — auto-dismiss after 1.5s of no interaction
-  static const int wpmDialInactivityMs = 1500;
-
-  /// Fade duration for the WPM dial appear/dismiss in milliseconds.
-  // P2 Grade C — quick fade for dial transitions
-  static const int wpmDialFadeMs = 200;
-
-  /// WPM increment per dial step.
-  // P2 Grade D — tunable
-  static const int wpmDialStep = 25;
-
   // ── v4: Overlay Hints (P6 Grade D) ──
 
   /// Auto-dismiss timeout for hint overlays in milliseconds.

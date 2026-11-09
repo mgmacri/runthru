@@ -58,7 +58,8 @@ class BackWallFontSizer {
     double screenHeight,
   ) {
     // Check if recomputation is needed
-    final headMoved = (headX - _lastHeadX).abs() > _headThreshold ||
+    final headMoved =
+        (headX - _lastHeadX).abs() > _headThreshold ||
         (headY - _lastHeadY).abs() > _headThreshold ||
         _lastHeadX.isNaN;
     final sizeChanged =
@@ -101,8 +102,10 @@ class BackWallFontSizer {
     );
     if (refWidth <= 0) return _cachedFontSize;
 
-    final fontSize =
-        (_trialSize * targetWidth / refWidth).clamp(_minFontSize, _maxFontSize);
+    final fontSize = (_trialSize * targetWidth / refWidth).clamp(
+      _minFontSize,
+      _maxFontSize,
+    );
 
     _cachedFontSize = fontSize;
     return fontSize;
@@ -150,8 +153,7 @@ class BackWallFontSizer {
 
     if (leftScreen == null || rightScreen == null) return baseFontSize;
 
-    final targetWidth =
-        (rightScreen.dx - leftScreen.dx).abs() * _fillFraction;
+    final targetWidth = (rightScreen.dx - leftScreen.dx).abs() * _fillFraction;
 
     // Measure current word at base font size
     final wordWidth = GlyphMeasurer.instance.wordWidth(

@@ -23,11 +23,13 @@ class ExtractedDocument {
   });
 
   factory ExtractedDocument.fromJson(Map<String, Object?> json) {
-    final sentences = (json['sentences'] as List<Object?>?)
+    final sentences =
+        (json['sentences'] as List<Object?>?)
             ?.map((e) => Sentence.fromJson(e as Map<String, Object?>))
             .toList() ??
         <Sentence>[];
-    final pageBoundaries = (json['pageBoundaries'] as List<Object?>?)
+    final pageBoundaries =
+        (json['pageBoundaries'] as List<Object?>?)
             ?.map((e) => PageBoundary.fromJson(e as Map<String, Object?>))
             .toList() ??
         <PageBoundary>[];
@@ -77,10 +79,10 @@ class ExtractedDocument {
   }
 
   Map<String, Object?> toJson() => {
-        'sentences': sentences.map((s) => s.toJson()).toList(),
-        'pageBoundaries': pageBoundaries.map((b) => b.toJson()).toList(),
-        'totalPages': totalPages,
-      };
+    'sentences': sentences.map((s) => s.toJson()).toList(),
+    'pageBoundaries': pageBoundaries.map((b) => b.toJson()).toList(),
+    'totalPages': totalPages,
+  };
 }
 
 enum PdfStatus {
@@ -170,10 +172,7 @@ class PdfEntry {
 
 /// Overall processing progress across all PDFs.
 class OverallProgress {
-  const OverallProgress({
-    this.completed = 0,
-    this.total = 0,
-  });
+  const OverallProgress({this.completed = 0, this.total = 0});
 
   final int completed;
   final int total;
@@ -194,133 +193,6 @@ class PdfTimeoutError implements Exception {
   @override
   String toString() =>
       'PdfTimeoutError: extraction exceeded timeout for $filePath';
-}
-
-// ── Section-based persistence models (Prompt 2) ──────────────────────
-
-/// A fixed-size chunk of sentences for lazy loading.
-class SectionData {
-  const SectionData({
-    required this.sectionIndex,
-    required this.startSentenceIndex,
-    required this.sentences,
-  });
-
-  factory SectionData.fromJson(Map<String, Object?> json) {
-    return SectionData(
-      sectionIndex: json['sectionIndex'] as int? ?? 0,
-      startSentenceIndex: json['startSentenceIndex'] as int? ?? 0,
-      sentences: (json['sentences'] as List<Object?>?)
-              ?.map((e) => Sentence.fromJson(e as Map<String, Object?>))
-              .toList() ??
-          <Sentence>[],
-    );
-  }
-
-  final int sectionIndex;
-  final int startSentenceIndex;
-  final List<Sentence> sentences;
-
-  int get totalWords => sentences.fold(0, (sum, s) => sum + s.words.length);
-
-  Map<String, Object?> toJson() => {
-        'sectionIndex': sectionIndex,
-        'startSentenceIndex': startSentenceIndex,
-        'sentences': sentences.map((s) => s.toJson()).toList(),
-      };
-}
-
-/// Metadata manifest for a sectioned PDF document.
-class DocumentManifest {
-  const DocumentManifest({
-    required this.filePath,
-    required this.fileHash,
-    required this.totalSentences,
-    required this.totalWords,
-    required this.totalSections,
-    required this.sectionSize,
-    this.pageMap = const {},
-    required this.lastModified,
-    required this.createdAt,
-  });
-
-  factory DocumentManifest.fromJson(Map<String, Object?> json) {
-    final pageMapRaw = json['pageMap'] as Map<String, Object?>? ?? {};
-    final pageMap = pageMapRaw.map(
-      (k, v) => MapEntry(int.parse(k), v as int),
-    );
-    return DocumentManifest(
-      filePath: json['filePath'] as String? ?? '',
-      fileHash: json['fileHash'] as String? ?? '',
-      totalSentences: json['totalSentences'] as int? ?? 0,
-      totalWords: json['totalWords'] as int? ?? 0,
-      totalSections: json['totalSections'] as int? ?? 1,
-      sectionSize: json['sectionSize'] as int? ?? 200,
-      pageMap: pageMap,
-      lastModified: json['lastModified'] != null
-          ? DateTime.parse(json['lastModified'] as String)
-          : DateTime.now(),
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
-    );
-  }
-
-  final String filePath;
-  final String fileHash;
-  final int totalSentences;
-  final int totalWords;
-  final int totalSections;
-  final int sectionSize;
-
-  /// pageNumber → startSentenceIndex
-  final Map<int, int> pageMap;
-  final DateTime lastModified;
-  final DateTime createdAt;
-
-  Map<String, Object?> toJson() => {
-        'filePath': filePath,
-        'fileHash': fileHash,
-        'totalSentences': totalSentences,
-        'totalWords': totalWords,
-        'totalSections': totalSections,
-        'sectionSize': sectionSize,
-        'pageMap': pageMap.map((k, v) => MapEntry(k.toString(), v)),
-        'lastModified': lastModified.toIso8601String(),
-        'createdAt': createdAt.toIso8601String(),
-      };
-}
-
-/// Global store index tracking last-opened timestamps per file hash.
-class StoreIndex {
-  const StoreIndex({required this.entries});
-
-  factory StoreIndex.fromJson(Map<String, Object?> json) {
-    final raw = json['entries'] as Map<String, Object?>? ?? {};
-    final entries = raw.map(
-      (k, v) => MapEntry(k, DateTime.parse(v as String)),
-    );
-    return StoreIndex(entries: entries);
-  }
-
-  /// fileHash → lastOpened timestamp
-  final Map<String, DateTime> entries;
-
-  StoreIndex touch(String hash) {
-    final updated = Map<String, DateTime>.from(entries);
-    updated[hash] = DateTime.now();
-    return StoreIndex(entries: updated);
-  }
-
-  StoreIndex remove(String hash) {
-    final updated = Map<String, DateTime>.from(entries);
-    updated.remove(hash);
-    return StoreIndex(entries: updated);
-  }
-
-  Map<String, Object?> toJson() => {
-        'entries': entries.map((k, v) => MapEntry(k, v.toIso8601String())),
-      };
 }
 
 // ── Page boundary tracking (Prompt 3) ────────────────────────────────
@@ -351,11 +223,11 @@ class PageBoundary {
   final String firstWords;
 
   Map<String, Object?> toJson() => {
-        'pageNumber': pageNumber,
-        'startSentenceIndex': startSentenceIndex,
-        'startWordIndex': startWordIndex,
-        'firstWords': firstWords,
-      };
+    'pageNumber': pageNumber,
+    'startSentenceIndex': startSentenceIndex,
+    'startWordIndex': startWordIndex,
+    'firstWords': firstWords,
+  };
 }
 
 /// User-defined reading range (start page/word → end page/word).
@@ -417,15 +289,15 @@ class ReadingRange {
   }
 
   Map<String, Object?> toJson() => {
-        'startPage': startPage,
-        'startWordIndexOnPage': startWordIndexOnPage,
-        'startWordAnchor': startWordAnchor,
-        'endPage': endPage,
-        'endWordIndexOnPage': endWordIndexOnPage,
-        'endWordAnchor': endWordAnchor,
-        'resolvedStartWordIndex': resolvedStartWordIndex,
-        'resolvedEndWordIndex': resolvedEndWordIndex,
-      };
+    'startPage': startPage,
+    'startWordIndexOnPage': startWordIndexOnPage,
+    'startWordAnchor': startWordAnchor,
+    'endPage': endPage,
+    'endWordIndexOnPage': endWordIndexOnPage,
+    'endWordAnchor': endWordAnchor,
+    'resolvedStartWordIndex': resolvedStartWordIndex,
+    'resolvedEndWordIndex': resolvedEndWordIndex,
+  };
 }
 
 /// Resolves a ReadingRange to global word indices using page boundaries.

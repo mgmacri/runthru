@@ -1,1 +1,0 @@
-Paced reading for ADHD and focus. Finish what you start — one word at a time.

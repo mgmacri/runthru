@@ -34,6 +34,7 @@ class ParallaxWordPainter extends CustomPainter {
     this.anchorColor,
     this.orpCondition = OrpCondition.orpBoldColor,
     this.fontFamily = 'BricolageGrotesque',
+    this.showAnchorGuides = true,
     super.repaint,
   }) : _anchorIndex = orpIndexInOriginal(word),
        _glyphs = word.isNotEmpty
@@ -62,6 +63,7 @@ class ParallaxWordPainter extends CustomPainter {
   final Color? anchorColor;
   final OrpCondition orpCondition;
   final String fontFamily;
+  final bool showAnchorGuides;
 
   final int _anchorIndex;
   final List<GlyphPosition> _glyphs;
@@ -167,6 +169,27 @@ class ParallaxWordPainter extends CustomPainter {
           RunThruTokens.stageBase,
         ) <
         4.5;
+
+    if (showAnchorGuides) {
+      final guidePaint = Paint()
+        ..color = effectiveAnchorColor.withValues(alpha: 0.55)
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round;
+      final guideX =
+          screenCenterX + (anchorCenterPx - referenceCenterPx) * entranceScale;
+      final guideGap = fontSize * 0.54;
+      final guideLength = (fontSize * 0.34).clamp(12.0, 20.0);
+      canvas.drawLine(
+        Offset(guideX, screenCenterY - guideGap - guideLength),
+        Offset(guideX, screenCenterY - guideGap),
+        guidePaint,
+      );
+      canvas.drawLine(
+        Offset(guideX, screenCenterY + guideGap),
+        Offset(guideX, screenCenterY + guideGap + guideLength),
+        guidePaint,
+      );
+    }
 
     for (var i = 0; i < _glyphs.length; i++) {
       final glyph = _glyphs[i];
@@ -335,7 +358,8 @@ class ParallaxWordPainter extends CustomPainter {
       animationValue != oldDelegate.animationValue ||
       depthBounceValue != oldDelegate.depthBounceValue ||
       orpCondition != oldDelegate.orpCondition ||
-      fontFamily != oldDelegate.fontFamily;
+      fontFamily != oldDelegate.fontFamily ||
+      showAnchorGuides != oldDelegate.showAnchorGuides;
 }
 
 /// Front four corners of a glyph's 3D bounding box (used for shadow/glow).

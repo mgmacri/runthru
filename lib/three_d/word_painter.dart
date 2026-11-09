@@ -20,6 +20,7 @@ class WordPainter extends CustomPainter {
     this.anchorColor,
     this.orpCondition = OrpCondition.orpBoldColor,
     this.fontFamily = 'BricolageGrotesque',
+    this.showAnchorGuides = true,
     super.repaint,
   }) : _anchorIndex = orpIndexInOriginal(word),
        _glyphs = GlyphMeasurer.instance.measureWord(
@@ -34,6 +35,7 @@ class WordPainter extends CustomPainter {
   final Color? anchorColor;
   final OrpCondition orpCondition;
   final String fontFamily;
+  final bool showAnchorGuides;
   final TextPainterPool painterPool;
   final int _anchorIndex;
   final List<GlyphPosition> _glyphs;
@@ -58,6 +60,7 @@ class WordPainter extends CustomPainter {
       startX = (size.width / 2) - anchorCenterX;
     }
     final centerY = size.height / 2;
+    final anchorCenterX = startX + anchorGlyph.xOffset + anchorGlyph.width / 2;
 
     // Subtle scale pulse from animation
     final scale = 1.0 + 0.015 * animationValue;
@@ -65,6 +68,27 @@ class WordPainter extends CustomPainter {
     canvas.translate(size.width / 2, centerY);
     canvas.scale(scale, scale);
     canvas.translate(-size.width / 2, -centerY);
+
+    if (showAnchorGuides) {
+      final guidePaint = Paint()
+        ..color = (anchorColor ?? RunThruTokens.stageAnchor).withValues(
+          alpha: 0.55,
+        )
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round;
+      final guideGap = fontSize * 0.54;
+      final guideLength = (fontSize * 0.34).clamp(12.0, 20.0);
+      canvas.drawLine(
+        Offset(anchorCenterX, centerY - guideGap - guideLength),
+        Offset(anchorCenterX, centerY - guideGap),
+        guidePaint,
+      );
+      canvas.drawLine(
+        Offset(anchorCenterX, centerY + guideGap),
+        Offset(anchorCenterX, centerY + guideGap + guideLength),
+        guidePaint,
+      );
+    }
 
     // ── Draw each glyph using pooled painters (round-robin) ──
     // P14 Grade C — apply shadow behind anchor when contrast < 4.5:1
@@ -104,10 +128,7 @@ class WordPainter extends CustomPainter {
       // P18 Grade B — ORP condition determines anchor styling
       final TextStyle style;
       if (!isAnchor) {
-        style = RunThruTypography.readingWord(
-          fontSize,
-          fontFamily: fontFamily,
-        );
+        style = RunThruTypography.readingWord(fontSize, fontFamily: fontFamily);
       } else {
         switch (orpCondition) {
           case OrpCondition.orpBoldColor:
@@ -139,8 +160,6 @@ class WordPainter extends CustomPainter {
       tp.paint(canvas, Offset(startX + glyph.xOffset, centerY - tp.height / 2));
     }
 
-    // Anchor line removed — it was drawing through the middle of the letter.
-
     canvas.restore();
   }
 
@@ -149,7 +168,9 @@ class WordPainter extends CustomPainter {
     return word != oldDelegate.word ||
         fontSize != oldDelegate.fontSize ||
         animationValue != oldDelegate.animationValue ||
+        anchorColor != oldDelegate.anchorColor ||
         orpCondition != oldDelegate.orpCondition ||
-        fontFamily != oldDelegate.fontFamily;
+        fontFamily != oldDelegate.fontFamily ||
+        showAnchorGuides != oldDelegate.showAnchorGuides;
   }
 }

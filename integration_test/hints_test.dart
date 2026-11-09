@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/core/hint_controller.dart';
@@ -45,7 +43,6 @@ void main() {
   late ProviderContainer container;
   late FakeConfigNotifier fakeConfig;
   late HintController controller;
-  Timer? capturedTimer;
 
   setUp(() {
     fakeConfig = FakeConfigNotifier();
@@ -54,19 +51,10 @@ void main() {
     );
     container.read(configProvider);
 
-    capturedTimer = null;
-    controller = HintController(
-      configNotifier: fakeConfig,
-      timerFactory: (duration, callback) {
-        capturedTimer = Timer(duration, callback);
-        return capturedTimer!;
-      },
-    );
+    controller = HintController(configNotifier: fakeConfig);
   });
 
   tearDown(() {
-    capturedTimer?.cancel();
-    controller.dispose();
     container.dispose();
   });
 
@@ -123,15 +111,13 @@ void main() {
       // Other hints still available.
       expect(newController.check(HintId.swipeLr), isNotNull);
       expect(newController.check(HintId.doubleTap), isNotNull);
-      expect(newController.check(HintId.longPress), isNotNull);
       expect(newController.check(HintId.clipboard), isNotNull);
 
-      newController.dispose();
       newContainer.dispose();
     });
 
-    test('5. All 6 hint IDs recognised, no extras', () {
-      expect(HintId.all.length, 6);
+    test('5. All 8 hint IDs recognised, no extras', () {
+      expect(HintId.all.length, 8);
 
       for (final id in HintId.all) {
         final hint = controller.check(id);
@@ -143,34 +129,6 @@ void main() {
 
     test('unrecognised hint ID returns null', () {
       expect(controller.check('hint_nonexistent'), isNull);
-    });
-
-    test('long-press timer fires callback', () {
-      // ignore: unused_local_variable
-      var timerFired = false;
-      controller.onLongPressHintTimerFired = () => timerFired = true;
-      controller.startLongPressTimer();
-
-      expect(capturedTimer, isNotNull);
-      expect(capturedTimer!.isActive, isTrue);
-
-      // Timer would fire after 2 minutes — verify it was created.
-      // (Actual firing is tested in unit tests via timer completion.)
-    });
-
-    test('long-press timer not started if hint already shown', () {
-      fakeConfig.markHintShown(HintId.longPress);
-      controller.startLongPressTimer();
-      expect(capturedTimer, isNull);
-    });
-
-    test('cancel long-press timer stops it', () {
-      controller.onLongPressHintTimerFired = () {};
-      controller.startLongPressTimer();
-      expect(capturedTimer!.isActive, isTrue);
-
-      controller.cancelLongPressTimer();
-      expect(capturedTimer!.isActive, isFalse);
     });
 
     test('progressive hint flow mirrors real usage', () {
@@ -194,12 +152,11 @@ void main() {
       expect(dtHint, isNotNull);
       controller.markShown(HintId.doubleTap);
 
-      // All shown — only longPress and clipboard remain.
+      // All shown — only clipboard remains.
       expect(controller.check(HintId.tap), isNull);
       expect(controller.check(HintId.swipeUp), isNull);
       expect(controller.check(HintId.swipeLr), isNull);
       expect(controller.check(HintId.doubleTap), isNull);
-      expect(controller.check(HintId.longPress), isNotNull);
       expect(controller.check(HintId.clipboard), isNotNull);
     });
   });

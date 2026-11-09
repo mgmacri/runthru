@@ -11,6 +11,7 @@ import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 import 'package:runthru/widgets/wpm_slider.dart';
 
 /// Settings screen with neumorphic cards.
@@ -152,279 +153,116 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: RunThruTokens.shellBase,
-      appBar: AppBar(
-        backgroundColor: RunThruTokens.shellBase,
-        elevation: 0,
-        title: const Text('Settings', style: RunThruTypography.title),
-        iconTheme: const IconThemeData(color: RunThruTokens.shellTextPrimary),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          // ── Reading Goal ──
-          NeumorphicCard(
-            surface: RunThruSurface.shell,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Reading Goal', style: RunThruTypography.title),
-                const SizedBox(height: 4),
-                Text(
-                  'Choose a preset to adjust speed and room settings.',
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _ReadingGoalSelector(
-                  selected: config.readingGoalPreset,
-                  currentWpm: config.defaultWpm,
-                  currentParallax: config.parallaxIntensity,
-                  hasPremium: hasPremium,
-                  onChanged: notifier.applyReadingGoalPreset,
-                ),
-              ],
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            const RunThruScreenHeader(
+              title: 'Settings',
+              subtitle: 'Reading comfort and sources',
             ),
-          ),
-
-          // ── Reading Speed ──
-          NeumorphicCard(
-            surface: RunThruSurface.shell,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Reading Speed', style: RunThruTypography.title),
-                const SizedBox(height: 12),
-                WpmSlider(
-                  value: config.defaultWpm,
-                  onChanged: notifier.setDefaultWpm,
-                ),
-                // P1 Grade A — shortened WPM advisory text
-                if (config.defaultWpm > 350)
-                  Semantics(
-                    liveRegion: true,
-                    child: const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Best for scanning familiar text',
-                        style: RunThruTypography.caption,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // ── Word Pacing ──
-          const PacingPanel(),
-
-          // ── Reading Comfort ──
-          const SpacingControls(),
-
-          NeumorphicCard(
-            key: _googleDriveBrowserSettingKey,
-            surface: RunThruSurface.shell,
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.manage_search_rounded,
-                  size: 22,
-                  color: RunThruTokens.shellAccent,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Use full Drive browser',
-                        style: RunThruTypography.title,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Browse supported files across Google Drive. This requires broader Drive access and may not be available in some organizations.',
-                        style: RunThruTypography.caption.copyWith(
-                          color: RunThruTokens.shellTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Switch.adaptive(
-                  value:
-                      config.googleDriveAccessMode ==
-                      GoogleDriveAccessMode.fullDriveBrowser,
-                  onChanged: (enabled) => notifier.setGoogleDriveAccessMode(
-                    enabled
-                        ? GoogleDriveAccessMode.fullDriveBrowser
-                        : GoogleDriveAccessMode.selectedFilesOnly,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── 3D Mode (Premium only — ALL platforms) ──
-          if (hasPremium)
+            // ── Reading Goal ──
             NeumorphicCard(
               surface: RunThruSurface.shell,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('3D Room Mode', style: RunThruTypography.title),
+                  const Text('Reading Goal', style: RunThruTypography.title),
                   const SizedBox(height: 4),
                   Text(
-                    'Controls the 3D room depth and parallax effect.',
+                    'Choose a preset to adjust speed and room settings.',
                     style: RunThruTypography.caption.copyWith(
                       color: RunThruTokens.shellTextSecondary,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _ParallaxIntensitySelector(
-                    selected: config.parallaxIntensity,
-                    onChanged: notifier.setParallaxIntensity,
+                  _ReadingGoalSelector(
+                    selected: config.readingGoalPreset,
+                    currentWpm: config.defaultWpm,
+                    currentParallax: config.parallaxIntensity,
+                    hasPremium: hasPremium,
+                    onChanged: notifier.applyReadingGoalPreset,
                   ),
                 ],
               ),
             ),
 
-          // ── Anchor Color (Premium only) ──
-          if (hasPremium)
+            // ── Reading Speed ──
             NeumorphicCard(
               surface: RunThruSurface.shell,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Anchor Letter Color',
-                    style: RunThruTypography.title,
-                  ),
+                  const Text('Reading Speed', style: RunThruTypography.title),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: List.generate(RunThruTokens.anchorColors.length, (
-                      i,
-                    ) {
-                      final color = RunThruTokens.anchorColors[i];
-                      final selected = config.anchorColorIndex == i;
-                      return GestureDetector(
-                        onTap: () => notifier.setAnchorColorIndex(i),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: selected
-                                ? Border.all(
-                                    color: RunThruTokens.shellTextPrimary,
-                                    width: 3,
-                                  )
-                                : null,
-                            boxShadow: selected
-                                ? [
-                                    BoxShadow(
-                                      color: color.withAlpha(120),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: selected
-                              ? const Icon(
-                                  Icons.check,
-                                  color: RunThruTokens.shellTextPrimary,
-                                  size: 20,
-                                )
-                              : null,
-                        ),
-                      );
-                    }),
+                  WpmSlider(
+                    value: config.defaultWpm,
+                    onChanged: notifier.setDefaultWpm,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    RunThruTokens.anchorColorNames[config.anchorColorIndex
-                        .clamp(0, RunThruTokens.anchorColorNames.length - 1)],
-                    style: RunThruTypography.caption,
-                  ),
-                  // P14 Grade C — live preview of anchor color on stage surface
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: const BoxDecoration(
-                      color: RunThruTokens.stageBase,
-                      borderRadius: BorderRadius.all(Radius.circular(8)),
-                    ),
-                    child: Center(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'rea',
-                              style: RunThruTypography.readingWord(24),
-                            ),
-                            TextSpan(
-                              text: 'd',
-                              style: RunThruTypography.readingAnchor(
-                                24,
-                                color:
-                                    RunThruTokens.anchorColors[config
-                                        .anchorColorIndex
-                                        .clamp(
-                                          0,
-                                          RunThruTokens.anchorColors.length - 1,
-                                        )],
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'ing',
-                              style: RunThruTypography.readingWord(24),
-                            ),
-                          ],
+                  // P1 Grade A — shortened WPM advisory text
+                  if (config.defaultWpm > 350)
+                    Semantics(
+                      liveRegion: true,
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Best for scanning familiar text',
+                          style: RunThruTypography.caption,
                         ),
                       ),
                     ),
+                ],
+              ),
+            ),
+
+            // ── Word Pacing ──
+            const PacingPanel(),
+
+            // ── Reading Comfort ──
+            const SpacingControls(),
+
+            NeumorphicCard(
+              surface: RunThruSurface.shell,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.center_focus_strong_rounded,
+                    size: 22,
+                    color: RunThruTokens.shellAccent,
                   ),
-                  // P14 Grade C — contrast warning tiers
-                  Builder(
-                    builder: (context) {
-                      final anchorColor =
-                          RunThruTokens.anchorColors[config.anchorColorIndex
-                              .clamp(0, RunThruTokens.anchorColors.length - 1)];
-                      final ratio = WcagContrast.contrastRatio(
-                        anchorColor,
-                        RunThruTokens.stageBase,
-                      );
-                      if (ratio >= 4.5) return const SizedBox.shrink();
-                      final isDanger = ratio < 3.0;
-                      return Semantics(
-                        liveRegion: true,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            isDanger
-                                ? 'This color is very hard to see — consider a darker option'
-                                : 'This color may be hard to see at speed',
-                            style: RunThruTypography.caption.copyWith(
-                              color: isDanger
-                                  ? RunThruTokens.shellError
-                                  : RunThruTokens.shellProcessing,
-                            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Focus Mode',
+                          style: RunThruTypography.title,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Hide reading controls and use gestures for pause, sentence steps, and pace.',
+                          style: RunThruTypography.caption.copyWith(
+                            color: RunThruTokens.shellTextSecondary,
                           ),
                         ),
-                      );
-                    },
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Switch.adaptive(
+                    value: config.focusModeEnabled,
+                    activeThumbColor: RunThruTokens.shellAccent,
+                    activeTrackColor: RunThruTokens.shellAccent.withValues(
+                      alpha: 0.34,
+                    ),
+                    onChanged: notifier.setFocusModeEnabled,
                   ),
                 ],
               ),
             ),
 
-          // ── Reading Font (Premium only) ──
-          if (hasPremium)
+            // ── Reading Font ──
             NeumorphicCard(
               surface: RunThruSurface.shell,
               child: Column(
@@ -432,209 +270,308 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   const Text('Reading Font', style: RunThruTypography.title),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Bundled fonts are guaranteed. System fonts depend on your device.',
-                    style: RunThruTypography.caption,
-                  ),
-                  const SizedBox(height: 12),
-                  _FontPicker(
-                    selected: config.fontFamily,
-                    onChanged: notifier.setFontFamily,
-                  ),
-                ],
-              ),
-            ),
-
-          // ── Upgrade to Premium (free users only) ──
-          if (!hasPremium)
-            NeumorphicCard(
-              surface: RunThruSurface.shell,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Unlock 3D Reading',
-                    style: RunThruTypography.title,
-                  ),
-                  const SizedBox(height: 8),
                   Text(
-                    'Get the immersive 3D cube viewport, head-tracking '
-                    'parallax, custom fonts, and reading range selection.',
-                    style: RunThruTypography.body.copyWith(
+                    'Atkinson Hyperlegible is optimised for fast single-fixation word recognition.',
+                    style: RunThruTypography.caption.copyWith(
                       color: RunThruTokens.shellTextSecondary,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: RunThruTokens.shellAccent,
-                      foregroundColor: RunThruTokens.shellBase,
+                  const SizedBox(height: 12),
+                  _FontPicker(
+                    selected: config.readingFontFamily,
+                    onChanged: notifier.setReadingFontFamily,
+                  ),
+                ],
+              ),
+            ),
+
+            NeumorphicCard(
+              key: _googleDriveBrowserSettingKey,
+              surface: RunThruSurface.shell,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.manage_search_rounded,
+                    size: 22,
+                    color: RunThruTokens.shellAccent,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Use full Drive browser',
+                          style: RunThruTypography.title,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Browse supported files across Google Drive. This requires broader Drive access and may not be available in some organizations.',
+                          style: RunThruTypography.caption.copyWith(
+                            color: RunThruTokens.shellTextSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                    onPressed: () =>
-                        ref.read(purchaseServiceProvider).purchasePremium(),
-                    child: Text(
-                      'Upgrade',
-                      style: RunThruTypography.body.copyWith(
-                        color: RunThruTokens.shellBase,
-                      ),
+                  ),
+                  const SizedBox(width: 12),
+                  Switch.adaptive(
+                    value:
+                        config.googleDriveAccessMode ==
+                        GoogleDriveAccessMode.fullDriveBrowser,
+                    activeThumbColor: RunThruTokens.shellAccent,
+                    activeTrackColor: RunThruTokens.shellAccent,
+                    onChanged: (enabled) => notifier.setGoogleDriveAccessMode(
+                      enabled
+                          ? GoogleDriveAccessMode.fullDriveBrowser
+                          : GoogleDriveAccessMode.selectedFilesOnly,
                     ),
                   ),
                 ],
               ),
             ),
 
-          // ── App Info (inset) ──
-          const NeumorphicCard(
-            surface: RunThruSurface.shell,
-            inset: true,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('RunThru', style: RunThruTypography.title),
-                SizedBox(height: 4),
-                Text('Version 2.0.0', style: RunThruTypography.caption),
-                SizedBox(height: 4),
-                Text(
-                  'Speed reading with 3D depth.',
-                  style: RunThruTypography.caption,
+            // ── 3D Mode (Premium only — ALL platforms) ──
+            if (hasPremium)
+              NeumorphicCard(
+                surface: RunThruSurface.shell,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('3D Room Mode', style: RunThruTypography.title),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Controls the 3D room depth and parallax effect.',
+                      style: RunThruTypography.caption.copyWith(
+                        color: RunThruTokens.shellTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _ParallaxIntensitySelector(
+                      selected: config.parallaxIntensity,
+                      onChanged: notifier.setParallaxIntensity,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
 
-          // ── Debug Logs ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              child: TextButton.icon(
-                onPressed: () => _showLogViewer(context),
-                icon: const Icon(
-                  Icons.bug_report,
-                  size: 16,
-                  color: RunThruTokens.shellTextSecondary,
+            // ── Anchor Color (Premium only) ──
+            if (hasPremium)
+              NeumorphicCard(
+                surface: RunThruSurface.shell,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Anchor Letter Color',
+                      style: RunThruTypography.title,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: List.generate(
+                        RunThruTokens.anchorColors.length,
+                        (i) {
+                          final color = RunThruTokens.anchorColors[i];
+                          final selected = config.anchorColorIndex == i;
+                          return GestureDetector(
+                            onTap: () => notifier.setAnchorColorIndex(i),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: selected
+                                    ? Border.all(
+                                        color: RunThruTokens.shellTextPrimary,
+                                        width: 3,
+                                      )
+                                    : null,
+                                boxShadow: selected
+                                    ? [
+                                        BoxShadow(
+                                          color: color.withAlpha(120),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: selected
+                                  ? const Icon(
+                                      Icons.check,
+                                      color: RunThruTokens.shellTextPrimary,
+                                      size: 20,
+                                    )
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      RunThruTokens.anchorColorNames[config.anchorColorIndex
+                          .clamp(0, RunThruTokens.anchorColorNames.length - 1)],
+                      style: RunThruTypography.caption,
+                    ),
+                    // P14 Grade C — live preview of anchor color on stage surface
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: const BoxDecoration(
+                        color: RunThruTokens.stageBase,
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: Center(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'rea',
+                                style: RunThruTypography.readingWord(24),
+                              ),
+                              TextSpan(
+                                text: 'd',
+                                style: RunThruTypography.readingAnchor(
+                                  24,
+                                  color:
+                                      RunThruTokens.anchorColors[config
+                                          .anchorColorIndex
+                                          .clamp(
+                                            0,
+                                            RunThruTokens.anchorColors.length -
+                                                1,
+                                          )],
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'ing',
+                                style: RunThruTypography.readingWord(24),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // P14 Grade C — contrast warning tiers
+                    Builder(
+                      builder: (context) {
+                        final anchorColor =
+                            RunThruTokens.anchorColors[config.anchorColorIndex
+                                .clamp(
+                                  0,
+                                  RunThruTokens.anchorColors.length - 1,
+                                )];
+                        final ratio = WcagContrast.contrastRatio(
+                          anchorColor,
+                          RunThruTokens.stageBase,
+                        );
+                        if (ratio >= 4.5) return const SizedBox.shrink();
+                        final isDanger = ratio < 3.0;
+                        return Semantics(
+                          liveRegion: true,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              isDanger
+                                  ? 'This color is very hard to see — consider a darker option'
+                                  : 'This color may be hard to see at speed',
+                              style: RunThruTypography.caption.copyWith(
+                                color: isDanger
+                                    ? RunThruTokens.shellError
+                                    : RunThruTokens.shellProcessing,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                label: Text(
-                  'View Debug Logs',
-                  style: RunThruTypography.caption.copyWith(
+              ),
+
+            // ── Upgrade to Premium (free users only) ──
+            if (!hasPremium)
+              NeumorphicCard(
+                surface: RunThruSurface.shell,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Unlock 3D Reading',
+                      style: RunThruTypography.title,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Get the immersive 3D cube viewport, head-tracking '
+                      'parallax, custom fonts, and reading range selection.',
+                      style: RunThruTypography.body.copyWith(
+                        color: RunThruTokens.shellTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: RunThruTokens.shellAccent,
+                        foregroundColor: RunThruTokens.shellBase,
+                      ),
+                      onPressed: () =>
+                          ref.read(purchaseServiceProvider).purchasePremium(),
+                      child: Text(
+                        'Upgrade',
+                        style: RunThruTypography.body.copyWith(
+                          color: RunThruTokens.shellBase,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── App Info (inset) ──
+            const NeumorphicCard(
+              surface: RunThruSurface.shell,
+              inset: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('RunThru', style: RunThruTypography.title),
+                  SizedBox(height: 4),
+                  Text('Version 2.0.0', style: RunThruTypography.caption),
+                  SizedBox(height: 4),
+                  Text(
+                    'Speed reading with 3D depth.',
+                    style: RunThruTypography.caption,
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Debug Logs ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => _showLogViewer(context),
+                  icon: const Icon(
+                    Icons.bug_report,
+                    size: 16,
                     color: RunThruTokens.shellTextSecondary,
+                  ),
+                  label: Text(
+                    'View Debug Logs',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FontPicker extends StatelessWidget {
-  const _FontPicker({required this.selected, required this.onChanged});
-
-  final String selected;
-  final void Function(String) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    const fonts = RunThruTypography.availableFonts;
-    final bundled = fonts.where((f) => f.isBundled).toList();
-    final system = fonts.where((f) => !f.isBundled).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Bundled fonts
-        ...bundled.map(_fontTile),
-        const SizedBox(height: 8),
-        Text(
-          'System Fonts',
-          style: RunThruTypography.caption.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // System fonts in a wrap for compactness
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: system.map(_fontChip).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _fontTile(FontChoice font) {
-    final isSelected = font.family == selected;
-    return GestureDetector(
-      onTap: () => onChanged(font.family),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? RunThruTokens.shellAccent.withAlpha(30)
-              : RunThruTokens.shellBase,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected
-                ? RunThruTokens.shellAccent
-                : RunThruTokens.shellTextSecondary.withAlpha(40),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                font.displayName,
-                style: TextStyle(
-                  fontFamily: font.family,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: RunThruTokens.shellTextPrimary,
-                ),
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                Icons.check_circle,
-                color: RunThruTokens.shellAccent,
-                size: 20,
-              ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _fontChip(FontChoice font) {
-    final isSelected = font.family == selected;
-    return GestureDetector(
-      onTap: () => onChanged(font.family),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? RunThruTokens.shellAccent.withAlpha(30)
-              : RunThruTokens.shellBase,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected
-                ? RunThruTokens.shellAccent
-                : RunThruTokens.shellTextSecondary.withAlpha(40),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Text(
-          font.displayName,
-          style: TextStyle(
-            fontFamily: font.family,
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            color: isSelected
-                ? RunThruTokens.shellAccent
-                : RunThruTokens.shellTextPrimary,
-          ),
         ),
       ),
     );
@@ -970,6 +907,115 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
             ),
           );
         }),
+      ),
+    );
+  }
+}
+
+class _FontPicker extends StatelessWidget {
+  const _FontPicker({required this.selected, required this.onChanged});
+
+  final String selected;
+  final void Function(String) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const fonts = RunThruTypography.availableFonts;
+    final bundled = fonts.where((f) => f.isBundled).toList();
+    final system = fonts.where((f) => !f.isBundled).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...bundled.map(_tile),
+        const SizedBox(height: 8),
+        Text(
+          'System Fonts',
+          style: RunThruTypography.caption.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Wrap(spacing: 6, runSpacing: 6, children: system.map(_chip).toList()),
+      ],
+    );
+  }
+
+  Widget _tile(FontChoice font) {
+    final isSelected = font.family == selected;
+    return GestureDetector(
+      onTap: () => onChanged(font.family),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? RunThruTokens.shellAccent.withValues(alpha: 0.12)
+              : RunThruTokens.shellBase,
+          border: Border.all(
+            color: isSelected
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellDivider,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                font.displayName,
+                style: TextStyle(
+                  fontFamily: font.family,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: RunThruTokens.shellInk,
+                ),
+              ),
+            ),
+            Text(
+              'The quick brown fox',
+              style: TextStyle(
+                fontFamily: font.family,
+                fontSize: 12,
+                color: RunThruTokens.shellInkSoft,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(FontChoice font) {
+    final isSelected = font.family == selected;
+    return GestureDetector(
+      onTap: () => onChanged(font.family),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? RunThruTokens.shellAccent.withValues(alpha: 0.12)
+              : RunThruTokens.shellBase,
+          border: Border.all(
+            color: isSelected
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellDivider,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          font.displayName,
+          style: TextStyle(
+            fontFamily: font.family,
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+            color: isSelected
+                ? RunThruTokens.shellAccent
+                : RunThruTokens.shellInkSoft,
+          ),
+        ),
       ),
     );
   }

@@ -73,9 +73,11 @@ void main() {
     });
 
     test('clearDocument nulls the document', () {
-      const doc = ExtractedDocument(sentences: [
-        Sentence(words: ['hello']),
-      ]);
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['hello']),
+        ],
+      );
       const entry = PdfEntry(
         filePath: '/test.pdf',
         fileName: 'test.pdf',
@@ -123,28 +125,33 @@ void main() {
 
     test('all expected statuses exist', () {
       expect(
-          PdfStatus.values,
-          containsAll([
-            PdfStatus.pending,
-            PdfStatus.queued,
-            PdfStatus.processing,
-            PdfStatus.preview,
-            PdfStatus.ready,
-            PdfStatus.error,
-            PdfStatus.unsupported,
-            PdfStatus.permanentlyFailed,
-          ]));
+        PdfStatus.values,
+        containsAll([
+          PdfStatus.pending,
+          PdfStatus.queued,
+          PdfStatus.processing,
+          PdfStatus.preview,
+          PdfStatus.ready,
+          PdfStatus.error,
+          PdfStatus.unsupported,
+          PdfStatus.permanentlyFailed,
+        ]),
+      );
     });
   });
 
   group('ExtractedDocument', () {
     test('merge combines sentences from two documents', () {
-      const doc1 = ExtractedDocument(sentences: [
-        Sentence(words: ['hello', 'world']),
-      ]);
-      const doc2 = ExtractedDocument(sentences: [
-        Sentence(words: ['foo', 'bar']),
-      ]);
+      const doc1 = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['hello', 'world']),
+        ],
+      );
+      const doc2 = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['foo', 'bar']),
+        ],
+      );
 
       final merged = doc1.merge(doc2);
       expect(merged.sentences.length, 2);
@@ -153,9 +160,11 @@ void main() {
     });
 
     test('merge with empty document', () {
-      const doc1 = ExtractedDocument(sentences: [
-        Sentence(words: ['hello']),
-      ]);
+      const doc1 = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['hello']),
+        ],
+      );
       const doc2 = ExtractedDocument(sentences: []);
 
       final merged = doc1.merge(doc2);
@@ -164,10 +173,12 @@ void main() {
     });
 
     test('JSON round-trip', () {
-      const original = ExtractedDocument(sentences: [
-        Sentence(words: ['a', 'b']),
-        Sentence(words: ['c']),
-      ]);
+      const original = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['a', 'b']),
+          Sentence(words: ['c']),
+        ],
+      );
 
       final json = original.toJson();
       final restored = ExtractedDocument.fromJson(json);

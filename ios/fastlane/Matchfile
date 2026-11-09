@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Matchfile — code-signing configuration (via fastlane match)
+#
+# Certificates and profiles are stored in a private GitHub repo.
+# https://docs.fastlane.tools/actions/match/
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Git repo that holds encrypted certs & profiles
+git_url("https://github.com/mgmacri/ios-certificates.git")
+
+# Git branch to use (default: master)
+git_branch("main")
+
+# Storage mode — "git" stores everything in the repo above
+storage_mode("git")
+
+# Bundle identifiers to manage — main app + ShareExtension
+app_identifier([
+  "com.mgmacri.runthru",
+  "com.mgmacri.runthru.ShareExtension"
+])
+
+# Apple Developer account
+username(ENV["APPLE_ID"] || "mattmacri89@gmail.com")
+
+# Team ID
+team_id("273TZKZB3M")
+
+# Signing type — set per-lane, but default to "appstore"
+type("appstore")
+
+# On CI (Codemagic), use the API key instead of interactive login
+# The API key is configured via environment variables.

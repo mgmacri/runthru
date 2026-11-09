@@ -8,14 +8,21 @@ import 'package:runthru/features/content/providers/instapaper_auth_provider.dart
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
+import 'package:runthru/core/sample_document.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
+import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/config.dart';
-import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Content-type filter for the unified library.
 enum _LibraryFilter { all, books, articles, docs }
+
+const int _kTilesPerPage = 4;
+const double _kPagedWellHeight = 340;
 
 /// Unified library screen: Continue Reading → Books → Articles.
 ///
@@ -32,13 +39,48 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   _LibraryFilter _filter = _LibraryFilter.all;
   bool _isSearchOpen = false;
   String _searchQuery = '';
+  bool _sampleSeeded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _seedSampleIfNeeded();
+    });
+  }
+
+  void _seedSampleIfNeeded() {
+    if (_sampleSeeded || !mounted) return;
+    final config = ref.read(configProvider).valueOrNull;
+    if (config == null) return;
+    if (config.hasSeenReadingGoalOnboarding) {
+      _sampleSeeded = true;
+      return;
+    }
+    final progress = ref.read(readingProgressProvider.notifier);
+    final existing = progress.getRecord(sampleContentId);
+    if (existing != null) {
+      _sampleSeeded = true;
+      return;
+    }
+    _sampleSeeded = true;
+    final doc = sampleExtractedDocument;
+    progress.record(
+      contentId: sampleContentId,
+      source: 'sample',
+      title: sampleTitle,
+      wordIndex: 1,
+      totalWords: doc.totalWords,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final pdfListAsync = ref.watch(pdfListProvider);
-    final processed = ref.watch(preprocessingQueueProvider);
-    final config = ref.watch(configProvider);
-    final queue = ref.read(preprocessingQueueProvider.notifier);
+    // Perf (BK-10): the whole-queue map is NOT watched here — one book's
+    // status flip must rebuild one tile, not the entire library. Tiles watch
+    // their own entry via a select; the header watches the failed count.
+    final failedCount = ref.watch(pdfFailedCountProvider);
     // Watch the store so the shelf rebuilds when the async load resolves and
     // whenever reading progress is recorded; `shelf` reads the resolved value.
     ref.watch(readingProgressProvider);
@@ -128,7 +170,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             // ── Header ──
             SliverToBoxAdapter(
               child: _LibraryHeader(
-                failedCount: queue.failedCount,
+                failedCount: failedCount,
                 sourceCount: sourceCount,
                 isSearchOpen: _isSearchOpen,
                 searchQuery: _searchQuery,
@@ -148,6 +190,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               child: _ContinueReadingShelf(
                 items: shelf,
                 onItemTap: _onShelfItemTap,
+                continueTargetKey: libraryContinueTourTargetKey,
               ),
             ),
 
@@ -162,33 +205,47 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             // ── Books section ──
             if (_filter == _LibraryFilter.all ||
                 _filter == _LibraryFilter.books) ...[
-              const SliverToBoxAdapter(child: _SectionHeader(title: 'Books')),
               pdfListAsync.when(
                 data: (list) {
                   final filteredList = _filterBooks(
                     list,
                     normalizedSearchQuery,
                   );
-                  return filteredList.isEmpty
-                      ? SliverToBoxAdapter(
-                          child: _EmptyBooksState(
-                            message: normalizedSearchQuery.isEmpty
-                                ? null
-                                : 'No books match this search.',
-                          ),
-                        )
-                      : _BooksSliverGrid(
-                          pdfList: filteredList,
-                          processed: processed,
-                          config: config,
-                          onTap: _onBookTap,
-                          onLongPress: _onBookLongPress,
-                        );
+                  return SliverToBoxAdapter(
+                    child: _LibrarySection(
+                      title: 'Books',
+                      countLabel: _countLabel(filteredList.length, 'book'),
+                      dotColor: RunThruTokens.shellTeal,
+                      itemCount: filteredList.length,
+                      empty: _EmptyBooksState(
+                        message: normalizedSearchQuery.isEmpty
+                            ? null
+                            : 'No books match this search.',
+                      ),
+                      itemBuilder: (context, index) {
+                        final entry = filteredList[index];
+                        return _buildBookTile(entry: entry);
+                      },
+                    ),
+                  );
                 },
-                loading: () =>
-                    const SliverToBoxAdapter(child: _SectionLoading()),
+                loading: () => const SliverToBoxAdapter(
+                  child: _LibrarySection(
+                    title: 'Books',
+                    countLabel: 'Loading',
+                    dotColor: RunThruTokens.shellTeal,
+                    itemCount: 0,
+                    empty: _SectionLoading(),
+                  ),
+                ),
                 error: (e, _) => SliverToBoxAdapter(
-                  child: _SectionError(message: e.toString()),
+                  child: _LibrarySection(
+                    title: 'Books',
+                    countLabel: 'Issue',
+                    dotColor: RunThruTokens.shellTeal,
+                    itemCount: 0,
+                    empty: _SectionError(message: e.toString()),
+                  ),
                 ),
               ),
             ],
@@ -196,17 +253,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             // ── Articles section ──
             if (_filter == _LibraryFilter.all ||
                 _filter == _LibraryFilter.articles) ...[
-              const SliverToBoxAdapter(
-                child: _SectionHeader(title: 'Articles'),
-              ),
               _ArticlesSliverList(query: normalizedSearchQuery),
             ],
 
             // ── Docs section ──
             if (_filter == _LibraryFilter.all ||
                 _filter == _LibraryFilter.docs) ...[
-              const SliverToBoxAdapter(child: _SectionHeader(title: 'Docs')),
-              const SliverToBoxAdapter(child: _EmptyDocsState()),
+              const SliverToBoxAdapter(
+                child: _LibrarySection(
+                  title: 'Docs',
+                  countLabel: '0 docs',
+                  dotColor: RunThruTokens.shellInkSoft,
+                  itemCount: 0,
+                  empty: _EmptyDocsState(),
+                ),
+              ),
             ],
 
             const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
@@ -218,7 +279,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   void _onShelfItemTap(ProgressRecord item) {
     // Navigate to the correct reader for the content type.
-    if (item.contentId.startsWith('instapaper://')) {
+    if (item.contentId == sampleContentId) {
+      context.push('/read-sample');
+    } else if (item.contentId.startsWith('instapaper://')) {
       _resumeInstapaperItem(item);
     } else if (item.contentId.startsWith('drive://')) {
       _resumeDriveItem(item);
@@ -305,6 +368,62 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         })
         .toList(growable: false);
   }
+
+  Widget _buildBookTile({required PdfEntry entry}) {
+    // Perf (BK-10): scope the queue watch to this tile — only this entry's
+    // updates rebuild it (PdfEntry instances are replaced on update, so the
+    // select's identity comparison is exact).
+    return Consumer(
+      builder: (context, tileRef, _) {
+        final processedEntry = tileRef.watch(
+          preprocessingQueueProvider.select((m) => m[entry.filePath]),
+        );
+        final displayEntry = processedEntry ?? entry;
+
+        final bookmark = tileRef.watch(
+          bookmarkStoreProvider.select(
+            (s) => s.valueOrNull?[entry.filePath],
+          ),
+        );
+        final range = bookmark?.readingRange;
+        double readingProgress = 0.0;
+        String? rangeLabel;
+
+        if (range != null) {
+          final rangeStart = range.resolvedStartWordIndex;
+          final rangeEnd = range.resolvedEndWordIndex;
+          final rangeSize = rangeEnd - rangeStart + 1;
+          if (rangeSize > 0 && bookmark != null) {
+            readingProgress = ((bookmark.wordIndex - rangeStart) / rangeSize)
+                .clamp(0.0, 1.0);
+          }
+          rangeLabel = 'Pages ${range.startPage + 1}-${range.endPage + 1}';
+        } else if (bookmark != null) {
+          // Documents are no longer retained in queue state, so word totals
+          // come from the cross-source progress store instead.
+          final record = tileRef
+              .read(readingProgressProvider.notifier)
+              .getRecord(entry.filePath);
+          if (record != null && record.totalWords > 0) {
+            readingProgress = record.percent;
+          }
+        }
+
+        return _BookTile(
+          entry: displayEntry,
+          progress: readingProgress,
+          rangeLabel: rangeLabel,
+          divider: false,
+          onTap: displayEntry.status == PdfStatus.ready
+              ? () => _onBookTap(entry)
+              : null,
+          onLongPress: displayEntry.status == PdfStatus.ready
+              ? () => _onBookLongPress(entry)
+              : null,
+        );
+      },
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,52 +450,37 @@ class _LibraryHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Expanded(
-                child: Text('Library', style: RunThruTypography.title),
-              ),
+          RunThruScreenHeader(
+            title: 'Library',
+            subtitle:
+                'Synced just now · $sourceCount ${sourceCount == 1 ? 'source' : 'sources'}',
+            actions: [
               if (failedCount > 0) _ErrorBadge(count: failedCount),
-              const SizedBox(width: 4),
-              _HeaderIconButton(
+              RunThruHeaderIconButton(
                 icon: isSearchOpen ? Icons.close_rounded : Icons.search_rounded,
                 tooltip: isSearchOpen ? 'Close search' : 'Search',
                 onPressed: onSearchToggle,
               ),
-              _HeaderIconButton(
+              const SizedBox(width: 8),
+              RunThruHeaderIconButton(
                 icon: Icons.cloud_outlined,
                 tooltip: 'Sources',
                 onPressed: () => context.go('/sources'),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              const Icon(
-                Icons.sync_rounded,
-                size: 13,
-                color: RunThruTokens.shellTextSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Synced just now · $sourceCount ${sourceCount == 1 ? 'source' : 'sources'}',
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
-                ),
-              ),
-            ],
-          ),
           if (isSearchOpen) ...[
             const SizedBox(height: 12),
-            _LibrarySearchField(
-              initialValue: searchQuery,
-              onChanged: onSearchChanged,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _LibrarySearchField(
+                initialValue: searchQuery,
+                onChanged: onSearchChanged,
+              ),
             ),
           ],
         ],
@@ -402,11 +506,7 @@ class _LibrarySearchField extends StatelessWidget {
       child: Container(
         height: 46,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: RunThruDecorations.insetDecoration(
-          RunThruSurface.shell,
-          size: RunThruShadowSize.small,
-          borderRadius: 12,
-        ),
+        decoration: RunThruDecorations.designerInset(borderRadius: 14),
         child: Row(
           children: [
             const Icon(
@@ -441,47 +541,27 @@ class _LibrarySearchField extends StatelessWidget {
   }
 }
 
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: tooltip,
-      button: true,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: IconButton(
-          icon: Icon(icon, size: 22),
-          color: RunThruTokens.shellTextSecondary,
-          onPressed: onPressed,
-          tooltip: tooltip,
-        ),
-      ),
-    );
-  }
-}
 // ─────────────────────────────────────────────────────────────────────────────
 // Continue Reading shelf
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ContinueReadingShelf extends StatelessWidget {
-  const _ContinueReadingShelf({required this.items, required this.onItemTap});
+  const _ContinueReadingShelf({
+    required this.items,
+    required this.onItemTap,
+    this.continueTargetKey,
+  });
 
   final List<ProgressRecord> items;
   final void Function(ProgressRecord) onItemTap;
+  final GlobalKey? continueTargetKey;
 
   @override
   Widget build(BuildContext context) {
+    final leading = items.isEmpty ? null : items.first;
+    final rest = items.length <= 1
+        ? const <ProgressRecord>[]
+        : items.skip(1).toList(growable: false);
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Column(
@@ -490,29 +570,122 @@ class _ContinueReadingShelf extends StatelessWidget {
           const _SectionHeader(title: 'Continue reading', topPadding: 0),
           if (items.isEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-              child: Text(
-                'Nothing in progress yet',
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+                decoration: RunThruDecorations.designerFlat(borderRadius: 18),
+                child: Column(
+                  children: [
+                    const RunThruMark(size: 50),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Nothing in progress yet',
+                      style: RunThruTypography.rowTitle,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Add a source to start your first reading session.',
+                      style: RunThruTypography.metadata,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    RunThruPrimaryButton(
+                      icon: Icons.add_link_rounded,
+                      label: 'Add a source',
+                      onPressed: () => context.go('/sources'),
+                    ),
+                  ],
                 ),
               ),
             )
-          else
-            SizedBox(
-              height: 150,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) => _ShelfCard(
-                  item: items[index],
-                  onTap: () => onItemTap(items[index]),
+          else ...[
+            _ContinueHero(
+              targetKey: continueTargetKey,
+              item: leading!,
+              onTap: () => onItemTap(leading),
+            ),
+            if (rest.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Container(
+                  decoration: RunThruDecorations.designerFlat(borderRadius: 16),
+                  child: Column(
+                    children: [
+                      for (final item in rest)
+                        _ShelfCard(item: item, onTap: () => onItemTap(item)),
+                    ],
+                  ),
                 ),
               ),
-            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _ContinueHero extends StatelessWidget {
+  const _ContinueHero({
+    required this.item,
+    required this.onTap,
+    this.targetKey,
+  });
+
+  final ProgressRecord item;
+  final VoidCallback onTap;
+  final GlobalKey? targetKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (item.percent * 100).round();
+    final minutesLeft = item.minutesLeft <= 1
+        ? '<1 min left'
+        : '${item.minutesLeft} min left';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+      child: Semantics(
+        label: '${item.title}, ${item.source}, $percent percent read',
+        button: true,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            key: targetKey,
+            padding: const EdgeInsets.all(16),
+            decoration: RunThruDecorations.designerRaised(borderRadius: 20),
+            child: Row(
+              children: [
+                RunThruIconThumb(icon: _iconForSource(item.source), size: 50),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: RunThruTypography.rowTitle.copyWith(
+                          fontSize: 18,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_SourceBadge._label(item.source)} · $minutesLeft',
+                        style: RunThruTypography.metadata,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                RunThruProgressRing(value: item.percent),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -534,22 +707,6 @@ class _ShelfCardState extends State<_ShelfCard> {
   @override
   Widget build(BuildContext context) {
     final percent = (widget.item.percent * 100).round();
-    final minutesLeft = widget.item.minutesLeft;
-    final timeLabel = minutesLeft <= 1
-        ? '<1 min left'
-        : '$minutesLeft min left';
-    final reduced = isReducedMotion(context);
-    final decoration = _pressed
-        ? RunThruDecorations.insetDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.small,
-            borderRadius: 12,
-          )
-        : RunThruDecorations.raisedDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.small,
-            borderRadius: 12,
-          );
 
     return Semantics(
       label:
@@ -560,62 +717,15 @@ class _ShelfCardState extends State<_ShelfCard> {
         onTapCancel: () => setState(() => _pressed = false),
         onTapUp: (_) => setState(() => _pressed = false),
         onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: reduced ? Duration.zero : const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          width: 126,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 76,
-                decoration: decoration,
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Icon(
-                        _iconForSource(widget.item.source),
-                        size: 28,
-                        color: _sourceColor(widget.item.source),
-                      ),
-                    ),
-                    Positioned(
-                      top: 7,
-                      right: 7,
-                      child: _SourceBadge(source: widget.item.source),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 7),
-              // Flexible so a long title (or larger text-scale) ellipsises
-              // instead of overflowing the fixed-height shelf row.
-              Flexible(
-                child: Text(
-                  widget.item.title,
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 5),
-              _ProgressBar(
-                value: widget.item.percent,
-                color: _sourceColor(widget.item.source),
-                height: 4,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                percent > 0 ? '$percent%' : timeLabel,
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
+        child: Opacity(
+          opacity: _pressed ? 0.82 : 1,
+          child: RunThruShellRow(
+            title: widget.item.title,
+            metadata: '${_SourceBadge._label(widget.item.source)} · $percent%',
+            icon: _iconForSource(widget.item.source),
+            trailing: RunThruProgressRing(value: widget.item.percent, size: 42),
+            semanticLabel:
+                '${widget.item.title}, ${widget.item.source}, $percent percent read',
           ),
         ),
       ),
@@ -623,46 +733,6 @@ class _ShelfCardState extends State<_ShelfCard> {
   }
 }
 
-class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({
-    required this.value,
-    required this.color,
-    this.height = 4,
-  });
-
-  final double value;
-  final Color color;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: '${(value.clamp(0.0, 1.0) * 100).round()} percent read',
-      child: Container(
-        height: height,
-        decoration: RunThruDecorations.insetDecoration(
-          RunThruSurface.shell,
-          size: RunThruShadowSize.small,
-          borderRadius: height / 2,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: FractionallySizedBox(
-            widthFactor: value.clamp(0.0, 1.0),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(height / 2),
-              ),
-              child: const SizedBox.expand(),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 // ─────────────────────────────────────────────────────────────────────────────
 // Filter chips
 // ─────────────────────────────────────────────────────────────────────────────
@@ -682,63 +752,11 @@ class _FilterChipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduced = isReducedMotion(context);
-    return SizedBox(
-      height: 54,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-        scrollDirection: Axis.horizontal,
-        children: _LibraryFilter.values.map((filter) {
-          final isSelected = filter == selected;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Semantics(
-              label: '${_labels[filter]} filter',
-              selected: isSelected,
-              button: true,
-              child: GestureDetector(
-                onTap: () => onChanged(filter),
-                child: AnimatedContainer(
-                  duration: reduced
-                      ? Duration.zero
-                      : const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 15,
-                    vertical: 7,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 38,
-                  ),
-                  decoration: isSelected
-                      ? RunThruDecorations.insetDecoration(
-                          RunThruSurface.shell,
-                          size: RunThruShadowSize.small,
-                          borderRadius: 999,
-                        )
-                      : RunThruDecorations.raisedDecoration(
-                          RunThruSurface.shell,
-                          size: RunThruShadowSize.small,
-                          borderRadius: 999,
-                        ),
-                  child: Text(
-                    _labels[filter]!,
-                    style: RunThruTypography.caption.copyWith(
-                      color: isSelected
-                          ? RunThruTokens.shellTextPrimary
-                          : RunThruTokens.shellTextSecondary,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return RunThruSegmentedFilter<_LibraryFilter>(
+      values: _LibraryFilter.values,
+      selected: selected,
+      labelFor: (filter) => _labels[filter]!,
+      onChanged: onChanged,
     );
   }
 }
@@ -757,97 +775,262 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(20, topPadding, 20, 10),
-      child: Text(
-        title,
-        style: RunThruTypography.caption.copyWith(
-          color: RunThruTokens.shellTextSecondary,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      child: Text(title, style: RunThruTypography.sectionLabel),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Books grid
+// Library section cards
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _BooksSliverGrid extends StatelessWidget {
-  const _BooksSliverGrid({
-    required this.pdfList,
-    required this.processed,
-    required this.config,
-    required this.onTap,
-    required this.onLongPress,
+class _LibrarySection extends StatelessWidget {
+  const _LibrarySection({
+    required this.title,
+    required this.countLabel,
+    required this.dotColor,
+    required this.itemCount,
+    this.itemBuilder,
+    this.empty,
   });
 
-  final List<PdfEntry> pdfList;
-  final Map<String, PdfEntry> processed;
-  final AsyncValue<dynamic> config;
-  final void Function(PdfEntry) onTap;
-  final void Function(PdfEntry) onLongPress;
+  final String title;
+  final String countLabel;
+  final Color dotColor;
+  final int itemCount;
+  final IndexedWidgetBuilder? itemBuilder;
+  final Widget? empty;
 
   @override
   Widget build(BuildContext context) {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      sliver: SliverGrid.builder(
-        itemCount: pdfList.length,
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 220,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 0.76,
+    return NeumorphicCard(
+      surface: RunThruSurface.shell,
+      size: RunThruShadowSize.standard,
+      borderRadius: 16,
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.fromLTRB(15, 15, 15, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(3, 0, 3, 11),
+            child: Row(
+              children: [
+                ExcludeSemantics(
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Semantics(
+                  header: true,
+                  child: Text(title, style: RunThruTypography.sectionLabel),
+                ),
+                const Spacer(),
+                Text(
+                  countLabel,
+                  style: RunThruTypography.caption.copyWith(
+                    color: RunThruTokens.shellInkSoft,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (itemCount == 0 || itemBuilder == null)
+            _SectionWell(child: empty ?? const SizedBox.shrink())
+          else
+            _PagedWell(itemCount: itemCount, itemBuilder: itemBuilder!),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionWell extends StatelessWidget {
+  const _SectionWell({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return NeumorphicCard(
+      surface: RunThruSurface.shell,
+      inset: true,
+      size: RunThruShadowSize.small,
+      borderRadius: 12,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: child,
+    );
+  }
+}
+
+class _PagedWell extends StatefulWidget {
+  const _PagedWell({required this.itemCount, required this.itemBuilder});
+
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  State<_PagedWell> createState() => _PagedWellState();
+}
+
+class _PagedWellState extends State<_PagedWell> {
+  late final PageController _controller;
+  int _page = 0;
+
+  int get _pageCount => (widget.itemCount / _kTilesPerPage).ceil();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PagedWell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final maxPage = (_pageCount - 1).clamp(0, _pageCount);
+    if (_page > maxPage) {
+      _page = maxPage;
+      _controller.jumpToPage(_page);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _goToPage(int page) {
+    final target = page.clamp(0, _pageCount - 1);
+    setState(() => _page = target);
+    if (isReducedMotion(context)) {
+      _controller.jumpToPage(target);
+    } else {
+      _controller.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SectionWell(
+          child: SizedBox(
+            height: _kPagedWellHeight,
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: _pageCount,
+              onPageChanged: (page) => setState(() => _page = page),
+              itemBuilder: (context, pageIndex) {
+                final firstIndex = pageIndex * _kTilesPerPage;
+                final pageItemCount = (widget.itemCount - firstIndex).clamp(
+                  0,
+                  _kTilesPerPage,
+                );
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < pageItemCount; i++) ...[
+                        _FloatingTile(
+                          child: widget.itemBuilder(context, firstIndex + i),
+                        ),
+                        if (i < pageItemCount - 1) const SizedBox(height: 9),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ),
-        itemBuilder: (context, index) {
-          final entry = pdfList[index];
-          final processedEntry = processed[entry.filePath];
-          final displayEntry = processedEntry ?? entry;
+        if (_pageCount > 1) ...[
+          const SizedBox(height: 11),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < _pageCount; index++) ...[
+                _PageDot(
+                  index: index,
+                  selected: index == _page,
+                  total: _pageCount,
+                  onTap: () => _goToPage(index),
+                ),
+                if (index < _pageCount - 1) const SizedBox(width: 6),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
 
-          final appConfig = config.valueOrNull;
-          final bookmark = appConfig is AppConfig
-              ? appConfig.bookmarks[entry.filePath]
-              : null;
-          final range = bookmark?.readingRange;
-          double readingProgress = 0.0;
-          String? rangeLabel;
+class _FloatingTile extends StatelessWidget {
+  const _FloatingTile({required this.child});
 
-          if (range != null) {
-            final rangeStart = range.resolvedStartWordIndex;
-            final rangeEnd = range.resolvedEndWordIndex;
-            final rangeSize = rangeEnd - rangeStart + 1;
-            if (rangeSize > 0 && bookmark != null) {
-              readingProgress = ((bookmark.wordIndex - rangeStart) / rangeSize)
-                  .clamp(0.0, 1.0);
-            }
-            rangeLabel = 'Pages ${range.startPage + 1}-${range.endPage + 1}';
-          } else if (bookmark != null && displayEntry.document != null) {
-            final totalWords = displayEntry.document!.totalWords;
-            if (totalWords > 0) {
-              readingProgress = (bookmark.wordIndex / totalWords).clamp(
-                0.0,
-                1.0,
-              );
-            }
-          }
+  final Widget child;
 
-          return _BookTile(
-            entry: displayEntry,
-            progress: readingProgress,
-            rangeLabel: rangeLabel,
-            onTap: displayEntry.status == PdfStatus.ready
-                ? () => onTap(entry)
-                : null,
-            // Long-press opens the reading-range picker for any ready book.
-            // RangePickerScreen itself shows a "PDF only" notice for
-            // non-PDF formats, so the tile must still navigate rather than
-            // swallow the gesture.
-            onLongPress: displayEntry.status == PdfStatus.ready
-                ? () => onLongPress(entry)
-                : null,
-          );
-        },
+  @override
+  Widget build(BuildContext context) {
+    return NeumorphicCard(
+      surface: RunThruSurface.shell,
+      size: RunThruShadowSize.small,
+      borderRadius: 13,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 13),
+      child: child,
+    );
+  }
+}
+
+class _PageDot extends StatelessWidget {
+  const _PageDot({
+    required this.index,
+    required this.selected,
+    required this.total,
+    required this.onTap,
+  });
+
+  final int index;
+  final bool selected;
+  final int total;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Page ${index + 1} of $total',
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: isReducedMotion(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: selected ? 17 : 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: selected
+                ? RunThruTokens.shellTeal
+                : RunThruTokens.shellInkSoft.withValues(alpha: 0.34),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
       ),
     );
   }
@@ -859,6 +1042,7 @@ class _BookTile extends StatefulWidget {
     required this.progress,
     required this.onTap,
     required this.onLongPress,
+    required this.divider,
     this.rangeLabel,
   });
 
@@ -867,6 +1051,7 @@ class _BookTile extends StatefulWidget {
   final String? rangeLabel;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final bool divider;
 
   @override
   State<_BookTile> createState() => _BookTileState();
@@ -877,19 +1062,7 @@ class _BookTileState extends State<_BookTile> {
 
   @override
   Widget build(BuildContext context) {
-    final reduced = isReducedMotion(context);
-    final statusColor = _statusColor(widget.entry.status);
-    final decoration = _pressed
-        ? RunThruDecorations.insetDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.small,
-            borderRadius: 12,
-          )
-        : RunThruDecorations.raisedDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.small,
-            borderRadius: 12,
-          );
+    final statusTone = _statusTone(widget.entry.status);
 
     return Semantics(
       label: '${widget.entry.fileName}, ${_statusLabel(widget.entry)}',
@@ -904,79 +1077,44 @@ class _BookTileState extends State<_BookTile> {
             : (_) => setState(() => _pressed = false),
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
-        child: AnimatedContainer(
-          duration: reduced ? Duration.zero : const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: decoration,
-                  child: Stack(
-                    children: [
-                      Center(
-                        child: Icon(
-                          Icons.menu_book_rounded,
-                          size: 34,
-                          color: statusColor,
-                        ),
-                      ),
-                      const Positioned(
-                        top: 8,
-                        right: 8,
-                        child: _SourceBadge(source: 'local'),
-                      ),
-                    ],
+        child: Opacity(
+          opacity: _pressed ? 0.82 : 1,
+          child: RunThruShellRow(
+            title: widget.entry.fileName,
+            metadata: widget.rangeLabel ?? _statusLabel(widget.entry),
+            icon: Icons.menu_book_rounded,
+            divider: widget.divider,
+            trailing: widget.progress > 0
+                ? RunThruProgressRing(value: widget.progress, size: 42)
+                : RunThruStatusPill(
+                    label: _statusPillLabel(widget.entry.status),
+                    tone: statusTone,
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.entry.fileName,
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellTextPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                widget.rangeLabel ?? _statusLabel(widget.entry),
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
-                  fontSize: 11,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (widget.progress > 0) ...[
-                const SizedBox(height: 6),
-                _ProgressBar(
-                  value: widget.progress,
-                  color: RunThruTokens.shellAccent,
-                  height: 4,
-                ),
-              ],
-            ],
           ),
         ),
       ),
     );
   }
 
-  static Color _statusColor(PdfStatus status) {
+  static RunThruStatusTone _statusTone(PdfStatus status) {
     return switch (status) {
-      PdfStatus.ready => RunThruTokens.shellReady,
-      PdfStatus.processing ||
-      PdfStatus.preview => RunThruTokens.shellProcessing,
+      PdfStatus.ready => RunThruStatusTone.ready,
+      PdfStatus.processing || PdfStatus.preview => RunThruStatusTone.warning,
       PdfStatus.error ||
       PdfStatus.unsupported ||
-      PdfStatus.permanentlyFailed => RunThruTokens.shellError,
-      PdfStatus.pending || PdfStatus.queued => RunThruTokens.shellTextSecondary,
+      PdfStatus.permanentlyFailed => RunThruStatusTone.error,
+      PdfStatus.pending || PdfStatus.queued => RunThruStatusTone.neutral,
     };
   }
+
+  static String _statusPillLabel(PdfStatus status) => switch (status) {
+    PdfStatus.ready => 'Ready',
+    PdfStatus.processing || PdfStatus.preview => 'Preparing',
+    PdfStatus.error ||
+    PdfStatus.unsupported ||
+    PdfStatus.permanentlyFailed => 'Issue',
+    PdfStatus.pending || PdfStatus.queued => 'Pending',
+  };
 
   static String _statusLabel(PdfEntry entry) {
     return switch (entry.status) {
@@ -1110,13 +1248,35 @@ class _ArticlesSliverList extends ConsumerWidget {
     switch (authState) {
       case InstapaperAuthChecking():
       case InstapaperAuthLoading():
-        return const SliverToBoxAdapter(child: _SectionLoading());
+        return const SliverToBoxAdapter(
+          child: _LibrarySection(
+            title: 'Articles',
+            countLabel: 'Loading',
+            dotColor: RunThruTokens.shellTealDeep,
+            itemCount: 0,
+            empty: _SectionLoading(),
+          ),
+        );
       case InstapaperAuthUnauthenticated():
       case InstapaperAuthLegacyFallbackRequired():
-        return const SliverToBoxAdapter(child: _EmptyArticlesState());
+        return const SliverToBoxAdapter(
+          child: _LibrarySection(
+            title: 'Articles',
+            countLabel: '0 articles',
+            dotColor: RunThruTokens.shellTealDeep,
+            itemCount: 0,
+            empty: _EmptyArticlesState(),
+          ),
+        );
       case InstapaperAuthError(:final message):
         return SliverToBoxAdapter(
-          child: _ArticlesAuthErrorTile(message: message),
+          child: _LibrarySection(
+            title: 'Articles',
+            countLabel: 'Issue',
+            dotColor: RunThruTokens.shellTealDeep,
+            itemCount: 0,
+            empty: _ArticlesAuthErrorTile(message: message),
+          ),
         );
       case InstapaperAuthAuthenticated():
         break;
@@ -1138,16 +1298,25 @@ class _ArticlesSliverList extends ConsumerWidget {
 
         if (visibleBookmarks.isEmpty) {
           return SliverToBoxAdapter(
-            child: _EmptyArticlesState(
-              message: query.isEmpty ? null : 'No articles match this search.',
+            child: _LibrarySection(
+              title: 'Articles',
+              countLabel: '0 articles',
+              dotColor: RunThruTokens.shellTealDeep,
+              itemCount: 0,
+              empty: _EmptyArticlesState(
+                message: query.isEmpty
+                    ? null
+                    : 'No articles match this search.',
+              ),
             ),
           );
         }
-        return SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          sliver: SliverList.separated(
+        return SliverToBoxAdapter(
+          child: _LibrarySection(
+            title: 'Articles',
+            countLabel: _countLabel(visibleBookmarks.length, 'article'),
+            dotColor: RunThruTokens.shellTealDeep,
             itemCount: visibleBookmarks.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 1),
             itemBuilder: (context, index) {
               final bookmark = visibleBookmarks[index];
               return _ArticleRow(
@@ -1166,9 +1335,24 @@ class _ArticlesSliverList extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const SliverToBoxAdapter(child: _SectionLoading()),
-      error: (error, _) =>
-          SliverToBoxAdapter(child: _SectionError(message: error.toString())),
+      loading: () => const SliverToBoxAdapter(
+        child: _LibrarySection(
+          title: 'Articles',
+          countLabel: 'Loading',
+          dotColor: RunThruTokens.shellTealDeep,
+          itemCount: 0,
+          empty: _SectionLoading(),
+        ),
+      ),
+      error: (error, _) => SliverToBoxAdapter(
+        child: _LibrarySection(
+          title: 'Articles',
+          countLabel: 'Issue',
+          dotColor: RunThruTokens.shellTealDeep,
+          itemCount: 0,
+          empty: _SectionError(message: error.toString()),
+        ),
+      ),
     );
   }
 
@@ -1195,82 +1379,15 @@ class _ArticleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: unread ? '$title, unread, $detail' : '$title, $detail',
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 56),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: RunThruTokens.shellDarkShadow.withValues(alpha: 0.7),
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: RunThruDecorations.raisedDecoration(
-                  RunThruSurface.shell,
-                  size: RunThruShadowSize.small,
-                  borderRadius: 10,
-                ),
-                child: Icon(
-                  _iconForSource(source),
-                  size: 19,
-                  color: _sourceColor(source),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: RunThruTypography.caption.copyWith(
-                        color: RunThruTokens.shellTextPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      detail,
-                      style: RunThruTypography.caption.copyWith(
-                        color: RunThruTokens.shellTextSecondary,
-                        fontSize: 11,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (unread) ...[
-                const SizedBox(width: 12),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: RunThruTokens.shellAccent,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+    return RunThruShellRow(
+      title: title,
+      metadata: detail,
+      icon: _iconForSource(source),
+      semanticLabel: unread ? '$title, unread, $detail' : '$title, $detail',
+      onTap: onTap,
+      trailing: unread
+          ? const RunThruStatusPill(label: 'New', tone: RunThruStatusTone.ready)
+          : null,
     );
   }
 }
@@ -1317,10 +1434,16 @@ class _SectionError extends StatelessWidget {
 // Source badge
 // ─────────────────────────────────────────────────────────────────────────────
 
+String _countLabel(int count, String singular) {
+  if (count == 1) return '1 $singular';
+  return '$count ${singular}s';
+}
+
 IconData _iconForSource(String source) => switch (source) {
   'instapaper' => Icons.bookmark_rounded,
   'drive' => Icons.cloud_outlined,
   'substack' => Icons.mail_outline_rounded,
+  'sample' => Icons.auto_stories_rounded,
   _ => Icons.book_rounded,
 };
 
@@ -1341,6 +1464,7 @@ class _SourceBadge extends StatelessWidget {
     'instapaper' => 'Instapaper',
     'drive' => 'Drive',
     'substack' => 'Substack',
+    'sample' => 'Sample',
     _ => 'Local',
   };
 

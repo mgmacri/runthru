@@ -32,6 +32,13 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
+  Future<void> setFocusModeEnabled(bool enabled) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(focusModeEnabled: enabled);
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
   /// Sets the Google Drive access mode without requesting new OAuth scopes.
   Future<void> setGoogleDriveAccessMode(GoogleDriveAccessMode mode) =>
       _synchronized(() async {
@@ -99,15 +106,10 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
-  Future<void> updateBookmark(String filePath, BookmarkData data) =>
-      _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
-        final bookmarks = Map<String, BookmarkData>.from(config.bookmarks);
-        bookmarks[filePath] = data;
-        final updated = config.copyWith(bookmarks: bookmarks);
-        state = AsyncData<AppConfig>(updated);
-        await _persist(updated);
-      });
+  // NOTE: bookmarks moved to BookmarkStore (lib/store/bookmark_store.dart).
+  // AppConfig.bookmarks is retained read-only as the migration source and
+  // rollback path — never add a bookmark writer here again (BK-5: it
+  // rewrote the whole config blob every 5 seconds during reading).
 
   Future<void> setAnchorColorIndex(int index) => _synchronized(() async {
     final config = state.valueOrNull ?? const AppConfig();
@@ -116,9 +118,9 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
-  Future<void> setFontFamily(String fontFamily) => _synchronized(() async {
+  Future<void> setReadingFontFamily(String family) => _synchronized(() async {
     final config = state.valueOrNull ?? const AppConfig();
-    final updated = config.copyWith(fontFamily: fontFamily);
+    final updated = config.copyWith(readingFontFamily: family);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });

@@ -22,6 +22,10 @@ class RunThruTokens extends ThemeExtension<RunThruTokens> {
   static const Color stageText = Color(0xFF2E272A);
   // stageAnchor default = High Risk Red (better contrast on light surface)
   static const Color stageAnchor = Color(0xFFC71F2D);
+  // stageFocalRed = warm red for the flat-2D ORP focal letter + guide lines.
+  // 3.96:1 on stageBase — passes WCAG AA for large text (the reading word is
+  // viewport-scaled, far above the 24px large-text threshold).
+  static const Color stageFocalRed = Color(0xFFBF4733);
   // stageProgress = Sea Green
   static const Color stageProgress = Color(0xFF149C88);
   // stagePauseOverlay = translucent Nimbus Cloud
@@ -29,19 +33,31 @@ class RunThruTokens extends ThemeExtension<RunThruTokens> {
   // stageWpmBadge = Dark Gull Gray
   static const Color stageWpmBadge = Color(0xFF625D5D);
 
-  // ── UI Shell (warm off-white neumorphic) ──
-  // shellBase = Antique White
-  static const Color shellBase = Color(0xFFEDE3D2);
-  // shellLightShadow = Bright White
-  static const Color shellLightShadow = Color(0xFFF4F5F0);
-  // shellDarkShadow = Birch
-  static const Color shellDarkShadow = Color(0xFFDDD5C7);
-  // shellTextPrimary = Black Bean
-  static const Color shellTextPrimary = Color(0xFF2E272A);
-  // shellTextSecondary = Dark Gull Gray
-  static const Color shellTextSecondary = Color(0xFF625D5D);
-  // shellAccent = Brittany Blue
-  static const Color shellAccent = Color(0xFF4C7E86);
+  // ── UI Shell (designer sand neumorphic) ──
+  static const Color shellSandHi = Color(0xFFE0D7C2);
+  static const Color shellSand = Color(0xFFD6CCB4);
+  static const Color shellSandLo = Color(0xFFCABFA6);
+  static const Color shellSandDeep = Color(0xFFC6BB9F);
+  static const Color shellCream = Color(0xFFF3EEDE);
+  static const Color shellInk = Color(0xFF332D22);
+  static const Color shellInkSample = Color(0xFF443D2F);
+  static const Color shellInkSoft = Color(0xFF5C5546);
+  static const Color shellInkFaint = Color(0xFF665E50);
+  static const Color shellTeal = Color(0xFF46776B);
+  static const Color shellTealDeep = Color(0xFF3A665B);
+  static const Color shellTealTint = Color(0x3346776B);
+  static const Color shellTealShadow = Color(0x553A665B);
+  static const Color shellTealHighlight = Color(0x884F8A7C);
+  static const Color shellDivider = Color(0x66B8AC91);
+  static const Color shellStatusTint = Color(0x2A46776B);
+
+  // Compatibility aliases for existing shell callers.
+  static const Color shellBase = shellSand;
+  static const Color shellLightShadow = shellCream;
+  static const Color shellDarkShadow = shellSandDeep;
+  static const Color shellTextPrimary = shellInk;
+  static const Color shellTextSecondary = shellInkSoft;
+  static const Color shellAccent = shellTeal;
   // shellProcessing = Marigold Color
   static const Color shellProcessing = Color(0xFFFDAC53);
   // shellReady = Sea Green
@@ -51,11 +67,10 @@ class RunThruTokens extends ThemeExtension<RunThruTokens> {
   // shellOnError = near-white for text on error surfaces
   static const Color shellOnError = Color(0xFFF4F5F0);
 
-  // ── WPM Dial ring gradient ──
-  // Low = Brittany Blue, Mid = Marigold, High = Hot Coral
-  static const Color dialRingLow = Color(0xFF4C7E86);
-  static const Color dialRingMid = Color(0xFFFDAC53);
-  static const Color dialRingHigh = Color(0xFFED5656);
+  // ── Onboarding tour spotlight ──
+  // Warm dark scrim punched with a spotlight hole over the live target
+  // (design ob-tour.jsx: rgba(36,28,16, dim)). Apply with alpha ~0.62.
+  static const Color tourScrim = Color(0xFF241C10);
 
   // ── 3D Marble Box (warm polished marble interior) ──
   // Warm whites and soft greys create an elegant Carrara marble feel.
@@ -166,6 +181,5 @@ class RunThruTokens extends ThemeExtension<RunThruTokens> {
   RunThruTokens lerp(
     covariant ThemeExtension<RunThruTokens>? other,
     double t,
-  ) =>
-      this;
+  ) => this;
 }

@@ -25,18 +25,10 @@ class RunThruAnimations {
     damping: 22,
   );
 
-  // ── A-004: Dial emerge (spring, 8% overshoot) ──
+  // ── A-004: Dial emerge ──
+  // The WPM dial is gone, but this duration is reused by the range picker,
+  // range confirmation modal, and finished-range overlay transitions.
   static const Duration dialEmergeDuration = Duration(milliseconds: 220);
-
-  static const SpringDescription dialEmergeSpring = SpringDescription(
-    mass: 1.0,
-    stiffness: 500,
-    damping: 18,
-  );
-
-  // ── A-005: Dial dismiss ──
-  static const Duration dialDismissDuration = Duration(milliseconds: 180);
-  static const Curve dialDismissCurve = Curves.easeIn;
 
   // ── A-006: Pause fog in ──
   static const Duration pauseFogDuration = Duration(milliseconds: 200);
@@ -98,15 +90,6 @@ class RunThruAnimations {
     double velocity = 0.0,
   }) {
     return SpringSimulation(cardReleaseSpring, from, to, velocity);
-  }
-
-  /// Create a spring simulation for A-004 dial emerge.
-  static SpringSimulation dialEmergeSimulation({
-    double from = 0.0,
-    double to = 1.0,
-    double velocity = 0.0,
-  }) {
-    return SpringSimulation(dialEmergeSpring, from, to, velocity);
   }
 
   // ── A-015: Pause button z-jiggle appear (3-step diminishing bounce) ──

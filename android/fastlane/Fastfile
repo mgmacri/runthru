@@ -10,6 +10,9 @@ platform :android do
     upload_to_play_store(
       track: "internal",
       aab: "../build/app/outputs/bundle/release/app-release.aab",
+      # Inline service-account JSON from the CI secret manager — never a
+      # checked-in file path.
+      json_key_data: ENV["GOOGLE_PLAY_JSON_KEY_DATA"],
     )
   end
 
@@ -18,6 +21,7 @@ platform :android do
     upload_to_play_store(
       track: "internal",
       track_promote_to: "production",
+      json_key_data: ENV["GOOGLE_PLAY_JSON_KEY_DATA"],
     )
   end
 end

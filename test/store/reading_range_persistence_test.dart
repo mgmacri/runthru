@@ -30,10 +30,7 @@ void main() {
     });
 
     test('handles missing optional fields', () {
-      final json = <String, Object?>{
-        'startPage': 0,
-        'endPage': 10,
-      };
+      final json = <String, Object?>{'startPage': 0, 'endPage': 10};
       final range = ReadingRange.fromJson(json);
 
       expect(range.startPage, 0);
@@ -207,7 +204,7 @@ void main() {
     test('merge combines pageBoundaries', () {
       const doc1 = ExtractedDocument(
         sentences: [
-          Sentence(words: ['a'])
+          Sentence(words: ['a']),
         ],
         pageBoundaries: [
           PageBoundary(pageNumber: 0, startSentenceIndex: 0, startWordIndex: 0),
@@ -216,7 +213,7 @@ void main() {
       );
       const doc2 = ExtractedDocument(
         sentences: [
-          Sentence(words: ['b'])
+          Sentence(words: ['b']),
         ],
         pageBoundaries: [
           PageBoundary(pageNumber: 1, startSentenceIndex: 0, startWordIndex: 1),

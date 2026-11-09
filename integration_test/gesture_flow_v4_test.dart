@@ -1,36 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/core/context_reveal_notifier.dart';
 import 'package:runthru/core/context_reveal_state.dart';
 import 'package:runthru/core/gesture_classifier.dart';
 import 'package:runthru/core/word_timer.dart';
-import 'package:runthru/core/wpm_dial_notifier.dart';
-import 'package:runthru/store/config.dart';
-import 'package:runthru/store/models.dart';
-
-/// Fake [ConfigNotifier] for WPM dial persistence in tests.
-class FakeConfigNotifier extends AsyncNotifier<AppConfig>
-    implements ConfigNotifier {
-  int? lastPersistedWpm;
-
-  @override
-  Future<AppConfig> build() async => const AppConfig();
-
-  @override
-  Future<void> setDefaultWpm(int wpm) async {
-    lastPersistedWpm = wpm.clamp(30, 1000);
-    state = AsyncData(
-      (state.valueOrNull ?? const AppConfig()).copyWith(
-        defaultWpm: wpm.clamp(30, 1000),
-      ),
-    );
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
 
 /// TASK-130 — Integration test: full gesture flow (v4).
 ///
@@ -43,8 +16,7 @@ class FakeConfigNotifier extends AsyncNotifier<AppConfig>
 /// 5. Swipe up → sentence view
 /// 6. Swipe up in sentence → jiggle
 /// 7. Swipe down → dismiss
-/// 8. Long-press → WPM dial appears
-/// 9. Sub-threshold swipes don't trigger
+/// 8. Sub-threshold swipes don't trigger
 void main() {
   // Android reference device dimensions.
   const screenWidth = 1080.0;
@@ -194,37 +166,7 @@ void main() {
       expect(container.read(contextRevealProvider).isActive, isFalse);
     });
 
-    test('8. Long-press → WPM dial appears, reading pauses', () {
-      final fakeConfig = FakeConfigNotifier();
-      final dialContainer = ProviderContainer(
-        overrides: [configProvider.overrideWith(() => fakeConfig)],
-      );
-      dialContainer.read(configProvider);
-
-      final pauseHistory = <bool>[];
-      Timer? capturedTimer;
-      final dialNotifier = WpmDialNotifier(
-        configNotifier: fakeConfig,
-        onPauseChanged: pauseHistory.add,
-        timerFactory: (duration, callback) {
-          capturedTimer?.cancel();
-          capturedTimer = Timer(duration, callback);
-          return capturedTimer!;
-        },
-      );
-
-      dialNotifier.show(const Offset(540, 1200), 250);
-      expect(dialNotifier.state.isVisible, isTrue);
-      expect(dialNotifier.state.currentWpm, 250);
-      expect(pauseHistory, [true]);
-
-      // Cleanup.
-      capturedTimer?.cancel();
-      dialNotifier.dispose();
-      dialContainer.dispose();
-    });
-
-    test('9. Sub-threshold swipes do NOT trigger', () {
+    test('8. Sub-threshold swipes do NOT trigger', () {
       // Distance too small (15% < 30%).
       final tooShort = classifySwipe(
         dx: -(screenWidth * 0.15),

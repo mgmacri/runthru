@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:runthru/design/design.dart';
 
-/// Semi-transparent reading ruler overlay that highlights the current
-/// reading line and dims surrounding content.
-///
-/// Uses shape + opacity (not color-only) for visibility.
-/// Excluded from screen reader semantics to avoid confusing assistive tech.
+/// Two horizontal hairlines that flank the focal word zone, helping the
+/// eye lock to the ORP column at speed.
 class ReadingRuler extends StatelessWidget {
   const ReadingRuler({
     super.key,
@@ -13,69 +10,67 @@ class ReadingRuler extends StatelessWidget {
     required this.viewportHeight,
   });
 
-  /// Whether the ruler is visible.
   final bool visible;
-
-  /// The height of the viewport in logical pixels.
   final double viewportHeight;
 
   @override
   Widget build(BuildContext context) {
     if (!visible) return const SizedBox.shrink();
-    const bandHeight = 80.0;
-    final bandTop = viewportHeight * 0.4;
-    final bandBottom = bandTop + bandHeight;
+
+    // Focal word sits at vertical center; hairlines flank a ~72px slot around it.
+    const slotHeight = 72.0;
+    final centerY = viewportHeight * 0.5;
+    final topLine = centerY - slotHeight / 2;
+    final bottomLine = centerY + slotHeight / 2;
+
     final duration = isReducedMotion(context)
         ? Duration.zero
         : const Duration(milliseconds: 200);
+
     return Semantics(
       excludeSemantics: true,
       child: AnimatedOpacity(
-        opacity: visible ? 1.0 : 0.0,
+        opacity: 1.0,
         duration: duration,
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: bandTop,
-              child: Container(
-                color: RunThruTokens.stageText.withValues(alpha: 0.15),
-              ),
-            ),
-            Positioned(
-              top: bandBottom,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                color: RunThruTokens.stageText.withValues(alpha: 0.15),
-              ),
-            ),
-            Positioned(
-              top: bandTop,
-              left: 0,
-              right: 0,
-              height: bandHeight,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: RunThruTokens.shellAccent.withValues(alpha: 0.3),
-                      width: 1,
-                    ),
-                    bottom: BorderSide(
-                      color: RunThruTokens.shellAccent.withValues(alpha: 0.3),
-                      width: 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        child: CustomPaint(
+          size: Size(double.infinity, viewportHeight),
+          painter: _RulerPainter(
+            topLine: topLine,
+            bottomLine: bottomLine,
+            color: RunThruTokens.shellAccent.withValues(alpha: 0.45),
+          ),
         ),
       ),
     );
   }
+}
+
+class _RulerPainter extends CustomPainter {
+  const _RulerPainter({
+    required this.topLine,
+    required this.bottomLine,
+    required this.color,
+  });
+
+  final double topLine;
+  final double bottomLine;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawLine(Offset(0, topLine), Offset(size.width, topLine), paint);
+    canvas.drawLine(
+        Offset(0, bottomLine), Offset(size.width, bottomLine), paint);
+  }
+
+  @override
+  bool shouldRepaint(_RulerPainter old) =>
+      old.topLine != topLine ||
+      old.bottomLine != bottomLine ||
+      old.color != color;
 }

@@ -90,8 +90,7 @@ class InstapaperAuth extends _$InstapaperAuth {
   /// instance) cannot trigger a double-initialization
   /// `LateInitializationError`. The service provider is keep-alive, so this
   /// returns the same instance on every read.
-  InstapaperAuthService get _service =>
-      ref.read(instapaperAuthServiceProvider);
+  InstapaperAuthService get _service => ref.read(instapaperAuthServiceProvider);
 
   @override
   InstapaperAuthState build() {

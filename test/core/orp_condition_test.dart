@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/core/orp.dart';
 import 'package:runthru/store/models.dart';
+import 'package:runthru/three_d/off_axis_projection.dart';
+import 'package:runthru/three_d/parallax_word_painter.dart';
 import 'package:runthru/three_d/text_painter_pool.dart';
 import 'package:runthru/three_d/word_painter.dart';
 
@@ -69,6 +71,58 @@ void main() {
       );
 
       expect(painter.shouldRepaint(painterDefault), isTrue);
+    });
+
+    test('anchor guide visibility participates in repaint decisions', () {
+      final withGuides = WordPainter(
+        word: 'reading',
+        fontSize: 24,
+        animationValue: 0,
+        painterPool: pool,
+      );
+      final withoutGuides = WordPainter(
+        word: 'reading',
+        fontSize: 24,
+        animationValue: 0,
+        painterPool: pool,
+        showAnchorGuides: false,
+      );
+
+      expect(withGuides.showAnchorGuides, isTrue);
+      expect(withGuides.shouldRepaint(withoutGuides), isTrue);
+    });
+  });
+
+  group('OrpCondition in ParallaxWordPainter', () {
+    late TextPainterPool pool;
+
+    setUp(() {
+      pool = TextPainterPool();
+    });
+
+    test('anchor guide visibility participates in repaint decisions', () {
+      final withGuides = ParallaxWordPainter(
+        word: 'reading',
+        fontSize: 42,
+        headX: 0,
+        headY: 0,
+        config: const RoomConfig(),
+        painterPool: pool,
+        animationValue: 1,
+      );
+      final withoutGuides = ParallaxWordPainter(
+        word: 'reading',
+        fontSize: 42,
+        headX: 0,
+        headY: 0,
+        config: const RoomConfig(),
+        painterPool: pool,
+        animationValue: 1,
+        showAnchorGuides: false,
+      );
+
+      expect(withGuides.showAnchorGuides, isTrue);
+      expect(withGuides.shouldRepaint(withoutGuides), isTrue);
     });
   });
 }

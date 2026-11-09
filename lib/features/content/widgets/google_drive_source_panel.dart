@@ -14,15 +14,22 @@ import 'package:runthru/features/content/services/google_drive_picker.dart';
 import 'package:runthru/features/content/widgets/brand_icons.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
-import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Displays Google Drive connection state and supported Drive files.
 class GoogleDriveSourcePanel extends ConsumerWidget {
   /// Creates the Google Drive source panel.
-  const GoogleDriveSourcePanel({super.key, this.onOpenBrowserSetting});
+  const GoogleDriveSourcePanel({
+    super.key,
+    this.onOpenBrowserSetting,
+    this.showDivider = false,
+  });
 
   /// Opens the Settings screen focused on the full Drive browser setting.
   final VoidCallback? onOpenBrowserSetting;
+
+  /// Whether to draw a hairline divider below the connection row.
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,6 +53,9 @@ class GoogleDriveSourcePanel extends ConsumerWidget {
               () => context.go(
                 '/?tab=3&focus=googleDriveBrowser&focusRequest=${DateTime.now().microsecondsSinceEpoch}',
               ),
+          onDisconnect: () =>
+              ref.read(googleDriveAuthProvider.notifier).disconnect(),
+          showDivider: showDivider,
         ),
         if (authState is GoogleDriveAuthAuthenticated && isFullBrowser)
           _FileList(
@@ -118,6 +128,49 @@ class GoogleDriveSourcePanel extends ConsumerWidget {
     if (query == null) return;
     await ref.read(googleDriveFilesProvider.notifier).refresh(query: query);
   }
+}
+
+/// Shows an inline Drive file browser sheet and imports the chosen file.
+///
+/// Connects with `fullDriveBrowser` scope if not already connected, then
+/// presents a searchable file list. On selection, triggers a Drive import
+/// with [DriveImportOrigin.sources] so the caller's `ref.listen` can
+/// navigate to the reader.
+Future<void> showGoogleDriveFilePicker(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final authState = ref.read(googleDriveAuthProvider);
+  if (authState is! GoogleDriveAuthAuthenticated) {
+    await ref
+        .read(googleDriveAuthProvider.notifier)
+        .connect(accessMode: GoogleDriveAccessMode.fullDriveBrowser);
+    if (!context.mounted) return;
+    if (ref.read(googleDriveAuthProvider) is! GoogleDriveAuthAuthenticated) {
+      return;
+    }
+  }
+
+  await ref
+      .read(configProvider.notifier)
+      .setGoogleDriveAccessMode(GoogleDriveAccessMode.fullDriveBrowser);
+  if (!context.mounted) return;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: RunThruTokens.shellBase,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _DriveFilePickerSheet(
+      onImport: (file) {
+        ref
+            .read(googleDriveImportProvider.notifier)
+            .importFile(file, origin: DriveImportOrigin.sources);
+      },
+    ),
+  );
 }
 
 /// Opens the selected-files Google Drive picker and imports chosen files.
@@ -208,188 +261,224 @@ void _showGoogleDriveSnack(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
-class _ConnectionRow extends ConsumerWidget {
+class _ConnectionRow extends StatelessWidget {
   const _ConnectionRow({
     required this.authState,
     required this.accessMode,
     required this.onChooseFiles,
     required this.onOpenBrowserSetting,
+    required this.onDisconnect,
+    this.showDivider = false,
   });
 
   final GoogleDriveAuthState authState;
   final GoogleDriveAccessMode accessMode;
   final Future<void> Function() onChooseFiles;
   final VoidCallback onOpenBrowserSetting;
+  final VoidCallback onDisconnect;
+  final bool showDivider;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final status = _statusFor(authState);
+  Widget build(BuildContext context) {
+    final isAuthenticated = authState is GoogleDriveAuthAuthenticated;
+    final isLoading = authState is GoogleDriveAuthLoading;
+    final accountLabel = isAuthenticated
+        ? (authState as GoogleDriveAuthAuthenticated).user.label
+        : null;
+
     final detail = switch (authState) {
       GoogleDriveAuthAuthenticated() =>
         accessMode == GoogleDriveAccessMode.fullDriveBrowser
             ? 'Full Drive browser enabled'
-            : 'RunThru can only access files you choose',
+            : 'We only access files you choose',
       GoogleDriveAuthError(:final message) => message,
       _ => 'RunThru can only access files you choose',
     };
-    final ready = authState is GoogleDriveAuthAuthenticated;
 
-    return _DriveCard(
-      semanticsLabel: ready ? 'Google Drive connected' : 'Connect Google Drive',
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    final String? statusLabel;
+    final RunThruStatusTone statusTone;
+    if (isAuthenticated) {
+      statusLabel = accountLabel;
+      statusTone = RunThruStatusTone.ready;
+    } else if (authState is GoogleDriveAuthError &&
+        (authState as GoogleDriveAuthError).kind !=
+            GoogleDriveFailureKind.userCancelled) {
+      statusLabel = 'Needs attention';
+      statusTone = RunThruStatusTone.warning;
+    } else {
+      statusLabel = 'Not connected';
+      statusTone = RunThruStatusTone.neutral;
+    }
+
+    final Widget trailing;
+    if (isAuthenticated) {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
-            width: 44,
-            height: 44,
-            child: Center(child: GoogleDriveBrandIcon(size: 28)),
+          _MiniButton(
+            icon: Icons.settings_outlined,
+            tooltip: 'Google Drive settings',
+            onPressed: onOpenBrowserSetting,
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(width: 8),
+          _MiniButton(
+            icon: Icons.logout_rounded,
+            tooltip: 'Disconnect Google Drive',
+            onPressed: onDisconnect,
+          ),
+        ],
+      );
+    } else {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MiniButton(
+            icon: Icons.settings_outlined,
+            tooltip: 'Google Drive settings',
+            onPressed: onOpenBrowserSetting,
+          ),
+          const SizedBox(width: 8),
+          Opacity(
+            opacity: isLoading ? 0.5 : 1.0,
+            child: GestureDetector(
+              onTap: isLoading
+                  ? null
+                  : () {
+                      if (accessMode ==
+                          GoogleDriveAccessMode.selectedFilesOnly) {
+                        onChooseFiles();
+                      }
+                    },
+              child: Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.center,
+                decoration: RunThruDecorations.designerRaisedSmall(
+                  borderRadius: 999,
+                ),
+                child: Text(
+                  'Connect',
+                  style: RunThruTypography.caption.copyWith(
+                    color: RunThruTokens.shellAccent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Semantics(
+      label: isAuthenticated ? 'Google Drive connected' : 'Connect Google Drive',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 60),
+          decoration: showDivider
+              ? const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: RunThruTokens.shellDivider,
+                      width: 0.6,
+                    ),
+                  ),
+                )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Google Drive',
-                        style: RunThruTypography.body.copyWith(
-                          color: RunThruTokens.shellTextPrimary,
-                          fontWeight: FontWeight.w600,
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: RunThruTokens.shellTealTint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const GoogleDriveBrandIcon(size: 21),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Google Drive',
+                              style: RunThruTypography.rowTitle.copyWith(
+                                color: RunThruTokens.shellTextPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (statusLabel != null) ...[
+                            const SizedBox(width: 7),
+                            RunThruStatusPill(
+                              label: statusLabel,
+                              tone: statusTone,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        detail,
+                        style: RunThruTypography.metadata.copyWith(
+                          color: RunThruTokens.shellTextSecondary,
+                          fontSize: 11,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    _DriveStatusBadge(label: status, ready: ready),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  detail,
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
+                    ],
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(width: 10),
+                trailing,
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              tooltip: 'Google Drive settings',
-              onPressed: onOpenBrowserSetting,
-              icon: const Icon(Icons.settings_outlined, size: 20),
-              color: RunThruTokens.shellTextSecondary,
-            ),
-          ),
-          _ConnectionAction(
-            authState: authState,
-            accessMode: accessMode,
-            onChooseFiles: onChooseFiles,
-          ),
-        ],
+        ),
       ),
     );
   }
-
-  String _statusFor(GoogleDriveAuthState authState) => switch (authState) {
-    GoogleDriveAuthChecking() => 'Checking',
-    GoogleDriveAuthUnauthenticated() => 'Not connected',
-    GoogleDriveAuthLoading() => 'Connecting',
-    GoogleDriveAuthAuthenticated(:final user) => user.label,
-    GoogleDriveAuthError(kind: GoogleDriveFailureKind.userCancelled) =>
-      'Not connected',
-    GoogleDriveAuthError() => 'Needs attention',
-  };
 }
 
-class _DriveStatusBadge extends StatelessWidget {
-  const _DriveStatusBadge({required this.label, required this.ready});
+class _MiniButton extends StatelessWidget {
+  const _MiniButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
 
-  final String label;
-  final bool ready;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 112),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: (ready ? RunThruTokens.shellReady : RunThruTokens.shellAccent)
-              .withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          child: Text(
-            label,
-            style: RunThruTypography.caption.copyWith(
-              color: ready
-                  ? RunThruTokens.shellReady
-                  : RunThruTokens.shellTextSecondary,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: GestureDetector(
+          onTap: onPressed,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: RunThruDecorations.designerRaisedSmall(
+              borderRadius: 10,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ConnectionAction extends ConsumerWidget {
-  const _ConnectionAction({
-    required this.authState,
-    required this.accessMode,
-    required this.onChooseFiles,
-  });
-
-  final GoogleDriveAuthState authState;
-  final GoogleDriveAccessMode accessMode;
-  final Future<void> Function() onChooseFiles;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (authState is GoogleDriveAuthAuthenticated) {
-      return SizedBox(
-        width: 48,
-        height: 48,
-        child: IconButton(
-          tooltip: 'Disconnect Google Drive',
-          onPressed: () =>
-              ref.read(googleDriveAuthProvider.notifier).disconnect(),
-          icon: const Icon(Icons.logout_rounded, size: 20),
-          color: RunThruTokens.shellTextSecondary,
-        ),
-      );
-    }
-    return SizedBox(
-      height: 44,
-      child: TextButton(
-        onPressed: authState is GoogleDriveAuthLoading
-            ? null
-            : () {
-                if (accessMode == GoogleDriveAccessMode.selectedFilesOnly) {
-                  onChooseFiles();
-                  return;
-                }
-                ref.read(googleDriveAuthProvider.notifier).connect();
-              },
-        child: Text(
-          'Connect',
-          style: RunThruTypography.caption.copyWith(
-            color: RunThruTokens.shellAccent,
-            fontWeight: FontWeight.w700,
+            child: Icon(icon, size: 16, color: RunThruTokens.shellInkSoft),
           ),
         ),
       ),
@@ -501,37 +590,17 @@ class _DriveFileRow extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Import ${file.name} from Google Drive',
-      child: GestureDetector(
+      child: RunThruShellRow(
+        title: file.name,
+        metadata: _labelFor(file),
+        icon: _iconFor(file),
         onTap: isImporting ? null : onTap,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              Icon(_iconFor(file), size: 20, color: RunThruTokens.shellAccent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  file.name,
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isImporting ? 'Importing...' : _labelFor(file),
-                style: RunThruTypography.caption.copyWith(
-                  color: isImporting
-                      ? RunThruTokens.stageProgress
-                      : RunThruTokens.shellTextSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
+        trailing: isImporting
+            ? const RunThruStatusPill(
+                label: 'Importing',
+                tone: RunThruStatusTone.warning,
+              )
+            : null,
       ),
     );
   }
@@ -551,28 +620,6 @@ class _DriveFileRow extends StatelessWidget {
     htmlMimeType => 'HTML',
     _ => 'Text',
   };
-}
-
-class _DriveCard extends StatelessWidget {
-  const _DriveCard({required this.child, required this.semanticsLabel});
-
-  final Widget child;
-  final String semanticsLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: semanticsLabel,
-      child: NeumorphicCard(
-        surface: RunThruSurface.shell,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        borderRadius: 12,
-        size: RunThruShadowSize.small,
-        child: child,
-      ),
-    );
-  }
 }
 
 class _StatusAction extends StatelessWidget {
@@ -632,4 +679,239 @@ class _StatusText extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Inline Drive file browser shown as a modal bottom sheet.
+class _DriveFilePickerSheet extends ConsumerStatefulWidget {
+  const _DriveFilePickerSheet({required this.onImport});
+
+  final void Function(GoogleDriveFile file) onImport;
+
+  @override
+  ConsumerState<_DriveFilePickerSheet> createState() =>
+      _DriveFilePickerSheetState();
+}
+
+class _DriveFilePickerSheetState extends ConsumerState<_DriveFilePickerSheet> {
+  late Future<List<GoogleDriveFile>> _filesFuture;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _filesFuture = _fetchFiles();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<List<GoogleDriveFile>> _fetchFiles({String? query}) {
+    return ref.read(googleDriveClientProvider).listDriveFiles(query: query);
+  }
+
+  void _search(String query) {
+    setState(() {
+      _query = query.trim();
+      _filesFuture = _fetchFiles(query: _query.isEmpty ? null : _query);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(
+              children: [
+                const GoogleDriveBrandIcon(size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Google Drive',
+                    style: RunThruTypography.rowTitle.copyWith(
+                      color: RunThruTokens.shellTextPrimary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  color: RunThruTokens.shellInkSoft,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search files',
+                hintStyle: RunThruTypography.caption.copyWith(
+                  color: RunThruTokens.shellTextSecondary,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 20,
+                  color: RunThruTokens.shellInkSoft,
+                ),
+                filled: true,
+                fillColor: RunThruTokens.shellSandHi,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                isDense: true,
+              ),
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellTextPrimary,
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: _search,
+              onChanged: (v) {
+                if (v.isEmpty && _query.isNotEmpty) _search('');
+              },
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<GoogleDriveFile>>(
+              future: _filesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  final error = snapshot.error;
+                  final message = error is GoogleDriveException
+                      ? error.message
+                      : 'Could not load Drive files. Try again.';
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            message,
+                            style: RunThruTypography.caption.copyWith(
+                              color: RunThruTokens.shellTextSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _filesFuture = _fetchFiles(
+                                query: _query.isEmpty ? null : _query,
+                              );
+                            }),
+                            child: Text(
+                              'Retry',
+                              style: RunThruTypography.caption.copyWith(
+                                color: RunThruTokens.shellAccent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                final files = snapshot.data ?? [];
+                if (files.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        _query.isEmpty
+                            ? 'No supported files found in Drive.'
+                            : 'No results for "$_query".',
+                        style: RunThruTypography.caption.copyWith(
+                          color: RunThruTokens.shellTextSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  controller: scrollController,
+                  itemCount: files.length,
+                  itemBuilder: (context, index) {
+                    final file = files[index];
+                    return _DrivePickerFileRow(
+                      file: file,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        widget.onImport(file);
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrivePickerFileRow extends StatelessWidget {
+  const _DrivePickerFileRow({required this.file, required this.onTap});
+
+  final GoogleDriveFile file;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Import ${file.name} from Google Drive',
+      child: RunThruShellRow(
+        title: file.name,
+        metadata: _labelFor(file),
+        icon: _iconFor(file),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  static IconData _iconFor(GoogleDriveFile file) => switch (file.mimeType) {
+    googleDocsMimeType => Icons.description_outlined,
+    pdfMimeType => Icons.picture_as_pdf_outlined,
+    epubMimeType => Icons.menu_book_outlined,
+    htmlMimeType => Icons.code_rounded,
+    _ => Icons.text_snippet_outlined,
+  };
+
+  static String _labelFor(GoogleDriveFile file) => switch (file.mimeType) {
+    googleDocsMimeType => 'Google Doc',
+    pdfMimeType => 'PDF',
+    epubMimeType => 'EPUB',
+    htmlMimeType => 'HTML',
+    _ => 'Text',
+  };
 }

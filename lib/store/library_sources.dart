@@ -8,6 +8,11 @@ import 'package:runthru/core/logger.dart';
 import 'package:runthru/store/library_source.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Set when a source is removed. The next library scan prunes bookmarks and
+/// progress records whose content no longer exists in any source, then
+/// clears the flag (BK-5/BK-14 orphan cleanup).
+const String kPrunePendingKey = 'runthru_prune_pending_v1';
+
 /// SharedPreferences key for the persisted library sources list.
 const _sourcesKey = 'runthru_library_sources';
 
@@ -226,6 +231,16 @@ class LibrarySourcesNotifier extends AsyncNotifier<List<LibrarySource>> {
     state = AsyncData(updated);
     await _persist(updated);
     appLog('library_sources', 'removed: ${target.locator}');
+
+    // Schedule a background prune of bookmarks/progress whose books are no
+    // longer in any source. Runs after the next scan (possibly next launch)
+    // — never blocks the removal.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(kPrunePendingKey, true);
+    } on Object catch (e) {
+      appLog('library_sources', 'could not schedule prune: $e');
+    }
   });
 
   static Future<void> _deleteOwnedFromDisk(LibrarySource source) async {

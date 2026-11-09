@@ -1,6 +1,38 @@
 import 'package:runthru/services/models.dart';
 import 'package:runthru/store/models.dart';
 
+/// Inclusive bounds for a sentence in a flat word list.
+typedef SentenceBounds = ({int start, int end});
+
+/// Finds the inclusive sentence bounds containing [wordIndex].
+///
+/// This helper works on the flat word slices used by the reading timer. It
+/// clamps out-of-range indices and falls back to punctuation boundaries when
+/// structured [Sentence] records are not available in the view layer.
+SentenceBounds sentenceBoundsForWord(List<String> words, int wordIndex) {
+  if (words.isEmpty) return (start: 0, end: -1);
+
+  final clampedIndex = wordIndex.clamp(0, words.length - 1);
+  var start = clampedIndex;
+  while (start > 0 && !_isSentenceEnd(words[start - 1])) {
+    start--;
+  }
+
+  var end = clampedIndex;
+  while (end < words.length - 1 && !_isSentenceEnd(words[end])) {
+    end++;
+  }
+
+  return (start: start, end: end);
+}
+
+bool _isSentenceEnd(String word) {
+  final trimmed = word.trimRight();
+  return trimmed.endsWith('.') ||
+      trimmed.endsWith('!') ||
+      trimmed.endsWith('?');
+}
+
 /// Returns the index of the first word of the sentence
 /// containing [bookmark.wordIndex].
 ///

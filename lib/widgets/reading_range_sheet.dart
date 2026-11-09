@@ -48,14 +48,18 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
   void initState() {
     super.initState();
     final r = widget.currentRange;
-    _startPageCtrl =
-        TextEditingController(text: r != null ? '${r.startPage + 1}' : '');
+    _startPageCtrl = TextEditingController(
+      text: r != null ? '${r.startPage + 1}' : '',
+    );
     _startWordCtrl = TextEditingController(
-        text: r != null ? '${r.startWordIndexOnPage}' : '');
-    _endPageCtrl =
-        TextEditingController(text: r != null ? '${r.endPage + 1}' : '');
-    _endWordCtrl =
-        TextEditingController(text: r != null ? '${r.endWordIndexOnPage}' : '');
+      text: r != null ? '${r.startWordIndexOnPage}' : '',
+    );
+    _endPageCtrl = TextEditingController(
+      text: r != null ? '${r.endPage + 1}' : '',
+    );
+    _endWordCtrl = TextEditingController(
+      text: r != null ? '${r.endWordIndexOnPage}' : '',
+    );
   }
 
   @override
@@ -230,8 +234,10 @@ class _ReadingRangeSheetState extends State<ReadingRangeSheet> {
               GestureDetector(
                 onTap: _validate,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   decoration: RunThruDecorations.raisedDecoration(
                     RunThruSurface.shell,
                     size: RunThruShadowSize.small,

@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/core/logger.dart';
+import 'package:runthru/services/content_identity.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/store/library_source.dart';
 import 'package:runthru/store/library_sources.dart';
@@ -40,10 +41,12 @@ class FolderScannerService {
       } else {
         entries = await Isolate.run(() => _scanSync(folderPath));
       }
+      // Log a bounded sample only — a 1000-book scan must not emit a
+      // multi-KB log line (BK-13).
       appLog(
         _tag,
-        'scanAsync result — ${entries.length} files found: '
-        '${entries.map((e) => e.fileName).join(', ')}',
+        'scanAsync result — ${entries.length} files found '
+        '(first: ${entries.take(3).map((e) => e.fileName).join(', ')})',
       );
       return entries;
     } on Object catch (e, st) {
@@ -172,7 +175,10 @@ class FolderScannerService {
   /// Folder sources are scanned concurrently (batched, via [scanMultipleAsync]);
   /// file sources become direct [PdfEntry]s. Results are deduplicated by
   /// canonical path so overlapping sources don't produce duplicate books.
-  static Future<List<PdfEntry>> scanSources(List<LibrarySource> sources) async {
+  static Future<List<PdfEntry>> scanSources(
+    List<LibrarySource> sources, {
+    ContentIdentityService? identity,
+  }) async {
     final referencedFolderPaths = <String>[];
     final ownedFolderPaths = <String>[];
     final fileEntries = <PdfEntry>[];
@@ -200,18 +206,47 @@ class FolderScannerService {
     final ownedFolderEntries = await scanMultipleAsync(ownedFolderPaths);
 
     final seen = <String>{};
-    final seenBookNames = <String>{};
+    // filename (lowercase) → path of the first accepted entry with that name.
+    final pathByName = <String, String>{};
+    final seenHashes = <String>{};
     final results = <PdfEntry>[];
     for (final entry in [...referencedFolderEntries, ...fileEntries]) {
       if (seen.add(_canonicalPath(entry.filePath))) {
-        seenBookNames.add(entry.fileName.toLowerCase());
+        pathByName.putIfAbsent(entry.fileName.toLowerCase(), () {
+          return entry.filePath;
+        });
         results.add(entry);
       }
     }
+    // Owned folders hold app-managed copies, which can duplicate referenced
+    // originals under a new path. Identity rule: dedupe by content hash when
+    // a name collision occurs — never silently drop a same-named file that
+    // is actually different content (BK-4).
     for (final entry in ownedFolderEntries) {
+      final canonical = _canonicalPath(entry.filePath);
+      if (seen.contains(canonical)) continue;
       final nameKey = entry.fileName.toLowerCase();
-      if (seenBookNames.add(nameKey) &&
-          seen.add(_canonicalPath(entry.filePath))) {
+      final collidingPath = pathByName[nameKey];
+      if (collidingPath != null) {
+        if (identity == null) {
+          // No identity service (tests/legacy callers): conservative skip.
+          continue;
+        }
+        final ownHash = await identity.ensureHash(entry.filePath);
+        final otherHash = await identity.ensureHash(collidingPath);
+        if (ownHash == null ||
+            otherHash == null ||
+            ownHash == otherHash ||
+            !seenHashes.add(ownHash)) {
+          dev.log(
+            'scanSources — duplicate content skipped: ${entry.fileName}',
+            name: _tag,
+          );
+          continue;
+        }
+      }
+      if (seen.add(canonical)) {
+        pathByName.putIfAbsent(nameKey, () => entry.filePath);
         results.add(entry);
       }
     }
@@ -229,7 +264,10 @@ final pdfListProvider = FutureProvider<List<PdfEntry>>((ref) async {
   return sources.when(
     data: (list) {
       appLog('pdfListProvider', 'scanning ${list.length} source(s)');
-      return FolderScannerService.scanSources(list);
+      return FolderScannerService.scanSources(
+        list,
+        identity: ref.read(contentIdentityProvider),
+      );
     },
     loading: () async {
       appLog('pdfListProvider', 'sources loading…');

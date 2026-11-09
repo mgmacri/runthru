@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/logger.dart';
+import 'package:runthru/core/sample_document.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/models/drive_content_identity.dart';
 import 'package:runthru/navigation/cube_transition.dart';
@@ -16,6 +17,7 @@ import 'package:runthru/services/models.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -29,10 +31,12 @@ final appRouter = GoRouter(
         final focusRequestId = state.uri.queryParameters['focusRequest'];
         return libraryTransitionPage(
           key: state.pageKey,
-          child: HomeShell(
-            initialTab: tab,
-            focusGoogleDriveBrowserSetting: focusGoogleDriveBrowserSetting,
-            focusRequestId: focusRequestId,
+          child: ReadingEntryOnboardingGate(
+            child: HomeShell(
+              initialTab: tab,
+              focusGoogleDriveBrowserSetting: focusGoogleDriveBrowserSetting,
+              focusRequestId: focusRequestId,
+            ),
           ),
         );
       },
@@ -43,7 +47,9 @@ final appRouter = GoRouter(
         final filePath = state.uri.queryParameters['path'] ?? '';
         return wallFoldTransitionPage(
           key: state.pageKey,
-          child: _PremiumReadGuard(filePath: filePath),
+          child: ReadingEntryOnboardingGate(
+            child: _PremiumReadGuard(filePath: filePath),
+          ),
         );
       },
     ),
@@ -54,7 +60,9 @@ final appRouter = GoRouter(
         return cubeTransitionPage(
           key: state.pageKey,
           direction: -1,
-          child: ReadingScreen(filePath: filePath),
+          child: ReadingEntryOnboardingGate(
+            child: ReadingScreen(filePath: filePath),
+          ),
         );
       },
     ),
@@ -78,6 +86,22 @@ final appRouter = GoRouter(
         child: const SettingsSourcesScreen(),
       ),
     ),
+    GoRoute(
+      path: '/read-sample',
+      pageBuilder: (context, state) {
+        final doc = sampleDocument;
+        return wallFoldTransitionPage(
+          key: state.pageKey,
+          child: ReadingEntryOnboardingGate(
+            child: ParallaxReadingScreen(
+              filePath: sampleContentId,
+              contentSource: 'sample',
+              clipboardDocument: doc,
+            ),
+          ),
+        );
+      },
+    ),
     // Rule 28 — clipboard reading route; document passed via extra
     GoRoute(
       path: '/read-clipboard',
@@ -85,10 +109,12 @@ final appRouter = GoRouter(
         final clipboardDoc = state.extra as ClipboardDocument?;
         return wallFoldTransitionPage(
           key: state.pageKey,
-          child: ParallaxReadingScreen(
-            filePath: 'clipboard://${clipboardDoc?.title ?? 'clipboard'}',
-            contentSource: 'clipboard',
-            clipboardDocument: clipboardDoc,
+          child: ReadingEntryOnboardingGate(
+            child: ParallaxReadingScreen(
+              filePath: 'clipboard://${clipboardDoc?.title ?? 'clipboard'}',
+              contentSource: 'clipboard',
+              clipboardDocument: clipboardDoc,
+            ),
           ),
         );
       },
@@ -111,16 +137,18 @@ final appRouter = GoRouter(
             : 'instapaper://$title';
         return wallFoldTransitionPage(
           key: state.pageKey,
-          child: ParallaxReadingScreen(
-            filePath: filePath,
-            contentSource: 'instapaper',
-            instapaperBookmarkId: bookmarkId,
-            instapaperInitialProgress: initialProgress,
-            clipboardDocument: ClipboardDocument(
-              title: title,
-              fullText: '',
-              document: document!,
-              pastedAt: DateTime.now(),
+          child: ReadingEntryOnboardingGate(
+            child: ParallaxReadingScreen(
+              filePath: filePath,
+              contentSource: 'instapaper',
+              instapaperBookmarkId: bookmarkId,
+              instapaperInitialProgress: initialProgress,
+              clipboardDocument: ClipboardDocument(
+                title: title,
+                fullText: '',
+                document: document!,
+                pastedAt: DateTime.now(),
+              ),
             ),
           ),
         );
@@ -150,14 +178,16 @@ final appRouter = GoRouter(
         }
         return wallFoldTransitionPage(
           key: state.pageKey,
-          child: ParallaxReadingScreen(
-            filePath: sourceId,
-            contentSource: 'drive',
-            clipboardDocument: ClipboardDocument(
-              title: title,
-              fullText: '',
-              document: document!,
-              pastedAt: DateTime.now(),
+          child: ReadingEntryOnboardingGate(
+            child: ParallaxReadingScreen(
+              filePath: sourceId,
+              contentSource: 'drive',
+              clipboardDocument: ClipboardDocument(
+                title: title,
+                fullText: '',
+                document: document!,
+                pastedAt: DateTime.now(),
+              ),
             ),
           ),
         );

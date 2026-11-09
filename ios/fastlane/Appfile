@@ -1,4 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Appfile — RunThru iOS app identifiers & team configuration
+#
+# Environment variables override defaults so CI (Codemagic) can inject its own
+# values without touching this file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Primary app bundle identifier
 app_identifier(ENV["APP_IDENTIFIER"] || "com.mgmacri.runthru")
-apple_id(ENV["APPLE_ID"])
+
+# Apple Developer account email
+apple_id(ENV["APPLE_ID"] || "mattmacri89@gmail.com")
+
+# Apple Developer Portal team ID
+team_id(ENV["TEAM_ID"] || "273TZKZB3M")
+
+# App Store Connect team ID (numeric)
+# Find yours at: https://appstoreconnect.apple.com → Users & Access
 itc_team_id(ENV["ITC_TEAM_ID"])
-team_id(ENV["TEAM_ID"])

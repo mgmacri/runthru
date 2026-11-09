@@ -177,7 +177,12 @@ class PacingPanel extends ConsumerWidget {
                   foregroundColor: RunThruTokens.shellAccent,
                   minimumSize: const Size(48, 48),
                 ),
-                child: const Text('Got it'),
+                child: Text(
+                  'Got it',
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellAccent,
+                  ),
+                ),
               ),
             ),
           ],

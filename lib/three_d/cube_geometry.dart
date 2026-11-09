@@ -15,10 +15,7 @@ class CubeGeometry {
   double get focalLength => viewportSize.height * 1.5;
 
   /// Center of viewport.
-  Offset get center => Offset(
-        viewportSize.width / 2,
-        viewportSize.height / 2,
-      );
+  Offset get center => Offset(viewportSize.width / 2, viewportSize.height / 2);
 
   /// Half-width/height for wall sizing.
   double get halfWidth => viewportSize.width / 2;

@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/core/hint_controller.dart';
@@ -35,7 +34,6 @@ void main() {
   late ProviderContainer container;
   late FakeConfigNotifier fakeConfig;
   late HintController controller;
-  Timer? capturedTimer;
 
   setUp(() {
     fakeConfig = FakeConfigNotifier();
@@ -44,19 +42,10 @@ void main() {
     );
     container.read(configProvider);
 
-    capturedTimer = null;
-    controller = HintController(
-      configNotifier: fakeConfig,
-      timerFactory: (duration, callback) {
-        capturedTimer = Timer(duration, callback);
-        return capturedTimer!;
-      },
-    );
+    controller = HintController(configNotifier: fakeConfig);
   });
 
   tearDown(() {
-    capturedTimer?.cancel();
-    controller.dispose();
     container.dispose();
   });
 
@@ -73,6 +62,21 @@ void main() {
     expect(hint, isNotNull);
     expect(hint!.id, HintId.swipeUp);
     expect(hint.message, 'Swipe up to see context');
+  });
+
+  test('reader gesture hints use the top slot instead of covering text', () {
+    const topReadingSlot = Alignment(0, -0.58);
+    for (final id in [
+      HintId.tap,
+      HintId.swipeUp,
+      HintId.swipeLr,
+      HintId.doubleTap,
+      HintId.focusPause,
+      HintId.focusBackSentence,
+      HintId.focusForwardSentence,
+    ]) {
+      expect(controller.check(id)?.position, topReadingSlot, reason: id);
+    }
   });
 
   test('hint not shown if already in shownHints', () async {
@@ -93,64 +97,30 @@ void main() {
     expect(controller.check(HintId.swipeLr), isNull);
   });
 
-  test('all 6 hint IDs recognized', () {
+  test('all hint IDs recognized', () {
     for (final id in HintId.all) {
       final hint = controller.check(id);
       expect(hint, isNotNull, reason: 'Hint "$id" should be recognized');
       expect(hint!.id, id);
       expect(hint.message, isNotEmpty);
     }
-    expect(HintId.all.length, 6);
+    expect(
+      HintId.all,
+      containsAllInOrder([
+        HintId.tap,
+        HintId.swipeUp,
+        HintId.swipeLr,
+        HintId.doubleTap,
+        HintId.clipboard,
+        HintId.focusPause,
+        HintId.focusBackSentence,
+        HintId.focusForwardSentence,
+      ]),
+    );
   });
 
   test('unrecognized hint ID returns null', () {
     final hint = controller.check('hint_nonexistent');
     expect(hint, isNull);
-  });
-
-  group('long-press timer', () {
-    test('fires callback after duration', () async {
-      // ignore: unused_local_variable
-      var fired = false;
-      controller.onLongPressHintTimerFired = () => fired = true;
-      controller.startLongPressTimer();
-
-      // Timer should have been created
-      expect(capturedTimer, isNotNull);
-      expect(capturedTimer!.isActive, isTrue);
-    });
-
-    test('does not start timer if hint already shown', () async {
-      await fakeConfig.markHintShown(HintId.longPress);
-      controller.startLongPressTimer();
-      expect(capturedTimer, isNull);
-    });
-
-    test('cancelLongPressTimer cancels active timer', () {
-      controller.onLongPressHintTimerFired = () {};
-      controller.startLongPressTimer();
-      expect(capturedTimer!.isActive, isTrue);
-
-      controller.cancelLongPressTimer();
-      expect(capturedTimer!.isActive, isFalse);
-    });
-
-    test('startLongPressTimer only starts once', () {
-      var startCount = 0;
-      controller = HintController(
-        configNotifier: fakeConfig,
-        timerFactory: (duration, callback) {
-          startCount++;
-          capturedTimer = Timer(duration, callback);
-          return capturedTimer!;
-        },
-      );
-
-      controller.onLongPressHintTimerFired = () {};
-      controller.startLongPressTimer();
-      controller.startLongPressTimer();
-      controller.startLongPressTimer();
-      expect(startCount, 1);
-    });
   });
 }

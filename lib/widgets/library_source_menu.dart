@@ -3,6 +3,8 @@
 /// embossed cards.
 library;
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:runthru/design/design.dart';
@@ -116,10 +118,15 @@ class _LibrarySourceMenuState extends State<LibrarySourceMenu>
         // Tap-outside dismissal — only intercepts when open.
         if (_open)
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _close,
-              child: const SizedBox.shrink(),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _close,
+                child: ColoredBox(
+                  color: RunThruTokens.shellInk.withValues(alpha: 0.10),
+                ),
+              ),
             ),
           ),
         // Cascading stack of source actions.
@@ -174,16 +181,8 @@ class _NeumorphicPlusButtonState extends State<NeumorphicPlusButton> {
     final inset = _pressed || widget.isOpen;
     final reduced = isReducedMotion(context);
     final decoration = inset
-        ? RunThruDecorations.insetDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.small,
-            borderRadius: widget.size / 2,
-          )
-        : RunThruDecorations.raisedDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.standard,
-            borderRadius: widget.size / 2,
-          );
+        ? RunThruDecorations.designerInset(borderRadius: widget.size / 2)
+        : RunThruDecorations.tealButton(borderRadius: widget.size / 2);
     return Semantics(
       button: true,
       label: widget.isOpen ? 'Close reading sources' : 'Open reading sources',
@@ -205,11 +204,13 @@ class _NeumorphicPlusButtonState extends State<NeumorphicPlusButton> {
                 ? Duration.zero
                 : const Duration(milliseconds: 200),
             curve: Curves.easeOut,
-            turns: widget.isOpen ? 0.125 : 0.0,
-            child: const Icon(
+            turns: reduced ? 0.0 : (widget.isOpen ? 0.125 : 0.0),
+            child: Icon(
               Icons.add_rounded,
               size: 28,
-              color: RunThruTokens.shellAccent,
+              color: inset
+                  ? RunThruTokens.shellTealDeep
+                  : RunThruTokens.shellCream,
             ),
           ),
         ),
@@ -358,20 +359,9 @@ class _EmbossedSourceActionCardState extends State<EmbossedSourceActionCard> {
 
   @override
   Widget build(BuildContext context) {
-    final shadowSize = widget.depth > 0.6
-        ? RunThruShadowSize.standard
-        : RunThruShadowSize.small;
     final decoration = _pressed
-        ? RunThruDecorations.insetDecoration(
-            RunThruSurface.shell,
-            size: RunThruShadowSize.small,
-            borderRadius: 14,
-          )
-        : RunThruDecorations.raisedDecoration(
-            RunThruSurface.shell,
-            size: shadowSize,
-            borderRadius: 14,
-          );
+        ? RunThruDecorations.designerInset(borderRadius: 999)
+        : RunThruDecorations.designerRaisedSmall(borderRadius: 999);
     return Semantics(
       button: true,
       label: widget.action.semanticsLabel,
@@ -393,13 +383,14 @@ class _EmbossedSourceActionCardState extends State<EmbossedSourceActionCard> {
                   Icon(
                     widget.action.icon,
                     size: 20,
-                    color: RunThruTokens.shellAccent,
+                    color: RunThruTokens.shellTealDeep,
                   ),
               const SizedBox(width: 10),
               Text(
                 widget.action.label,
-                style: RunThruTypography.body.copyWith(
-                  color: RunThruTokens.shellTextPrimary,
+                style: RunThruTypography.rowTitle.copyWith(
+                  color: RunThruTokens.shellInk,
+                  fontSize: 14,
                 ),
               ),
             ],

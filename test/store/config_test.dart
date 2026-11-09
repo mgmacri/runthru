@@ -1,5 +1,9 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('AppConfig', () {
@@ -12,6 +16,7 @@ void main() {
         config.googleDriveAccessMode,
         GoogleDriveAccessMode.selectedFilesOnly,
       );
+      expect(config.focusModeEnabled, isFalse);
     });
 
     test('roundtrip JSON serialization', () {
@@ -22,6 +27,7 @@ void main() {
           '/test.pdf': BookmarkData(wordIndex: 42, timestamp: DateTime(2026)),
         },
         googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+        focusModeEnabled: true,
       );
 
       final json = config.toJson();
@@ -34,6 +40,7 @@ void main() {
         restored.googleDriveAccessMode,
         GoogleDriveAccessMode.fullDriveBrowser,
       );
+      expect(restored.focusModeEnabled, isTrue);
     });
 
     test('fromJson handles missing fields gracefully', () {
@@ -44,6 +51,7 @@ void main() {
         config.googleDriveAccessMode,
         GoogleDriveAccessMode.selectedFilesOnly,
       );
+      expect(config.focusModeEnabled, isFalse);
     });
 
     test('corrupt Google Drive access mode defaults to selected files', () {
@@ -118,6 +126,83 @@ void main() {
       final config = AppConfig.fromJson({});
       expect(config.shownHints, isEmpty);
     });
+  });
+
+  group('ConfigNotifier onboarding persistence', () {
+    test('fresh persisted config resolves onboarding as unseen', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final config = await container.read(configProvider.future);
+
+      expect(config.hasSeenReadingGoalOnboarding, isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('runthru_config'), isNull);
+    });
+
+    test('setHasSeenReadingGoalOnboarding persists completion flag', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await container.read(configProvider.future);
+      await container
+          .read(configProvider.notifier)
+          .setHasSeenReadingGoalOnboarding(true);
+
+      final config = container.read(configProvider).requireValue;
+      expect(config.hasSeenReadingGoalOnboarding, isTrue);
+
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('runthru_config');
+      expect(raw, contains('"hasSeenReadingGoalOnboarding":true'));
+    });
+
+    test('setFocusModeEnabled persists synchronized focus mode flag', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await container.read(configProvider.future);
+      await container.read(configProvider.notifier).setFocusModeEnabled(true);
+
+      final config = container.read(configProvider).requireValue;
+      expect(config.focusModeEnabled, isTrue);
+
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('runthru_config');
+      expect(raw, contains('"focusModeEnabled":true'));
+    });
+
+    test(
+      'skip-equivalent comfortable preset and completion flag persist',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+
+        await container.read(configProvider.future);
+        final comfortable = readingGoalConfigs.firstWhere(
+          (goal) => goal.preset == ReadingGoalPreset.comfortable,
+        );
+        await container
+            .read(configProvider.notifier)
+            .applyReadingGoalPreset(comfortable);
+        await container
+            .read(configProvider.notifier)
+            .setHasSeenReadingGoalOnboarding(true);
+
+        final config = container.read(configProvider).requireValue;
+        expect(config.hasSeenReadingGoalOnboarding, isTrue);
+        expect(config.readingGoalPreset, ReadingGoalPreset.comfortable);
+
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('runthru_config');
+        expect(raw, contains('"readingGoalPreset":"comfortable"'));
+        expect(raw, contains('"hasSeenReadingGoalOnboarding":true'));
+      },
+    );
   });
 
   group('BookmarkData', () {

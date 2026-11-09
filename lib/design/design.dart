@@ -2,6 +2,7 @@
 /// All widget code should import from this file only.
 library;
 
+export 'package:runthru/design/a11y_tokens.dart';
 export 'package:runthru/design/animations.dart';
 export 'package:runthru/design/animations_3d.dart';
 export 'package:runthru/design/decorations.dart';

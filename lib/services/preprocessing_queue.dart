@@ -2,8 +2,14 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as dev;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/core/logger.dart';
+import 'package:runthru/services/book_identity.dart';
+import 'package:runthru/services/book_manifest_store.dart';
+import 'package:runthru/services/content_cache_policy.dart';
+import 'package:runthru/services/content_identity.dart';
+import 'package:runthru/services/content_store/content_store.dart';
 import 'package:runthru/services/document_classifier.dart';
 import 'package:runthru/services/device_capability.dart';
 import 'package:runthru/services/epub_extractor.dart';
@@ -12,6 +18,10 @@ import 'package:runthru/services/models.dart';
 import 'package:runthru/services/notification_service.dart';
 import 'package:runthru/services/pdf_cache.dart';
 import 'package:runthru/services/pdf_extractor.dart';
+import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
+import 'package:runthru/store/bookmark_store.dart';
+import 'package:runthru/store/library_sources.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Hyper-parallel PDF preprocessing queue with adaptive worker pool,
 /// progressive extraction (preview → full), and priority preemption.
@@ -24,6 +34,18 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   final Ref _ref;
 
+  late final ContentIdentityService _identity = _ref.read(
+    contentIdentityProvider,
+  );
+
+  late final BookManifestStore _manifest = _ref.read(
+    bookManifestStoreProvider,
+  );
+
+  /// Pages (or EPUB chapters) extracted per phase-2 chunk. Each chunk gets
+  /// its own timeout and durable commit. Mutable for tests/tuning.
+  static int completionChunkPages = 25;
+
   /// Phase 1 queue — preview extraction (pages 1–3).
   final _previewQueue = Queue<String>();
 
@@ -32,6 +54,15 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   /// Tracks actively running workers by filePath.
   final _activeWorkers = <String>{};
+
+  /// O(1) dedup index of enqueued canonical path keys (BK-12).
+  final _enqueuedKeys = <String>{};
+
+  /// Resolved content hashes: canonical path key → sha256.
+  final _hashByPath = <String, String>{};
+
+  /// Reverse index for duplicate-content collapse: sha256 → path key.
+  final _pathByHash = <String, String>{};
 
   /// The priority file currently being processed (if any).
   String? _priorityFile;
@@ -73,6 +104,8 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   Timer? _notificationTimer;
 
   void _init() {
+    // Configure the shared cache budget before any extraction writes.
+    _ref.read(contentCachePolicyProvider);
     _ref.listen(pdfListProvider, (previous, next) {
       next.when(data: _enqueueAll, loading: () {}, error: (_, __) {});
     });
@@ -83,17 +116,52 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
   void _enqueueAll(List<PdfEntry> entries) {
     appLog('preprocessing', 'enqueueAll — ${entries.length} files');
-    final scanCycleSeen = <String>{};
     for (final entry in entries) {
-      final key = _logicalBookKey(entry);
-      if (!scanCycleSeen.add(key)) {
-        appLog('preprocessing', 'dedupe skip cycleKey=$key');
-        continue;
-      }
       _enqueueIfNew(entry);
     }
     _startNotificationUpdates();
     _fillWorkers();
+    unawaited(_maybePruneOrphans(entries));
+  }
+
+  /// After a source removal, prunes bookmarks/progress for books that exist
+  /// in no remaining source. Async and non-blocking — runs after a scan.
+  Future<void> _maybePruneOrphans(List<PdfEntry> entries) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool(kPrunePendingKey) ?? false)) return;
+
+      final activePaths = {for (final e in entries) e.filePath};
+      final activeHashes = <String>{};
+      for (final e in entries) {
+        final hash = await _identity.knownHashFor(e.filePath);
+        if (hash != null) activeHashes.add(hash);
+      }
+      if (!mounted) return;
+
+      final bookmarks = _ref.read(bookmarkStoreProvider.notifier);
+      await _ref.read(bookmarkStoreProvider.future);
+      final prunedBookmarks = await bookmarks.pruneMissingLocal(
+        activePaths: activePaths,
+        activeHashes: activeHashes,
+      );
+      if (!mounted) return;
+      final progress = _ref.read(readingProgressProvider.notifier);
+      await _ref.read(readingProgressProvider.future);
+      final prunedProgress = await progress.pruneMissingLocal(
+        activePaths: activePaths,
+        activeHashes: activeHashes,
+      );
+
+      await prefs.setBool(kPrunePendingKey, false);
+      appLog(
+        'preprocessing',
+        'orphan prune complete bookmarks=$prunedBookmarks '
+            'progress=$prunedProgress',
+      );
+    } on Object catch (e) {
+      appLog('preprocessing', 'orphan prune failed: $e');
+    }
   }
 
   /// Enqueue entries from a streaming multi-directory scan.
@@ -103,8 +171,11 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
   }
 
   void _enqueueIfNew(PdfEntry entry) {
-    final key = _logicalBookKey(entry);
-    if (state.values.any((existing) => _logicalBookKey(existing) == key)) {
+    // Identity rule: dedup by canonical path now (O(1)), upgraded to
+    // content hash as hashes resolve — never by filename, which collapses
+    // distinct books that happen to share a name (BK-4).
+    final key = canonicalPathKey(entry.filePath);
+    if (!_enqueuedKeys.add(key)) {
       appLog('preprocessing', 'enqueue skipped duplicate key=$key');
       return;
     }
@@ -113,7 +184,118 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       entry.filePath: entry.copyWith(status: PdfStatus.queued),
     };
     _previewQueue.add(entry.filePath);
-    appLog('preprocessing', 'enqueue file=${entry.fileName} key=$key');
+    appLog('preprocessing', 'enqueue file=${entry.fileName}');
+    // Cheap (stat + index lookup) identity check — collapses re-imported
+    // copies whose content hash is already known.
+    unawaited(_resolveKnownIdentity(entry.filePath));
+  }
+
+  /// Looks up a memoised content hash for [filePath] and collapses the entry
+  /// if that content is already queued under another path.
+  Future<void> _resolveKnownIdentity(String filePath) async {
+    try {
+      final hash = await _identity.knownHashFor(filePath);
+      if (hash == null || !mounted) return;
+      _registerHash(filePath, hash);
+    } on Object catch (e) {
+      appLog('preprocessing', 'identity lookup failed: $e');
+    }
+  }
+
+  /// Computes (if needed) and registers the content hash after extraction —
+  /// the bytes were just read anyway, so hashing here is nearly free.
+  Future<void> _upgradeIdentity(String filePath) async {
+    try {
+      final hash = await _identity.ensureHash(filePath);
+      if (hash == null || !mounted) return;
+      _registerHash(filePath, hash);
+    } on Object catch (e) {
+      appLog('preprocessing', 'identity upgrade failed: $e');
+    }
+  }
+
+  DateTime _lastBudgetEnforce = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Write-through into the Ring 2 content store (and incremental migration
+  /// of legacy PdfCache entries on touch). Idempotent per content hash.
+  Future<void> _ingestToStore(String filePath, ExtractedDocument doc) async {
+    try {
+      await _upgradeIdentity(filePath);
+      final hash = contentHashOf(filePath);
+      if (hash == null || !mounted) return;
+      final store = _ref.read(contentStoreProvider);
+      if (await store.hasBook(hash)) return;
+      final fileName = filePath.split(RegExp(r'[/\\]')).last;
+      await store.putDocument(
+        BookIdentity(
+          contentHash: hash,
+          sourceId: 'local',
+          displayName: fileName,
+        ),
+        doc,
+      );
+      // Enforce the shared budget, at most once a minute — eviction scans
+      // directories and shouldn't run per book during a bulk extraction.
+      final now = DateTime.now();
+      if (now.difference(_lastBudgetEnforce).inSeconds >= 60) {
+        _lastBudgetEnforce = now;
+        if (!mounted) return;
+        final policy = _ref.read(contentCachePolicyProvider);
+        final reserved = await PdfCache.totalUsageBytes();
+        await store.enforceBudget(
+          policy.totalBudgetBytes,
+          reservedBytes: reserved,
+        );
+      }
+    } on Object catch (e) {
+      appLog('preprocessing', 'store ingest failed file=$filePath: $e');
+    }
+  }
+
+  /// Returns the resolved content hash for [filePath], if known.
+  String? contentHashOf(String filePath) =>
+      _hashByPath[canonicalPathKey(filePath)];
+
+  void _registerHash(String filePath, String hash) {
+    final key = canonicalPathKey(filePath);
+    final existingPath = _pathByHash[hash];
+    if (existingPath != null && existingPath != key) {
+      // Same content under two paths — keep the first, drop this one.
+      // Surface the collapse explicitly (observability over silence).
+      appLog(
+        'preprocessing',
+        'duplicate content collapsed file=$filePath '
+            'hash=${hash.substring(0, 12)} keptPath=$existingPath',
+      );
+      _previewQueue.remove(filePath);
+      _completionQueue.remove(filePath);
+      _enqueuedKeys.remove(key);
+      _hashByPath.remove(key);
+      if (!mounted) return;
+      final next = {...state}..remove(filePath);
+      state = next;
+      return;
+    }
+    _hashByPath[key] = hash;
+    _pathByHash[hash] = key;
+  }
+
+  /// Test-only: injects an entry directly into queue state.
+  @visibleForTesting
+  void debugSetEntry(PdfEntry entry) {
+    _enqueuedKeys.add(canonicalPathKey(entry.filePath));
+    state = {...state, entry.filePath: entry};
+  }
+
+  /// Releases the in-memory document for [filePath] after a reading session
+  /// ends. The extracted text stays in [PdfCache]; the next [prioritize]
+  /// rehydrates it from disk. Keeps queue memory O(metadata), not O(words).
+  void releaseDocument(String filePath) {
+    if (!mounted) return;
+    final entry = state[filePath];
+    if (entry == null || entry.document == null) return;
+    state = {...state, filePath: entry.copyWith(clearDocument: true)};
+    appLog('preprocessing', 'released document file=${entry.fileName}');
   }
 
   /// Pause all background processing.
@@ -141,7 +323,50 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       existing = state[filePath];
       if (existing == null) return; // dedup removed it; already processing
     }
-    if (existing.status == PdfStatus.ready) return;
+    if (existing.status == PdfStatus.ready) {
+      if (existing.document != null) return;
+      // Document was released after a previous session — rehydrate from
+      // cache without re-extracting.
+      final cached = await PdfCache.load(filePath);
+      if (cached != null) {
+        if (!mounted) return;
+        final current = state[filePath];
+        if (current == null) return;
+        _update(filePath, current.copyWith(document: cached));
+        unawaited(_ingestToStore(filePath, cached));
+        return;
+      }
+      // Legacy cache miss — try the Ring 2 content store before paying for
+      // a re-extraction.
+      final hash =
+          contentHashOf(filePath) ?? await _identity.knownHashFor(filePath);
+      if (hash != null) {
+        final fromStore = await _ref
+            .read(contentStoreProvider)
+            .getDocument(hash);
+        if (fromStore != null) {
+          if (!mounted) return;
+          final current = state[filePath];
+          if (current == null) return;
+          _update(filePath, current.copyWith(document: fromStore));
+          return;
+        }
+      }
+      if (!mounted) return;
+      // Cache evicted — fall through to a full re-extraction.
+      if (!mounted) return;
+      _update(
+        filePath,
+        existing.copyWith(
+          status: PdfStatus.queued,
+          clearDocument: true,
+          retryCount: 0,
+          progress: const PdfProgress(),
+        ),
+      );
+      existing = state[filePath];
+      if (existing == null) return;
+    }
 
     _priorityFile = filePath;
 
@@ -244,14 +469,23 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
 
       final cachedFull = await PdfCache.load(filePath);
       if (cachedFull != null) {
+        // Memory rule: only the prioritized (actively read) file keeps its
+        // document in queue state. Background books carry metadata only —
+        // the text stays on disk until a reading session asks for it.
         _update(
           filePath,
           entry.copyWith(
             status: PdfStatus.ready,
-            document: cachedFull,
-            progress: entry.progress.copyWith(phase: ExtractionPhase.done),
+            document: isPriority ? cachedFull : null,
+            clearDocument: !isPriority,
+            progress: PdfProgress(
+              lastCompletedPage: cachedFull.totalPages,
+              totalPages: cachedFull.totalPages,
+              phase: ExtractionPhase.done,
+            ),
           ),
         );
+        unawaited(_ingestToStore(filePath, cachedFull));
         return;
       }
     } on Object catch (e) {
@@ -262,17 +496,34 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     try {
       final cachedPreview = await PdfCache.loadPreview(filePath);
       if (cachedPreview != null) {
-        final kind = await DocumentClassifier.classifyPath(filePath);
-        final totalPages = kind == DocumentKind.epub
-            ? await epubChapterCountInIsolate(filePath)
-            : await pdfPageCountInIsolate(filePath);
+        // Page counts come from the durable manifest — a cold start with a
+        // 200-book library must not open 200 PDFs (BK-3). Unknown books are
+        // counted once and written back.
+        final manifestEntry = await _manifest.entryFor(filePath);
+        final int totalPages;
+        if (manifestEntry != null && manifestEntry.pageCount > 0) {
+          totalPages = manifestEntry.pageCount;
+        } else {
+          final kind = await DocumentClassifier.classifyPath(filePath);
+          totalPages = kind == DocumentKind.epub
+              ? await epubChapterCountInIsolate(filePath)
+              : await pdfPageCountInIsolate(filePath);
+          await _manifest.setPageCount(filePath, totalPages);
+        }
+        // Resume from committed chunk progress when it goes beyond the
+        // bare preview (the preview cache holds everything committed).
+        final resumePage = (manifestEntry?.lastCompletedPage ?? 0).clamp(
+          previewPageCount.clamp(0, totalPages),
+          totalPages,
+        );
         _update(
           filePath,
           entry.copyWith(
             status: PdfStatus.preview,
-            document: cachedPreview,
+            document: isPriority ? cachedPreview : null,
+            clearDocument: !isPriority,
             progress: PdfProgress(
-              lastCompletedPage: previewPageCount.clamp(0, totalPages),
+              lastCompletedPage: resumePage,
               totalPages: totalPages,
               phase: ExtractionPhase.preview,
             ),
@@ -302,6 +553,14 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       // matter was blank and the extractor probed deeper).
       final pagesExtracted = result.extractedEndPage + 1;
 
+      // A fresh preview supersedes any stale committed chunk progress (the
+      // preview cache was lost, so older progress is no longer recoverable).
+      await _manifest.setProgress(
+        filePath,
+        lastCompletedPage: pagesExtracted,
+        pageCount: totalPages,
+      );
+
       // Save preview to cache (don't block).
       PdfCache.savePreview(filePath, previewDoc).catchError((Object e) {
         dev.log('Preview cache save failed: $e', name: 'preprocessing');
@@ -316,7 +575,8 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
           filePath,
           entry.copyWith(
             status: PdfStatus.ready,
-            document: previewDoc,
+            document: isPriority ? previewDoc : null,
+            clearDocument: !isPriority,
             retryCount: 0,
             progress: PdfProgress(
               lastCompletedPage: totalPages,
@@ -330,7 +590,8 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
           filePath,
           entry.copyWith(
             status: PdfStatus.preview,
-            document: previewDoc,
+            document: isPriority ? previewDoc : null,
+            clearDocument: !isPriority,
             retryCount: 0,
             progress: PdfProgress(
               lastCompletedPage: pagesExtracted,
@@ -339,6 +600,14 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
             ),
           ),
         );
+      }
+      // The file's bytes were just read — settle its content identity now.
+      // Complete books also flow into the Ring 2 store; previews stay in
+      // PdfCache only (the store holds fully ingested books).
+      if (pagesExtracted >= totalPages) {
+        unawaited(_ingestToStore(filePath, previewDoc));
+      } else {
+        unawaited(_upgradeIdentity(filePath));
       }
     } on UnsupportedPdfError catch (e) {
       appLog('preprocessing', 'unsupported file=$filePath error=${e.message}');
@@ -370,8 +639,28 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     bool isPriority = false,
   }) async {
     final entry = state[filePath];
-    if (entry == null || entry.document == null) return;
+    if (entry == null) return;
     if (entry.status == PdfStatus.ready) return;
+
+    // Background books carry no document in state — rehydrate the preview
+    // from cache so phase 2 can merge onto it.
+    final baseDoc = entry.document ?? await PdfCache.loadPreview(filePath);
+    if (baseDoc == null) {
+      // Preview neither in state nor on disk — restart from phase 1.
+      if (!mounted) return;
+      _update(
+        filePath,
+        entry.copyWith(
+          status: PdfStatus.queued,
+          clearDocument: true,
+          progress: const PdfProgress(),
+        ),
+      );
+      _previewQueue.add(filePath);
+      _fillWorkers();
+      return;
+    }
+    if (!mounted) return;
 
     final progress = entry.progress;
     final startPage = progress.lastCompletedPage;
@@ -404,22 +693,82 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       if (kind == DocumentKind.unsupported) {
         throw const UnsupportedPdfError('This file type is not supported.');
       }
-      final result = kind == DocumentKind.epub
-          ? await extractEpubPagesInIsolate(filePath, startPage, totalPages - 1)
-          : await extractPdfPagesInIsolate(filePath, startPage, totalPages - 1);
 
-      final fullDoc = entry.document!.merge(result.document);
+      // Chunked extraction (BK-7): fixed-size page chunks, each committed
+      // durably (partial doc → preview cache, progress → manifest) so a
+      // timeout or crash resumes from the last finished chunk — across
+      // launches if needed — instead of restarting from the preview.
+      var workingDoc = baseDoc;
+      var cursor = startPage;
+      while (cursor < totalPages) {
+        if (!mounted) return;
+        final chunkEnd = (cursor + completionChunkPages - 1).clamp(
+          cursor,
+          totalPages - 1,
+        );
+        final result = kind == DocumentKind.epub
+            ? await extractEpubPagesInIsolate(filePath, cursor, chunkEnd)
+            : await extractPdfPagesInIsolate(filePath, cursor, chunkEnd);
+        workingDoc = workingDoc.merge(result.document);
+        cursor = result.extractedEndPage + 1;
+
+        if (!mounted) return;
+        final current = state[filePath];
+        if (current == null) return;
+        if (cursor >= totalPages) break;
+
+        // Commit the chunk before moving on (cache first, then manifest, so
+        // recorded progress never exceeds what is recoverable from disk).
+        await PdfCache.savePreview(filePath, workingDoc);
+        await _manifest.setProgress(
+          filePath,
+          lastCompletedPage: cursor,
+          pageCount: totalPages,
+        );
+        _update(
+          filePath,
+          current.copyWith(
+            status: PdfStatus.processing,
+            document: isPriority ? workingDoc : null,
+            clearDocument: !isPriority,
+            progress: PdfProgress(
+              lastCompletedPage: cursor,
+              totalPages: totalPages,
+              phase: ExtractionPhase.backgroundCompletion,
+            ),
+          ),
+        );
+
+        // Scheduler yield: reading sessions pause background work between
+        // chunks; the committed progress resumes when reading stops.
+        if (_isPaused && !isPriority) {
+          _completionQueue.add(filePath);
+          appLog(
+            'preprocessing',
+            'completion yielded at page $cursor file=$filePath',
+          );
+          return;
+        }
+      }
+
+      final fullDoc = workingDoc;
 
       // Save full document to cache (don't block).
       PdfCache.save(filePath, fullDoc).catchError((Object e) {
         dev.log('Cache save failed: $e', name: 'preprocessing');
       });
+      await _manifest.setProgress(
+        filePath,
+        lastCompletedPage: totalPages,
+        pageCount: totalPages,
+      );
 
       _update(
         filePath,
         entry.copyWith(
           status: PdfStatus.ready,
-          document: fullDoc,
+          document: isPriority ? fullDoc : null,
+          clearDocument: !isPriority,
           retryCount: 0,
           progress: PdfProgress(
             lastCompletedPage: totalPages,
@@ -428,6 +777,7 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
           ),
         ),
       );
+      unawaited(_ingestToStore(filePath, fullDoc));
     } on UnsupportedPdfError catch (e) {
       appLog('preprocessing', 'unsupported completion file=$filePath');
       _update(
@@ -436,7 +786,14 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       );
     } on PdfTimeoutError catch (e) {
       appLog('preprocessing', 'timeout (completion) file=$filePath');
-      _handleRetry(filePath, entry, e.toString(), isPreviewPhase: false);
+      // Use the live entry — chunk commits may have advanced progress past
+      // the snapshot taken when this method started.
+      _handleRetry(
+        filePath,
+        state[filePath] ?? entry,
+        e.toString(),
+        isPreviewPhase: false,
+      );
     } on Object catch (e, st) {
       appLog('preprocessing', 'completion FAILED file=$filePath error=$e');
       dev.log(
@@ -445,7 +802,12 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
         error: e,
         stackTrace: st,
       );
-      _handleRetry(filePath, entry, e.toString(), isPreviewPhase: false);
+      _handleRetry(
+        filePath,
+        state[filePath] ?? entry,
+        e.toString(),
+        isPreviewPhase: false,
+      );
     }
   }
 
@@ -479,14 +841,22 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
           'PERMANENTLY FAILED file=$filePath error=$errorMessage',
         );
       } else {
-        // Phase 2 failure — keep preview data, mark as preview (partial).
+        // Phase 2 failure — keep all committed chunks, mark as partial.
+        // Chunk progress is durable, so the next launch retries from the
+        // last finished chunk instead of being capped forever (BK-7).
+        final committed = entry.progress.lastCompletedPage.clamp(
+          previewPageCount,
+          entry.progress.totalPages > 0
+              ? entry.progress.totalPages
+              : previewPageCount,
+        );
         _update(
           filePath,
           entry.copyWith(
             status: PdfStatus.preview,
             errorMessage:
-                'Partial — pages 1–$previewPageCount only. '
-                'Background completion failed: $errorMessage',
+                'Partial — pages 1–$committed extracted so far. '
+                'Extraction will resume on next launch. ($errorMessage)',
             retryCount: retries,
           ),
         );
@@ -528,13 +898,6 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     _progressController.add(entry);
   }
 
-  static String _logicalBookKey(PdfEntry entry) {
-    final normalizedPath = entry.filePath.replaceAll('\\', '/');
-    final segments = normalizedPath.split('/');
-    final fileName = segments.isEmpty ? entry.fileName : segments.last;
-    return fileName.toLowerCase();
-  }
-
   /// Retry all failed (non-permanent) entries.
   void retryErrors() {
     final errorPaths = state.entries
@@ -545,9 +908,9 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
     for (final path in errorPaths) {
       final entry = state[path];
       if (entry == null) continue;
-      // Decide which queue based on whether it has preview data.
-      if (entry.document != null &&
-          entry.progress.phase == ExtractionPhase.backgroundCompletion) {
+      // Decide which queue based on extraction phase — the document itself
+      // may have been released from memory (it lives in PdfCache).
+      if (entry.progress.phase == ExtractionPhase.backgroundCompletion) {
         _completionQueue.add(path);
       } else {
         _previewQueue.add(path);
@@ -609,6 +972,18 @@ final pdfStatusProvider = Provider.family<PdfStatus, String>((ref, filePath) {
 final pdfProgressProvider = Provider.family<double, String>((ref, filePath) {
   final entries = ref.watch(preprocessingQueueProvider);
   return entries[filePath]?.progress.fraction ?? 0.0;
+});
+
+/// Count of permanently failed files (header badge) — selector-scoped so
+/// the library doesn't watch the whole queue map.
+final pdfFailedCountProvider = Provider<int>((ref) {
+  return ref.watch(
+    preprocessingQueueProvider.select(
+      (m) => m.values
+          .where((e) => e.status == PdfStatus.permanentlyFailed)
+          .length,
+    ),
+  );
 });
 
 /// Overall progress across all PDFs.

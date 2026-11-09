@@ -1,0 +1,64 @@
+{
+  "_comment": "Copy to .claude/settings.json (tracked). Allows flutter/dart/git-local work, denies push/reset/secrets, auto-formats Dart on edit.",
+  "permissions": {
+    "allow": [
+      "Bash(flutter *)",
+      "Bash(dart *)",
+      "Bash(~/.flutter-sdk/bin/flutter *)",
+      "Bash(~/.flutter-sdk/bin/dart *)",
+      "Bash(scripts/verify_release_readiness.sh*)",
+      "Bash(scripts/swarm.sh*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git worktree *)",
+      "Bash(git switch *)",
+      "Bash(git checkout -b *)",
+      "Bash(git stash*)",
+      "Bash(rg *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(sed -n *)",
+      "Bash(adb devices*)",
+      "Bash(adb logcat*)",
+      "Bash(adb install*)"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean*)",
+      "Bash(git rebase*)",
+      "Bash(rm -rf *)",
+      "Read(./dart_defines/development.json)",
+      "Read(./android/key.properties)",
+      "Read(./**/*.p8)",
+      "Read(./**/*.jks)",
+      "Read(./**/*.keystore)",
+      "Read(./ios/fastlane/.env)",
+      "Read(./ios/fastlane/.env.local)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.dart) [ -f \"$f\" ] && ( command -v dart >/dev/null && dart format \"$f\" || \"$HOME/.flutter-sdk/bin/dart\" format \"$f\" ) >/dev/null 2>&1 || true;; esac"
+          }
+        ]
+      }
+    ]
+  },
+  "enableAllProjectMcpServers": true
+}

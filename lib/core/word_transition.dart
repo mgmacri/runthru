@@ -36,8 +36,7 @@ WordTransitionResult selectWordTransition({
   final int staggerTotal =
       RunThruAnimations.glyphStaggerMs * math.max<int>(0, charCount - 1);
   final int budget =
-      (displayMs * RunThruTiming.a013MaxDisplayFraction).floor() -
-      staggerTotal;
+      (displayMs * RunThruTiming.a013MaxDisplayFraction).floor() - staggerTotal;
 
   // P6 Grade A — hard floor prevents sub-perceptual display times
   final int baseDurationMs = math.max<int>(

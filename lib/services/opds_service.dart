@@ -66,9 +66,9 @@ class OpdsService {
     final uri = _buildUri(query: query, page: page);
     appLog(_tag, 'fetchCatalog start query="$query" page=$page');
 
-    final response = await _client.get(uri).timeout(
-          const Duration(seconds: 15),
-        );
+    final response = await _client
+        .get(uri)
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
       appLog(_tag, 'fetchCatalog failed status=${response.statusCode}');
@@ -124,9 +124,9 @@ class OpdsService {
 
     try {
       final request = http.Request('GET', downloadUri);
-      final response = await _client.send(request).timeout(
-            const Duration(seconds: 120),
-          );
+      final response = await _client
+          .send(request)
+          .timeout(const Duration(seconds: 120));
 
       if (response.statusCode != 200) {
         appLog(
@@ -213,9 +213,9 @@ class OpdsService {
   /// Fetch an OPDS feed URL and parse it. Used for following subsection links.
   Future<OpdsCatalog> _fetchAndParse(String url) async {
     final uri = Uri.parse(url);
-    final response = await _client.get(uri).timeout(
-          const Duration(seconds: 15),
-        );
+    final response = await _client
+        .get(uri)
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
       throw HttpException(
         'OPDS detail feed returned ${response.statusCode}',
@@ -250,7 +250,7 @@ class OpdsService {
       // Total results (OpenSearch).
       final totalResultsEl =
           feed.getElement('totalResults', namespace: opensearchNs) ??
-              feed.getElement('opensearch:totalResults');
+          feed.getElement('opensearch:totalResults');
       final totalResults = int.tryParse(totalResultsEl?.innerText ?? '') ?? 0;
 
       // Next page link.
@@ -276,8 +276,9 @@ class OpdsService {
 
         // Author — prefer <author><name>, fall back to <dcterms:creator>.
         final authorEl = entryEl.getElement('author', namespace: atomNs);
-        final authorName =
-            authorEl?.getElement('name', namespace: atomNs)?.innerText;
+        final authorName = authorEl
+            ?.getElement('name', namespace: atomNs)
+            ?.innerText;
         final dcCreator = entryEl.getElement('creator', namespace: dcNs);
         final author = authorName ?? dcCreator?.innerText;
 
@@ -286,23 +287,22 @@ class OpdsService {
         String? subsectionUrl;
         final links = <OpdsLink>[];
 
-        for (final linkEl
-            in entryEl.findAllElements('link', namespace: atomNs)) {
+        for (final linkEl in entryEl.findAllElements(
+          'link',
+          namespace: atomNs,
+        )) {
           final href = linkEl.getAttribute('href') ?? '';
           final type = linkEl.getAttribute('type') ?? '';
           final rel = linkEl.getAttribute('rel');
 
-          appLog(
-            _tag,
-            'parse link raw rel=$rel type=$type href=$href',
-          );
+          appLog(_tag, 'parse link raw rel=$rel type=$type href=$href');
 
           // Resolve relative URLs. data: URIs are embedded base64 and used directly.
           final resolvedHref = href.startsWith('http')
               ? href
               : href.startsWith('data:')
-                  ? href
-                  : 'https://www.gutenberg.org$href';
+              ? href
+              : 'https://www.gutenberg.org$href';
 
           if (rel == 'http://opds-spec.org/image' ||
               rel == 'http://opds-spec.org/image/thumbnail') {
@@ -330,14 +330,16 @@ class OpdsService {
         );
 
         if (title.isNotEmpty) {
-          entries.add(OpdsEntry(
-            id: id,
-            title: title,
-            author: author,
-            coverUrl: coverUrl,
-            links: links,
-            subsectionUrl: subsectionUrl,
-          ));
+          entries.add(
+            OpdsEntry(
+              id: id,
+              title: title,
+              author: author,
+              coverUrl: coverUrl,
+              links: links,
+              subsectionUrl: subsectionUrl,
+            ),
+          );
         }
       }
 
@@ -359,8 +361,9 @@ class OpdsService {
     if (entry.links.isEmpty) return null;
 
     if (preferredType != null) {
-      final match =
-          entry.links.where((l) => l.type.contains(preferredType)).firstOrNull;
+      final match = entry.links
+          .where((l) => l.type.contains(preferredType))
+          .firstOrNull;
       if (match != null) return match;
     }
 
@@ -402,9 +405,10 @@ final opdsServiceProvider = Provider<OpdsService>((ref) {
 });
 
 final opdsCatalogProvider =
-    FutureProvider.family<OpdsCatalog, ({String? query, int page})>(
-  (ref, params) {
-    final service = ref.watch(opdsServiceProvider);
-    return service.fetchCatalog(query: params.query, page: params.page);
-  },
-);
+    FutureProvider.family<OpdsCatalog, ({String? query, int page})>((
+      ref,
+      params,
+    ) {
+      final service = ref.watch(opdsServiceProvider);
+      return service.fetchCatalog(query: params.query, page: params.page);
+    });

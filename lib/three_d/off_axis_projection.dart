@@ -29,8 +29,10 @@ class Point3D {
 /// Matches the Python reference: eyeDepth=10, roomDepth=30, unitScale=100.
 class RoomConfig {
   /// Derive room geometry so the near face fills [screenSize] exactly.
-  factory RoomConfig.fromScreen(Size screenSize,
-      {double overdrawMargin = 0.2}) {
+  factory RoomConfig.fromScreen(
+    Size screenSize, {
+    double overdrawMargin = 0.2,
+  }) {
     const unitScale = 100.0;
     return RoomConfig(
       eyeDepth: 10.0,

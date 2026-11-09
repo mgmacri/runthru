@@ -25,6 +25,7 @@ class ProgressRecord {
     required this.totalWords,
     required this.lastReadAt,
     this.finished = false,
+    this.contentHash,
   });
 
   /// Reconstructs a record from JSON (SharedPreferences).
@@ -39,6 +40,7 @@ class ProgressRecord {
           ? DateTime.parse(json['lastReadAt'] as String)
           : DateTime.fromMillisecondsSinceEpoch(0),
       finished: json['finished'] as bool? ?? false,
+      contentHash: json['contentHash'] as String?,
     );
   }
 
@@ -63,6 +65,10 @@ class ProgressRecord {
   /// True when the item has been read to completion.
   final bool finished;
 
+  /// Content hash of the underlying book — survives re-imports that change
+  /// the path-based [contentId].
+  final String? contentHash;
+
   /// Reading progress 0.0–1.0.
   double get percent =>
       totalWords > 0 ? (wordIndex / totalWords).clamp(0.0, 1.0) : 0.0;
@@ -82,6 +88,7 @@ class ProgressRecord {
     int? totalWords,
     DateTime? lastReadAt,
     bool? finished,
+    String? contentHash,
   }) {
     return ProgressRecord(
       contentId: contentId ?? this.contentId,
@@ -91,6 +98,7 @@ class ProgressRecord {
       totalWords: totalWords ?? this.totalWords,
       lastReadAt: lastReadAt ?? this.lastReadAt,
       finished: finished ?? this.finished,
+      contentHash: contentHash ?? this.contentHash,
     );
   }
 
@@ -103,6 +111,7 @@ class ProgressRecord {
     'totalWords': totalWords,
     'lastReadAt': lastReadAt.toIso8601String(),
     'finished': finished,
+    'contentHash': contentHash,
   };
 }
 
@@ -126,6 +135,10 @@ class ReadingProgress extends _$ReadingProgress {
   /// the new total to prevent an out-of-range position.
   ///
   /// [lastReadAt] is exposed for testing; in production it defaults to now.
+  /// Maximum retained records — oldest (by [ProgressRecord.lastReadAt])
+  /// are evicted beyond this, so the store never grows without bound.
+  static const int maxRecords = 500;
+
   Future<void> record({
     required String contentId,
     required String source,
@@ -133,12 +146,20 @@ class ReadingProgress extends _$ReadingProgress {
     required int wordIndex,
     required int totalWords,
     DateTime? lastReadAt,
+    String? contentHash,
   }) async {
     // Collapse any pre-existing duplicates (legacy persisted data or a
     // concurrent write that landed before this call) into a single entry per
     // contentId, then upsert this one. This is the single point that keeps the
     // store free of duplicate shelf items.
     final byId = _indexByContentId(state.valueOrNull ?? const []);
+    // Identity rule: the same content re-imported under a new path keeps a
+    // single record — drop entries that match by content hash.
+    if (contentHash != null) {
+      byId.removeWhere(
+        (key, value) => key != contentId && value.contentHash == contentHash,
+      );
+    }
     final clampedWord = wordIndex.clamp(0, totalWords);
     byId[contentId] = ProgressRecord(
       contentId: contentId,
@@ -147,11 +168,38 @@ class ReadingProgress extends _$ReadingProgress {
       wordIndex: clampedWord,
       totalWords: totalWords,
       lastReadAt: lastReadAt ?? DateTime.now(),
+      contentHash: contentHash ?? byId[contentId]?.contentHash,
     );
 
-    final records = byId.values.toList();
+    var records = byId.values.toList();
+    if (records.length > maxRecords) {
+      records.sort((a, b) => b.lastReadAt.compareTo(a.lastReadAt));
+      records = records.take(maxRecords).toList();
+    }
     state = AsyncData(records);
     await _persist(records);
+  }
+
+  /// Removes local-source records whose path is gone from every source and
+  /// whose content hash is no longer active (source-removal cleanup).
+  /// Remote sources are untouched. Returns the number pruned.
+  Future<int> pruneMissingLocal({
+    required Set<String> activePaths,
+    required Set<String> activeHashes,
+  }) async {
+    final records = state.valueOrNull ?? const <ProgressRecord>[];
+    final kept = records.where((r) {
+      if (r.source != 'local') return true;
+      if (activePaths.contains(r.contentId)) return true;
+      final hash = r.contentHash;
+      return hash != null && activeHashes.contains(hash);
+    }).toList();
+    final pruned = records.length - kept.length;
+    if (pruned > 0) {
+      state = AsyncData(kept);
+      await _persist(kept);
+    }
+    return pruned;
   }
 
   /// Marks the item as finished; removes it from the Continue Reading shelf.

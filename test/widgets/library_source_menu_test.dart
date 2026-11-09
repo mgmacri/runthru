@@ -49,8 +49,9 @@ List<LibrarySourceAction> _actions({
 
 void main() {
   group('LibrarySourceMenu', () {
-    testWidgets('renders the + button (closed state) on the screen',
-        (tester) async {
+    testWidgets('renders the + button (closed state) on the screen', (
+      tester,
+    ) async {
       await tester.pumpWidget(_harness(actions: _actions()));
 
       expect(find.bySemanticsLabel('Open reading sources'), findsOneWidget);
@@ -60,8 +61,9 @@ void main() {
       expect(find.text('Instapaper'), findsNothing);
     });
 
-    testWidgets('tapping + opens the cascading source stack with all actions',
-        (tester) async {
+    testWidgets('tapping + opens the cascading source stack with all actions', (
+      tester,
+    ) async {
       await tester.pumpWidget(_harness(actions: _actions()));
 
       await tester.tap(find.bySemanticsLabel('Open reading sources'));
@@ -74,8 +76,9 @@ void main() {
       expect(find.bySemanticsLabel('Close reading sources'), findsOneWidget);
     });
 
-    testWidgets('source actions appear in order Paste, Folder, Instapaper',
-        (tester) async {
+    testWidgets('source actions appear in order Paste, Folder, Instapaper', (
+      tester,
+    ) async {
       await tester.pumpWidget(_harness(actions: _actions()));
 
       await tester.tap(find.bySemanticsLabel('Open reading sources'));
@@ -110,8 +113,9 @@ void main() {
       expect(find.bySemanticsLabel('Open reading sources'), findsOneWidget);
     });
 
-    testWidgets('tapping an action invokes its callback and closes the stack',
-        (tester) async {
+    testWidgets('tapping an action invokes its callback and closes the stack', (
+      tester,
+    ) async {
       var pasteTapped = false;
       await tester.pumpWidget(
         _harness(actions: _actions(onPaste: () => pasteTapped = true)),
@@ -152,8 +156,9 @@ void main() {
       expect(insta, isTrue);
     });
 
-    testWidgets('reduced motion still opens to a fully visible stack',
-        (tester) async {
+    testWidgets('reduced motion still opens to a fully visible stack', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _harness(actions: _actions(), reducedMotion: true),
       );
@@ -167,8 +172,7 @@ void main() {
       expect(find.text('Instapaper'), findsOneWidget);
     });
 
-    testWidgets('semantics labels are present for all actions',
-        (tester) async {
+    testWidgets('semantics labels are present for all actions', (tester) async {
       await tester.pumpWidget(_harness(actions: _actions()));
 
       await tester.tap(find.bySemanticsLabel('Open reading sources'));

@@ -3,6 +3,7 @@ import 'dart:developer' as dev;
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 import 'package:runthru/services/models.dart';
 
@@ -19,8 +20,17 @@ import 'package:runthru/services/models.dart';
 class PdfCache {
   PdfCache._();
 
-  /// Maximum cache size in bytes (50 MB).
-  static const int maxCacheBytes = 50 * 1024 * 1024;
+  /// Active cache budget in bytes. Set by [configureBudget] from the single
+  /// [ContentCachePolicy] — do not hardcode private budgets here.
+  static int _maxCacheBytes = 150 * 1024 * 1024;
+
+  /// Current cache budget in bytes.
+  static int get maxCacheBytes => _maxCacheBytes;
+
+  /// Applies the shared cache policy budget.
+  static void configureBudget(int bytes) {
+    _maxCacheBytes = bytes;
+  }
 
   /// Suffix for full-document cache files.
   static const String _fullSuffix = '.json.gz';
@@ -74,7 +84,10 @@ class PdfCache {
 
   /// Encodes [doc] to gzip'd UTF-8 JSON and writes it to [cacheFile]. Encode
   /// (JSON serialize + gzip) runs in an isolate to keep the main thread free.
-  static Future<void> _writeGzipDoc(File cacheFile, ExtractedDocument doc) async {
+  static Future<void> _writeGzipDoc(
+    File cacheFile,
+    ExtractedDocument doc,
+  ) async {
     final bytes = await Isolate.run(
       () => gzip.encode(utf8.encode(jsonEncode(doc.toJson()))),
     );
@@ -179,15 +192,42 @@ class PdfCache {
   /// (Rule 11). With 6+ PDFs caching concurrently, synchronous directory
   /// scanning was causing 1000+ dropped frames at startup.
   static Future<void> _evictIfOverBudget(String dirPath) async {
+    // Statics are per-isolate — capture the budget into the closure so the
+    // spawned isolate doesn't see a default value.
+    final budgetBytes = _maxCacheBytes;
     try {
-      await Isolate.run(() => _evictSync(dirPath));
+      await Isolate.run(() => evictSync(dirPath, budgetBytes));
     } on Object catch (e) {
       dev.log('Cache eviction error: $e', name: 'pdf_cache');
     }
   }
 
-  /// Synchronous eviction — runs inside an isolate only.
-  static void _evictSync(String dirPath) {
+  /// Total bytes currently used by the cache directory.
+  static Future<int> totalUsageBytes() async {
+    final dir = await _cacheDir();
+    if (dir == null) return 0;
+    try {
+      return await Isolate.run(() {
+        var total = 0;
+        for (final file in Directory(dir).listSync().whereType<File>()) {
+          try {
+            total += file.lengthSync();
+          } on FileSystemException {
+            // skip
+          }
+        }
+        return total;
+      });
+    } on Object catch (e) {
+      dev.log('Cache usage scan failed: $e', name: 'pdf_cache');
+      return 0;
+    }
+  }
+
+  /// Synchronous LRU eviction (oldest last-read first) — runs inside an
+  /// isolate in production; exposed for tests.
+  @visibleForTesting
+  static void evictSync(String dirPath, int budgetBytes) {
     final dir = Directory(dirPath);
     final files = dir.listSync().whereType<File>().toList();
 
@@ -196,7 +236,7 @@ class PdfCache {
       totalBytes += file.lengthSync();
     }
 
-    if (totalBytes <= maxCacheBytes) return;
+    if (totalBytes <= budgetBytes) return;
 
     // Sort by last modified ascending (oldest first = LRU).
     files.sort((a, b) {
@@ -208,7 +248,7 @@ class PdfCache {
     });
 
     for (final file in files) {
-      if (totalBytes <= maxCacheBytes) break;
+      if (totalBytes <= budgetBytes) break;
       try {
         final size = file.lengthSync();
         file.deleteSync();

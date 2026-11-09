@@ -6,8 +6,11 @@ import 'package:runthru/design/tokens.dart';
 class RunThruTypography {
   RunThruTypography._();
 
-  /// Default UI font.
-  static const String _uiFamily = 'BricolageGrotesque';
+  static const String uiFamily = 'HankenGrotesk';
+  static const String _uiFamily = uiFamily;
+
+  /// Default font for the RSVP reading surface.
+  static const String readingFamily = 'AtkinsonHyperlegible';
 
   // ── UI Shell ──
 
@@ -51,33 +54,103 @@ class RunThruTypography {
     color: RunThruTokens.shellTextPrimary,
   );
 
+  /// Compact screen title for shell headers.
+  static const TextStyle screenTitle = TextStyle(
+    fontFamily: _uiFamily,
+    fontSize: 23,
+    fontWeight: FontWeight.w700,
+    height: 1.08,
+    color: RunThruTokens.shellInk,
+  );
+
+  /// Uppercase-style section label without negative tracking.
+  static const TextStyle sectionLabel = TextStyle(
+    fontFamily: _uiFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    height: 1.25,
+    color: RunThruTokens.shellInkSoft,
+  );
+
+  /// Dense row primary text.
+  static const TextStyle rowTitle = TextStyle(
+    fontFamily: _uiFamily,
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    height: 1.22,
+    color: RunThruTokens.shellInk,
+  );
+
+  /// Dense metadata text.
+  static const TextStyle metadata = TextStyle(
+    fontFamily: 'Satoshi',
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: 1.28,
+    color: RunThruTokens.shellInkSoft,
+  );
+
+  /// Tiny labels for badges and compact controls.
+  static const TextStyle tinyLabel = TextStyle(
+    fontFamily: 'Satoshi',
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    height: 1.15,
+    color: RunThruTokens.shellInkSoft,
+  );
+
+  /// Primary CTA label.
+  static const TextStyle primaryButton = TextStyle(
+    fontFamily: _uiFamily,
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    height: 1.1,
+    color: RunThruTokens.shellCream,
+  );
+
+  /// Bottom navigation label.
+  static const TextStyle navLabel = TextStyle(
+    fontFamily: 'Satoshi',
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    height: 1.12,
+    color: RunThruTokens.shellInkSoft,
+  );
+
+  /// Status-pill text.
+  static const TextStyle statusPill = TextStyle(
+    fontFamily: 'Satoshi',
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    height: 1.1,
+    color: RunThruTokens.shellTealDeep,
+  );
+
   // ── Reading Stage (user-selectable font) ──
 
   static TextStyle readingWord(
     double fontSize, {
     Color? color,
     String fontFamily = _uiFamily,
-  }) =>
-      TextStyle(
-        fontFamily: fontFamily,
-        fontSize: fontSize,
-        fontWeight: FontWeight.w400,
-        height: 1.0,
-        color: color ?? RunThruTokens.stageText,
-      );
+  }) => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: fontSize,
+    fontWeight: FontWeight.w400,
+    height: 1.0,
+    color: color ?? RunThruTokens.stageText,
+  );
 
   static TextStyle readingAnchor(
     double fontSize, {
     Color? color,
     String fontFamily = _uiFamily,
-  }) =>
-      TextStyle(
-        fontFamily: fontFamily,
-        fontSize: fontSize,
-        fontWeight: FontWeight.w700,
-        height: 1.0,
-        color: color ?? RunThruTokens.stageAnchor,
-      );
+  }) => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: fontSize,
+    fontWeight: FontWeight.w700,
+    height: 1.0,
+    color: color ?? RunThruTokens.stageAnchor,
+  );
 
   // ── Stage badge (WPM display on pause) ──
 
@@ -92,6 +165,8 @@ class RunThruTypography {
   /// All available reading font choices. Bundled fonts first, then system fonts.
   static const List<FontChoice> availableFonts = [
     // ── Bundled fonts ──
+    FontChoice('AtkinsonHyperlegible', 'Atkinson Hyperlegible', true),
+    FontChoice('HankenGrotesk', 'Hanken Grotesk', true),
     FontChoice('BricolageGrotesque', 'Bricolage Grotesque', true),
     FontChoice('Satoshi', 'Satoshi', true),
     // ── System fonts ──

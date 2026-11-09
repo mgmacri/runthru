@@ -15,6 +15,20 @@ int orpIndex(String word) {
   return (length + 1) ~/ 2;
 }
 
+/// Bucketed ORP index for focal word display (0-indexed).
+/// Groups words by length:
+/// - length 1 → index 0
+/// - length 2–5 → index 1
+/// - length 6–9 → index 2
+/// - length 10–13 → index 3
+/// - length ≥ 14 → index 4
+int bucketedOrpIndex(String word) {
+  final stripped = word.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+  final length = stripped.length;
+  if (length <= 0) return 0;
+  return (length + 2) ~/ 4;
+}
+
 /// Returns the number of leading punctuation characters in [word].
 /// Used to offset the ORP index back into the original word.
 int leadingPunctuationCount(String word) {

@@ -15,6 +15,7 @@ import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/services/artifact_classifier.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
 import 'package:runthru/features/reading/providers/suppression_provider.dart';
+import 'package:runthru/features/reading/widgets/full_page_mode_view.dart';
 import 'package:runthru/features/reading/widgets/mode_switcher.dart';
 import 'package:runthru/features/reading/widgets/paragraph_mode_view.dart';
 import 'package:runthru/features/reading/widgets/reading_ruler.dart';
@@ -26,6 +27,7 @@ import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
 import 'package:runthru/store/analytics_models.dart';
+import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/three_d/cube_viewport.dart';
@@ -33,7 +35,6 @@ import 'package:runthru/widgets/finished_range_overlay.dart';
 import 'package:runthru/widgets/pause_fog_3d.dart';
 import 'package:runthru/widgets/progress_hairline_3d.dart';
 import 'package:runthru/widgets/word_display_3d.dart';
-import 'package:runthru/widgets/wpm_dial_3d.dart';
 
 /// Full-screen 3D reading experience with static marble cube viewport.
 class ReadingScreen extends ConsumerStatefulWidget {
@@ -48,7 +49,6 @@ class ReadingScreen extends ConsumerStatefulWidget {
 class _ReadingScreenState extends ConsumerState<ReadingScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _breatheController;
-  bool _dialVisible = false;
   bool _isFullScreen = false;
   List<String> _words = [];
   List<String> _allDocWords = [];
@@ -89,6 +89,8 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
   Future<void> _initReading() async {
     final queue = ref.read(preprocessingQueueProvider.notifier);
     await queue.prioritize(widget.filePath);
+    if (!mounted) return;
+    await ref.read(bookmarkStoreProvider.future);
 
     if (!mounted) return;
     final processed = ref.read(preprocessingQueueProvider);
@@ -100,7 +102,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
       appLog(
         'ReadingScreen',
         'ERROR: document null after prioritize — status=${entry?.status} '
-        'reason=${entry?.errorMessage}',
+            'reason=${entry?.errorMessage}',
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -139,7 +141,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     _classifyArtifacts(_allDocWords);
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-    final bookmark = config.bookmarks[widget.filePath];
+    final bookmark = ref
+        .read(bookmarkStoreProvider.notifier)
+        .resolve(widget.filePath);
     final range = bookmark?.readingRange;
 
     if (range != null && doc.hasPageBoundaries) {
@@ -238,6 +242,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
   @override
   void dispose() {
     _endAnalyticsSession();
+    // Drop the session's document from queue state — the text stays in
+    // PdfCache and is rehydrated by the next prioritize().
+    _queue.releaseDocument(widget.filePath);
     _queue.resumeBackground();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.removeObserver(this);
@@ -288,10 +295,6 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
     }
   }
 
-  void _showDial() {
-    setState(() => _dialVisible = true);
-  }
-
   void _toggleFullScreen() {
     setState(() => _isFullScreen = !_isFullScreen);
     SystemChrome.setEnabledSystemUIMode(
@@ -312,6 +315,15 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
         )];
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
+      // Reading yields the device: extraction pauses between chunks while
+      // words are flashing and resumes when reading stops.
+      if (prev?.isPlaying != next.isPlaying) {
+        if (next.isPlaying) {
+          _queue.pauseBackground();
+        } else {
+          _queue.resumeBackground();
+        }
+      }
       if (prev?.currentIndex != next.currentIndex) {
         final globalIndex = _sliceOffset + next.currentIndex;
         ref
@@ -342,7 +354,18 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _togglePause,
-                    onLongPress: _showDial,
+                    onVerticalDragEnd: (details) {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity < 0) {
+                        ref
+                            .read(readingModeNotifierProvider.notifier)
+                            .cycleMode();
+                      } else if (velocity > 0) {
+                        ref
+                            .read(readingModeNotifierProvider.notifier)
+                            .cycleModeReverse();
+                      }
+                    },
                     child: _buildViewport(
                       config,
                       child: _buildContent(
@@ -455,12 +478,12 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                 ? Duration.zero
                 : const Duration(milliseconds: 300),
             child: switch (readingMode) {
-              ReadingMode.rsvp => WordDisplay3D(
-                key: const ValueKey('rsvp'),
+              ReadingMode.singleWord => WordDisplay3D(
+                key: const ValueKey('singleWord'),
                 word: currentWord,
                 fontSize: fontSize,
                 anchorColor: anchorColor,
-                fontFamily: config.fontFamily,
+                fontFamily: config.readingFontFamily,
               ),
               ReadingMode.sentence => SentenceModeView(
                 key: const ValueKey('sentence'),
@@ -468,7 +491,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                 currentIndex: timerState.currentIndex,
                 letterSpacing: config.letterSpacing,
                 wordSpacing: config.wordSpacing,
-                fontFamily: config.fontFamily,
+                fontFamily: config.readingFontFamily,
                 fontSize: fontSize,
               ),
               ReadingMode.paragraph => ParagraphModeView(
@@ -477,14 +500,29 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                 currentIndex: timerState.currentIndex,
                 letterSpacing: config.letterSpacing,
                 wordSpacing: config.wordSpacing,
-                fontFamily: config.fontFamily,
+                fontFamily: config.readingFontFamily,
                 fontSize: fontSize,
+                wpm: timerState.wpm,
+              ),
+              ReadingMode.fullPage => FullPageModeView(
+                key: const ValueKey('fullPage'),
+                words: _words,
+                currentIndex: timerState.currentIndex,
+                letterSpacing: config.letterSpacing,
+                wordSpacing: config.wordSpacing,
+                fontFamily: config.readingFontFamily,
+                fontSize: fontSize,
+                wpm: timerState.wpm,
               ),
             },
           ),
         ),
+        // The continuous-text modes draw their own reading-band ruler; the
+        // flanking hairlines are single-word only.
         ReadingRuler(
-          visible: config.readingRulerEnabled,
+          visible:
+              config.readingRulerEnabled &&
+              readingMode == ReadingMode.singleWord,
           viewportHeight: MediaQuery.sizeOf(context).height,
         ),
         // Suppression overlay — shows detected artifacts during pause only.
@@ -508,7 +546,6 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
           child: PauseFog3D(
             isPaused: !timerState.isPlaying && _words.isNotEmpty,
             wpm: timerState.wpm,
-            onResume: _togglePause,
           ),
         ),
         if (_isRangeComplete && _readingRange != null)
@@ -540,23 +577,6 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
               },
             ),
           ),
-        Positioned(
-          bottom: 40,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: WpmDial3D(
-              wpm: timerState.wpm,
-              visible: _dialVisible,
-              onWpmChanged: (wpm) {
-                ref.read(wordTimerProvider.notifier).setWpm(wpm);
-              },
-              onDismissed: () {
-                setState(() => _dialVisible = false);
-              },
-            ),
-          ),
-        ),
       ],
     );
   }

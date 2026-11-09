@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/store/library_sources.dart';
+import 'package:runthru/widgets/error_snack_bar.dart';
 
 /// Shared folder- and file-import flows for the library.
 ///
@@ -369,12 +370,7 @@ class LibraryImport {
 
   static void _showError(BuildContext context, String message) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: RunThruTokens.shellError,
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(errorSnackBar(message: message));
   }
 
   static void _showPermissionDeniedDialog(BuildContext context) {
@@ -393,14 +389,24 @@ class LibraryImport {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellTextSecondary,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(
+              'Open Settings',
+              style: RunThruTypography.body.copyWith(
+                color: RunThruTokens.shellAccent,
+              ),
+            ),
           ),
         ],
       ),

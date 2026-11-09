@@ -43,8 +43,8 @@ class _TestCache {
 
     try {
       final bytes = await cacheFile.readAsBytes();
-      final json = jsonDecode(utf8.decode(gzip.decode(bytes)))
-          as Map<String, Object?>;
+      final json =
+          jsonDecode(utf8.decode(gzip.decode(bytes))) as Map<String, Object?>;
       final doc = ExtractedDocument.fromJson(json);
       if (!doc.hasPageBoundaries) return null;
       return doc;
@@ -208,36 +208,40 @@ void main() {
       },
     );
 
-    test('stored payload is gzip-compressed and smaller than raw JSON',
-        () async {
-      // A document with lots of repetitive natural-language-ish words —
-      // exactly what gzip excels at.
-      final doc = _buildDoc(sentenceCount: 200, wordsPerSentence: 12);
-      final modified = DateTime(2025, 1, 1);
+    test(
+      'stored payload is gzip-compressed and smaller than raw JSON',
+      () async {
+        // A document with lots of repetitive natural-language-ish words —
+        // exactly what gzip excels at.
+        final doc = _buildDoc(sentenceCount: 200, wordsPerSentence: 12);
+        final modified = DateTime(2025, 1, 1);
 
-      await cache.save('/big/file.pdf', doc, lastModified: modified);
+        await cache.save('/big/file.pdf', doc, lastModified: modified);
 
-      final key = '/big/file.pdf|${modified.toIso8601String()}'
-          .hashCode
-          .toUnsigned(64)
-          .toRadixString(16);
-      final stored = File('${tempDir.path}/$key.json.gz');
-      expect(stored.existsSync(), isTrue);
+        final key = '/big/file.pdf|${modified.toIso8601String()}'.hashCode
+            .toUnsigned(64)
+            .toRadixString(16);
+        final stored = File('${tempDir.path}/$key.json.gz');
+        expect(stored.existsSync(), isTrue);
 
-      final rawJsonBytes = utf8.encode(jsonEncode(doc.toJson())).length;
-      final gzBytes = stored.lengthSync();
-      expect(gzBytes, lessThan(rawJsonBytes));
+        final rawJsonBytes = utf8.encode(jsonEncode(doc.toJson())).length;
+        final gzBytes = stored.lengthSync();
+        expect(gzBytes, lessThan(rawJsonBytes));
 
-      // gzip magic number (0x1f 0x8b) confirms the on-disk format.
-      final header = stored.readAsBytesSync();
-      expect(header[0], 0x1f);
-      expect(header[1], 0x8b);
+        // gzip magic number (0x1f 0x8b) confirms the on-disk format.
+        final header = stored.readAsBytesSync();
+        expect(header[0], 0x1f);
+        expect(header[1], 0x8b);
 
-      // And it still round-trips.
-      final loaded = await cache.load('/big/file.pdf', lastModified: modified);
-      expect(loaded, isNotNull);
-      expect(loaded!.totalWords, doc.totalWords);
-    });
+        // And it still round-trips.
+        final loaded = await cache.load(
+          '/big/file.pdf',
+          lastModified: modified,
+        );
+        expect(loaded, isNotNull);
+        expect(loaded!.totalWords, doc.totalWords);
+      },
+    );
 
     test('document without page boundaries returns null on load', () async {
       // Documents without page boundaries are considered invalid (old format).

@@ -9,10 +9,7 @@ class NeumorphicCard extends StatelessWidget {
     this.size = RunThruShadowSize.standard,
     this.borderRadius = 16,
     this.padding = const EdgeInsets.all(16),
-    this.margin = const EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 8,
-    ),
+    this.margin = const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     this.inset = false,
     this.child,
   });

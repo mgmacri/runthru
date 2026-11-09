@@ -47,12 +47,14 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
       vsync: this,
       duration: RunThruAnimations.dialEmergeDuration,
     );
-    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     if (widget.visible) _show();
   }
@@ -103,76 +105,85 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
           child: ScaleTransition(
             scale: _scaleAnimation,
             child: Center(
-              child: Container(
-                margin: const EdgeInsets.all(32),
-                padding: const EdgeInsets.all(24),
-                constraints: const BoxConstraints(maxWidth: 360),
-                decoration: RunThruDecorations.raisedDecoration(
-                  RunThruSurface.shell,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Checkmark + title.
-                    const Icon(
-                      Icons.check_circle_outline,
-                      color: RunThruTokens.shellReady,
-                      size: 40,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Range Complete',
-                      style: RunThruTypography.title,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Stats.
-                    Text(
-                      'Pages ${widget.startPage + 1}\u2013${widget.endPage + 1}'
-                      '  \u00B7  '
-                      '${_formatWordCount(widget.wordCount)} words',
-                      style: RunThruTypography.body.copyWith(
-                        color: RunThruTokens.shellTextSecondary,
+              child: Semantics(
+                liveRegion: true,
+                container: true,
+                explicitChildNodes: true,
+                label:
+                    'Range complete. '
+                    'Pages ${widget.startPage + 1} to ${widget.endPage + 1} '
+                    'finished.',
+                child: Container(
+                  margin: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(24),
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  decoration: RunThruDecorations.raisedDecoration(
+                    RunThruSurface.shell,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Checkmark + title.
+                      const Icon(
+                        Icons.check_circle_outline,
+                        color: RunThruTokens.shellReady,
+                        size: 40,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (widget.averageWpm > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Average: ${widget.averageWpm} WPM',
-                          style: RunThruTypography.caption,
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Range Complete',
+                        style: RunThruTypography.title,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Stats.
+                      Text(
+                        'Pages ${widget.startPage + 1}\u2013${widget.endPage + 1}'
+                        '  \u00B7  '
+                        '${_formatWordCount(widget.wordCount)} words',
+                        style: RunThruTypography.body.copyWith(
+                          color: RunThruTokens.shellTextSecondary,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                    const SizedBox(height: 24),
-
-                    // Continue Reading button (primary).
-                    _ActionButton(
-                      label: 'Continue Reading  \u2192',
-                      isPrimary: true,
-                      onTap: widget.onContinueReading,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Set New Range + Library (secondary row).
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ActionButton(
-                            label: 'Set New Range',
-                            onTap: widget.onSetNewRange,
+                      if (widget.averageWpm > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Average: ${widget.averageWpm} WPM',
+                            style: RunThruTypography.caption,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _ActionButton(
-                            label: 'Library',
-                            onTap: widget.onGoToLibrary,
+                      const SizedBox(height: 24),
+
+                      // Continue Reading button (primary).
+                      _ActionButton(
+                        label: 'Continue Reading  \u2192',
+                        isPrimary: true,
+                        onTap: widget.onContinueReading,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Set New Range + Library (secondary row).
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ActionButton(
+                              label: 'Set New Range',
+                              onTap: widget.onSetNewRange,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _ActionButton(
+                              label: 'Library',
+                              onTap: widget.onGoToLibrary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -203,23 +214,33 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Select: $label',
       onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: RunThruDecorations.pillDecoration(
-          RunThruSurface.shell,
-        ),
-        child: Text(
-          label,
-          style: RunThruTypography.body.copyWith(
-            color: isPrimary
-                ? RunThruTokens.shellAccent
-                : RunThruTokens.shellTextPrimary,
-            fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w400,
+      child: GestureDetector(
+        onTap: onTap,
+        excludeFromSemantics: true,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(
+            minHeight: RunThruA11y.minTapTarget,
           ),
-          textAlign: TextAlign.center,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: RunThruDecorations.pillDecoration(RunThruSurface.shell),
+          child: ExcludeSemantics(
+            child: Text(
+              label,
+              style: RunThruTypography.body.copyWith(
+                color: isPrimary
+                    ? RunThruTokens.shellAccent
+                    : RunThruTokens.shellTextPrimary,
+                fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w400,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
         ),
       ),
     );

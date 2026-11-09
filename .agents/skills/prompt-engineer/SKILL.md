@@ -19,7 +19,8 @@ the feature code yourself — you produce the prompt another agent will execute.
 
 - A backlog task block (goal, files likely touched, implementation notes, dependencies,
   tests, acceptance criteria, estimated size).
-- The repo's shared rules in `.github/copilot-instructions.md` and `CLAUDE.md`.
+- The repo's shared rules in `.github/copilot-instructions.md`, `CLAUDE.md`,
+  and `doc/specs/active/design-direction.md`.
 
 ## Procedure
 
@@ -28,9 +29,13 @@ the feature code yourself — you produce the prompt another agent will execute.
    (pull these from the task's "files likely touched" plus obvious neighbors).
 3. **Scope fence** — state explicitly what is OUT of scope so the agent doesn't rewrite the
    reading engine, document model, import pipeline, or platform build settings.
-4. **Architecture constraints** — restate the relevant hard rules for this task only
-   (Riverpod, go_router, secure storage, no logging of tokens/content, design tokens,
-   regenerate `.g.dart`).
+4. **Architecture and active-design constraints** — restate the relevant rules
+   for this task only. Preserve Riverpod, go_router, secure storage, no logging
+   of tokens/content, accessibility, platform boundaries, and generated-file
+   rules. For UI tasks, defer to `doc/specs/active/design-direction.md` and any
+   current designer-approved brief; do not reintroduce stale blanket bans on
+   local `Color`, `TextStyle`, `BoxDecoration`, Material loading widgets, or
+   old neumorphic shell/stage rules unless the task explicitly requires them.
 5. **Step-by-step implementation tasks** — concrete, ordered, each independently checkable.
 6. **Tests to add** — enumerate them from the task's test list.
 7. **Verification commands** — always:

@@ -83,6 +83,11 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   /// Word lookup callback for per-word adaptive pacing.
   String? Function(int index)? _wordAt;
 
+  /// Optional per-word difficulty multiplier from on-device model
+  /// annotations (`modelAnnotations['difficultyPerWord']`). Ring 1 never
+  /// calls a model — it only reads this hint when one was attached.
+  double? Function(int index)? _difficultyAt;
+
   DateTime? _warmupStart;
 
   void loadDocument(int totalWords, {int startIndex = 0}) {
@@ -91,6 +96,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     _wasPaused = false;
     _hasPlayedOnce = false;
     _wordAt = null;
+    _difficultyAt = null;
     _warmupStart = null;
     state = WordTimerState(
       totalWords: totalWords,
@@ -105,6 +111,15 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   /// index, or null if out of bounds.
   void attachWordSource(String? Function(int index) wordAt) {
     _wordAt = wordAt;
+  }
+
+  /// Attaches a per-word difficulty multiplier source (edge AI hook).
+  ///
+  /// The callback returns a multiplier for the word at the given index
+  /// (1.0 = neutral, >1.0 = dwell longer), or null when no annotation
+  /// exists. Used only if attached — pacing is unchanged otherwise.
+  void attachDifficultySource(double? Function(int index)? difficultyAt) {
+    _difficultyAt = difficultyAt;
   }
 
   void play() {
@@ -199,7 +214,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     final base = state.intervalMs;
     final word = _wordAt?.call(state.currentIndex);
     final next = _wordAt?.call(state.currentIndex + 1);
-    final interval = word == null
+    var interval = word == null
         ? base
         : durationForWord(
             word,
@@ -207,6 +222,12 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
             baseIntervalMs: base,
             config: state.pacingConfig,
           );
+
+    // Model-annotated difficulty override — applied only when present.
+    final difficulty = _difficultyAt?.call(state.currentIndex);
+    if (difficulty != null) {
+      interval = (interval * difficulty.clamp(0.5, 3.0)).round();
+    }
 
     // ── Warm-up ramp ──
     var adjustedInterval = interval;

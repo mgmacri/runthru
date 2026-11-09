@@ -40,9 +40,7 @@ class _FontSizeSliderState extends State<FontSizeSlider> {
             inactiveTrackColor: RunThruTokens.shellDarkShadow,
             thumbColor: RunThruTokens.shellTextPrimary,
             overlayColor: RunThruTokens.shellAccent.withAlpha(51),
-            thumbShape: const RoundSliderThumbShape(
-              enabledThumbRadius: 12,
-            ),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
             trackHeight: 6,
           ),
           child: Slider(

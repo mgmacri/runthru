@@ -77,11 +77,10 @@ class CubeViewportPainter extends CustomPainter {
         Offset(fLeft, fBottom),
       ],
       RunThruTokens.cubeLeftWall,
-      ui.Gradient.linear(
-        const Offset(fLeft, 0),
-        Offset(bLeft, 0),
-        [const Color(0x00000000), const Color(0x0A000000)],
-      ),
+      ui.Gradient.linear(const Offset(fLeft, 0), Offset(bLeft, 0), [
+        const Color(0x00000000),
+        const Color(0x0A000000),
+      ]),
     );
 
     // ── Right wall ──
@@ -94,11 +93,10 @@ class CubeViewportPainter extends CustomPainter {
         Offset(fRight, fBottom),
       ],
       RunThruTokens.cubeRightWall,
-      ui.Gradient.linear(
-        Offset(fRight, 0),
-        Offset(bRight, 0),
-        [const Color(0x00000000), const Color(0x0C000000)],
-      ),
+      ui.Gradient.linear(Offset(fRight, 0), Offset(bRight, 0), [
+        const Color(0x00000000),
+        const Color(0x0C000000),
+      ]),
     );
 
     // ── Top wall ──
@@ -111,11 +109,10 @@ class CubeViewportPainter extends CustomPainter {
         Offset(fRight, fTop),
       ],
       RunThruTokens.cubeTopWall,
-      ui.Gradient.linear(
-        const Offset(0, fTop),
-        Offset(0, bTop),
-        [const Color(0x00000000), const Color(0x08000000)],
-      ),
+      ui.Gradient.linear(const Offset(0, fTop), Offset(0, bTop), [
+        const Color(0x00000000),
+        const Color(0x08000000),
+      ]),
     );
 
     // ── Bottom wall ──
@@ -128,11 +125,10 @@ class CubeViewportPainter extends CustomPainter {
         Offset(fRight, fBottom),
       ],
       RunThruTokens.cubeBottomWall,
-      ui.Gradient.linear(
-        Offset(0, fBottom),
-        Offset(0, bBottom),
-        [const Color(0x00000000), const Color(0x0E000000)],
-      ),
+      ui.Gradient.linear(Offset(0, fBottom), Offset(0, bBottom), [
+        const Color(0x00000000),
+        const Color(0x0E000000),
+      ]),
     );
 
     // ── Edge highlight lines (subtle neumorphic crease) ──
@@ -145,7 +141,10 @@ class CubeViewportPainter extends CustomPainter {
     canvas.drawLine(Offset(fRight, fTop), Offset(bRight, bTop), edgePaint);
     canvas.drawLine(Offset(fLeft, fBottom), Offset(bLeft, bBottom), edgePaint);
     canvas.drawLine(
-        Offset(fRight, fBottom), Offset(bRight, bBottom), edgePaint);
+      Offset(fRight, fBottom),
+      Offset(bRight, bBottom),
+      edgePaint,
+    );
 
     // ── Neumorphic rim — light highlight top-left, dark shadow bottom-right ──
     final neuDarkRim = Paint()

@@ -118,11 +118,20 @@ void main() {
   group('pageForWordIndex', () {
     final boundaries = [
       const PageBoundary(
-          pageNumber: 0, startSentenceIndex: 0, startWordIndex: 0),
+        pageNumber: 0,
+        startSentenceIndex: 0,
+        startWordIndex: 0,
+      ),
       const PageBoundary(
-          pageNumber: 1, startSentenceIndex: 2, startWordIndex: 10),
+        pageNumber: 1,
+        startSentenceIndex: 2,
+        startWordIndex: 10,
+      ),
       const PageBoundary(
-          pageNumber: 2, startSentenceIndex: 4, startWordIndex: 25),
+        pageNumber: 2,
+        startSentenceIndex: 4,
+        startWordIndex: 25,
+      ),
     ];
 
     test('returns correct page for word in first page', () {
@@ -150,9 +159,15 @@ void main() {
   group('wordIndexOnPage', () {
     final boundaries = [
       const PageBoundary(
-          pageNumber: 0, startSentenceIndex: 0, startWordIndex: 0),
+        pageNumber: 0,
+        startSentenceIndex: 0,
+        startWordIndex: 0,
+      ),
       const PageBoundary(
-          pageNumber: 1, startSentenceIndex: 2, startWordIndex: 10),
+        pageNumber: 1,
+        startSentenceIndex: 2,
+        startWordIndex: 10,
+      ),
     ];
 
     test('returns correct offset within page', () {

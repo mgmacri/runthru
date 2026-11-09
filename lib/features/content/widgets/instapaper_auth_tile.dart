@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/widgets/brand_icons.dart';
-import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Neumorphic source-connection tile for Instapaper.
 ///
@@ -17,38 +17,56 @@ import 'package:runthru/widgets/neumorphic_card.dart';
 /// login/logout controls.
 class InstapaperAuthTile extends ConsumerWidget {
   /// Creates an [InstapaperAuthTile].
-  const InstapaperAuthTile({super.key});
+  const InstapaperAuthTile({super.key, this.showDivider = false});
+
+  /// Whether to draw a hairline divider below this row.
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(instapaperAuthProvider);
 
     return switch (authState) {
-      InstapaperAuthChecking() => const _SourceRow(
+      InstapaperAuthChecking() => _SourceRow(
         icon: Icons.bookmark_outline,
-        iconWidget: InstapaperBrandIcon(size: 22),
+        iconWidget: const InstapaperBrandIcon(size: 20),
         name: 'Instapaper',
-        statusWidget: _StatusChip(label: 'Checking…', ready: false),
-        trailing: SizedBox.shrink(),
+        statusWidget: Text(
+          'Checking…',
+          style: RunThruTypography.metadata.copyWith(
+            color: RunThruTokens.shellTextSecondary,
+          ),
+        ),
+        trailing: const SizedBox.shrink(),
+        showDivider: showDivider,
       ),
       InstapaperAuthUnauthenticated() ||
       InstapaperAuthLegacyFallbackRequired() => _NotConnectedTile(
         onConnect: () => _showLoginSheet(context, ref),
+        showDivider: showDivider,
       ),
-      InstapaperAuthLoading() => const _SourceRow(
+      InstapaperAuthLoading() => _SourceRow(
         icon: Icons.bookmark_outline,
-        iconWidget: InstapaperBrandIcon(size: 22),
+        iconWidget: const InstapaperBrandIcon(size: 20),
         name: 'Instapaper',
-        statusWidget: _StatusChip(label: 'Connecting…', ready: false),
-        trailing: SizedBox.shrink(),
+        statusWidget: Text(
+          'Connecting…',
+          style: RunThruTypography.metadata.copyWith(
+            color: RunThruTokens.shellTextSecondary,
+          ),
+        ),
+        trailing: const SizedBox.shrink(),
+        showDivider: showDivider,
       ),
       InstapaperAuthAuthenticated(:final user) => _ConnectedTile(
         username: user.username,
         onLogout: () => ref.read(instapaperAuthProvider.notifier).logout(),
+        showDivider: showDivider,
       ),
       InstapaperAuthError(:final message) => _ErrorTile(
         message: message,
         onRetry: () => _showLoginSheet(context, ref),
+        showDivider: showDivider,
       ),
     };
   }
@@ -305,37 +323,41 @@ class _FormField extends StatelessWidget {
 }
 
 class _NotConnectedTile extends StatelessWidget {
-  const _NotConnectedTile({required this.onConnect});
+  const _NotConnectedTile({required this.onConnect, this.showDivider = false});
 
   final VoidCallback onConnect;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     return _SourceRow(
       icon: Icons.bookmark_outline,
-      iconWidget: const InstapaperBrandIcon(size: 22),
+      iconWidget: const InstapaperBrandIcon(size: 20),
       name: 'Instapaper',
-      statusWidget: const _StatusChip(label: 'Not connected', ready: false),
-      trailing: SizedBox(
-        height: 36,
-        child: Semantics(
-          button: true,
-          label: 'Connect Instapaper',
-          child: GestureDetector(
-            onTap: onConnect,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: RunThruDecorations.raisedDecoration(
-                RunThruSurface.shell,
-                size: RunThruShadowSize.small,
-                borderRadius: 8,
-              ),
-              child: Text(
-                'Connect',
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellAccent,
-                ),
+      statusWidget: Text(
+        'Not connected',
+        style: RunThruTypography.metadata.copyWith(
+          color: RunThruTokens.shellTextSecondary,
+        ),
+      ),
+      showDivider: showDivider,
+      trailing: Semantics(
+        button: true,
+        label: 'Connect Instapaper',
+        child: GestureDetector(
+          onTap: onConnect,
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: RunThruDecorations.designerRaisedSmall(
+              borderRadius: 999,
+            ),
+            child: Text(
+              'Connect',
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellAccent,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -346,26 +368,49 @@ class _NotConnectedTile extends StatelessWidget {
 }
 
 class _ConnectedTile extends StatelessWidget {
-  const _ConnectedTile({required this.username, required this.onLogout});
+  const _ConnectedTile({
+    required this.username,
+    required this.onLogout,
+    this.showDivider = false,
+  });
 
   final String username;
   final VoidCallback onLogout;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     return _SourceRow(
       icon: Icons.bookmark_rounded,
-      iconWidget: const InstapaperBrandIcon(size: 22),
+      iconWidget: const InstapaperBrandIcon(size: 20),
       name: 'Instapaper',
-      statusWidget: _StatusChip(label: username, ready: true),
-      trailing: SizedBox(
-        width: 48,
-        height: 48,
-        child: IconButton(
-          onPressed: onLogout,
-          icon: const Icon(Icons.logout_rounded, size: 20),
+      inlineBadge: RunThruStatusPill(
+        label: username,
+        tone: RunThruStatusTone.ready,
+      ),
+      statusWidget: Text(
+        'Connected',
+        style: RunThruTypography.metadata.copyWith(
           color: RunThruTokens.shellTextSecondary,
-          tooltip: 'Disconnect Instapaper',
+        ),
+      ),
+      showDivider: showDivider,
+      trailing: Semantics(
+        button: true,
+        label: 'Disconnect Instapaper',
+        child: GestureDetector(
+          onTap: onLogout,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: RunThruDecorations.designerRaisedSmall(borderRadius: 10),
+            child: const Icon(
+              Icons.logout_rounded,
+              size: 16,
+              color: RunThruTokens.shellInkSoft,
+            ),
+          ),
         ),
       ),
     );
@@ -373,42 +418,48 @@ class _ConnectedTile extends StatelessWidget {
 }
 
 class _ErrorTile extends StatelessWidget {
-  const _ErrorTile({required this.message, required this.onRetry});
+  const _ErrorTile({
+    required this.message,
+    required this.onRetry,
+    this.showDivider = false,
+  });
 
   final String message;
   final VoidCallback onRetry;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     return _SourceRow(
       icon: Icons.bookmark_outline,
-      iconWidget: const InstapaperBrandIcon(size: 22),
+      iconWidget: const InstapaperBrandIcon(size: 20),
       name: 'Instapaper',
-      statusWidget: const _StatusChip(
-        label: 'Error',
-        ready: false,
-        color: RunThruTokens.shellError,
+      statusWidget: Text(
+        message,
+        style: RunThruTypography.metadata.copyWith(
+          color: RunThruTokens.shellError,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
-      trailing: SizedBox(
-        height: 36,
-        child: Semantics(
-          button: true,
-          label: 'Reconnect Instapaper',
-          child: GestureDetector(
-            onTap: onRetry,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: RunThruDecorations.raisedDecoration(
-                RunThruSurface.shell,
-                size: RunThruShadowSize.small,
-                borderRadius: 8,
-              ),
-              child: Text(
-                'Reconnect',
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellError,
-                ),
+      showDivider: showDivider,
+      trailing: Semantics(
+        button: true,
+        label: 'Reconnect Instapaper',
+        child: GestureDetector(
+          onTap: onRetry,
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: RunThruDecorations.designerRaisedSmall(
+              borderRadius: 999,
+            ),
+            child: Text(
+              'Retry',
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellError,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -418,66 +469,90 @@ class _ErrorTile extends StatelessWidget {
   }
 }
 
-/// Neumorphic row layout shared by all source tile states.
+/// Flat row layout shared by all source tile states.
 class _SourceRow extends StatelessWidget {
   const _SourceRow({
     required this.icon,
     this.iconWidget,
     required this.name,
+    this.inlineBadge,
     required this.statusWidget,
     required this.trailing,
+    this.showDivider = false,
   });
 
   final IconData icon;
   final Widget? iconWidget;
   final String name;
+  final Widget? inlineBadge;
   final Widget statusWidget;
   final Widget trailing;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    return NeumorphicCard(
-      surface: RunThruSurface.shell,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          iconWidget ?? Icon(icon, size: 22, color: RunThruTokens.shellAccent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: RunThruTypography.body),
-                const SizedBox(height: 2),
-                statusWidget,
-              ],
-            ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 60),
+        decoration: showDivider
+            ? const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: RunThruTokens.shellDivider,
+                    width: 0.6,
+                  ),
+                ),
+              )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: RunThruTokens.shellTealTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: iconWidget ??
+                    Icon(icon, size: 20, color: RunThruTokens.shellAccent),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            style: RunThruTypography.rowTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (inlineBadge != null) ...[
+                          const SizedBox(width: 7),
+                          inlineBadge!,
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    statusWidget,
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              trailing,
+            ],
           ),
-          const SizedBox(width: 8),
-          trailing,
-        ],
+        ),
       ),
-    );
-  }
-}
-
-/// Small status chip: "Connected", "Not connected", username, etc.
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.ready, this.color});
-
-  final String label;
-  final bool ready;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final textColor =
-        color ??
-        (ready ? RunThruTokens.shellReady : RunThruTokens.shellTextSecondary);
-    return Text(
-      label,
-      style: RunThruTypography.caption.copyWith(color: textColor),
     );
   }
 }

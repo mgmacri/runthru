@@ -31,10 +31,7 @@ Page<void> wallFoldTransitionPage({
 
       // Reverse exit: wall fold-out
       // animation goes 1→0, so fold progress = 1 - animation.value
-      return _WallFoldOut(
-        foldProgress: 1.0 - animation.value,
-        child: child,
-      );
+      return _WallFoldOut(foldProgress: 1.0 - animation.value, child: child);
     },
   );
 }
@@ -90,10 +87,7 @@ Page<void> libraryTransitionPage({
 /// Renders the fold-out animation: 4 colored wall panels fold away
 /// from the center while the main content fades out.
 class _WallFoldOut extends StatelessWidget {
-  const _WallFoldOut({
-    required this.foldProgress,
-    required this.child,
-  });
+  const _WallFoldOut({required this.foldProgress, required this.child});
 
   /// 0.0 = fully closed (normal view), 1.0 = fully folded out.
   final double foldProgress;
@@ -107,14 +101,18 @@ class _WallFoldOut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Staggered fold progress per wall (eased)
-    final leftT =
-        Curves.easeInCubic.transform(_stagger(foldProgress, 0.0, 0.6));
-    final rightT =
-        Curves.easeInCubic.transform(_stagger(foldProgress, 0.05, 0.65));
-    final topT =
-        Curves.easeInCubic.transform(_stagger(foldProgress, 0.10, 0.70));
-    final bottomT =
-        Curves.easeInCubic.transform(_stagger(foldProgress, 0.30, 1.0));
+    final leftT = Curves.easeInCubic.transform(
+      _stagger(foldProgress, 0.0, 0.6),
+    );
+    final rightT = Curves.easeInCubic.transform(
+      _stagger(foldProgress, 0.05, 0.65),
+    );
+    final topT = Curves.easeInCubic.transform(
+      _stagger(foldProgress, 0.10, 0.70),
+    );
+    final bottomT = Curves.easeInCubic.transform(
+      _stagger(foldProgress, 0.30, 1.0),
+    );
 
     // Max fold angle (slightly less than 90° to avoid projection artifacts)
     const maxAngle = math.pi * 0.42; // ~75°

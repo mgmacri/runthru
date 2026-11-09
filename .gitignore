@@ -53,8 +53,7 @@ speedy-boy-srs-v2-dart.md
 digest.txt
 tasks-v2-dart.json
 research/
-CLAUDE.md
-.claude/
+.claude/settings.local.json
 python-example/
 Satoshi_Complete/
 
@@ -74,3 +73,16 @@ tools/orchestrator/orchestrator.env
 tools/orchestrator/runs/
 tools/orchestrator/MANUAL_TESTING_QUEUE.md
 tools/orchestrator/.done_tasks
+.aider*
+
+# Fastlane
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
+ios/fastlane/screenshots/
+ios/fastlane/test_output/
+ios/fastlane/.env
+ios/fastlane/.env.local
+# Keep .env.default as template (has placeholders, no secrets)
+
+# Agent swarm run logs
+.swarm/

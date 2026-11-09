@@ -16,7 +16,7 @@ import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/store/library_source.dart';
 import 'package:runthru/store/library_sources.dart';
 import 'package:runthru/widgets/library_source_menu.dart';
-import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Source-type filter for the dedicated Sources screen.
 enum _SourcesFilter { all, folders, files, articles }
@@ -143,11 +143,12 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   const SliverToBoxAdapter(
                     child: _SourceSectionHeader(title: 'Folders'),
                   ),
-                  for (final source in folderSources)
+                  for (int i = 0; i < folderSources.length; i++)
                     SliverToBoxAdapter(
                       child: _LibrarySourceRow(
-                        source: source,
-                        onRemove: () => _handleRemoveSource(source),
+                        source: folderSources[i],
+                        onRemove: () => _handleRemoveSource(folderSources[i]),
+                        showDivider: i < folderSources.length - 1,
                       ),
                     ),
                 ],
@@ -161,6 +162,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                       child: _LibrarySourceRow(
                         source: source,
                         onRemove: () => _handleRemoveSource(source),
+                        showDivider: true,
                       ),
                     ),
                   SliverToBoxAdapter(
@@ -171,6 +173,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                       status: 'Ready',
                       statusColor: RunThruTokens.shellReady,
                       onTap: () => _handlePaste(context),
+                      showDivider: true,
                     ),
                   ),
                   const SliverToBoxAdapter(child: GoogleDriveSourcePanel()),
@@ -180,7 +183,9 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   const SliverToBoxAdapter(
                     child: _SourceSectionHeader(title: 'Articles'),
                   ),
-                  const SliverToBoxAdapter(child: InstapaperAuthTile()),
+                  const SliverToBoxAdapter(
+                    child: InstapaperAuthTile(showDivider: true),
+                  ),
                   const SliverToBoxAdapter(
                     child: _PlainSourceRow(
                       icon: Icons.mail_outline_rounded,
@@ -344,7 +349,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
   }
 
   Future<void> _handleGoogleDriveAction(BuildContext ctx) async {
-    await chooseGoogleDriveFilesForReading(ctx, ref);
+    await showGoogleDriveFilePicker(ctx, ref);
   }
 
   Future<void> _handlePaste(BuildContext ctx) async {
@@ -420,54 +425,17 @@ class _SourcesHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(showBackButton ? 8 : 20, 16, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (showBackButton) ...[
-                Semantics(
-                  label: 'Back',
-                  button: true,
-                  child: SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      iconSize: 20,
-                      color: RunThruTokens.shellTextPrimary,
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              const Expanded(
-                child: Text('Sources', style: RunThruTypography.title),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              const Icon(
-                Icons.add_link_rounded,
-                size: 13,
-                color: RunThruTokens.shellTextSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '$sourceCount ${sourceCount == 1 ? 'source' : 'sources'} available',
-                style: RunThruTypography.caption.copyWith(
-                  color: RunThruTokens.shellTextSecondary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return RunThruScreenHeader(
+      title: 'Sources',
+      subtitle:
+          '$sourceCount ${sourceCount == 1 ? 'source' : 'sources'} connected',
+      leading: showBackButton
+          ? RunThruHeaderIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).pop(),
+            )
+          : null,
     );
   }
 }
@@ -487,63 +455,11 @@ class _SourcesFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduced = isReducedMotion(context);
-    return SizedBox(
-      height: 54,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-        scrollDirection: Axis.horizontal,
-        children: _SourcesFilter.values.map((filter) {
-          final isSelected = filter == selected;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Semantics(
-              label: '${_labels[filter]} filter',
-              selected: isSelected,
-              button: true,
-              child: GestureDetector(
-                onTap: () => onChanged(filter),
-                child: AnimatedContainer(
-                  duration: reduced
-                      ? Duration.zero
-                      : const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 15,
-                    vertical: 7,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 38,
-                  ),
-                  decoration: isSelected
-                      ? RunThruDecorations.insetDecoration(
-                          RunThruSurface.shell,
-                          size: RunThruShadowSize.small,
-                          borderRadius: 999,
-                        )
-                      : RunThruDecorations.raisedDecoration(
-                          RunThruSurface.shell,
-                          size: RunThruShadowSize.small,
-                          borderRadius: 999,
-                        ),
-                  child: Text(
-                    _labels[filter]!,
-                    style: RunThruTypography.caption.copyWith(
-                      color: isSelected
-                          ? RunThruTokens.shellTextPrimary
-                          : RunThruTokens.shellTextSecondary,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return RunThruSegmentedFilter<_SourcesFilter>(
+      values: _SourcesFilter.values,
+      selected: selected,
+      labelFor: (filter) => _labels[filter]!,
+      onChanged: onChanged,
     );
   }
 }
@@ -553,17 +469,38 @@ class _SourceSectionHeader extends StatelessWidget {
 
   final String title;
 
+  static const _icons = {
+    'Folders': Icons.folder_outlined,
+    'Files': Icons.description_outlined,
+    'Articles': Icons.article_outlined,
+  };
+
   @override
   Widget build(BuildContext context) {
+    final icon = _icons[title] ?? Icons.circle_outlined;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-      child: Text(
-        title,
-        style: RunThruTypography.caption.copyWith(
-          color: RunThruTokens.shellTextSecondary,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: RunThruTokens.shellTealTint,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 15, color: RunThruTokens.shellAccent),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: RunThruTypography.rowTitle.copyWith(
+              color: RunThruTokens.shellTextPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -571,10 +508,15 @@ class _SourceSectionHeader extends StatelessWidget {
 
 /// A configured library source with a remove control.
 class _LibrarySourceRow extends StatelessWidget {
-  const _LibrarySourceRow({required this.source, required this.onRemove});
+  const _LibrarySourceRow({
+    required this.source,
+    required this.onRemove,
+    this.showDivider = false,
+  });
 
   final LibrarySource source;
   final VoidCallback onRemove;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -582,60 +524,26 @@ class _LibrarySourceRow extends StatelessWidget {
     final detail = source.ownsFiles
         ? 'Imported copy · stored in app'
         : source.locator;
-    return NeumorphicCard(
-      surface: RunThruSurface.shell,
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-      borderRadius: 12,
-      size: RunThruShadowSize.small,
-      child: Row(
-        children: [
-          Icon(
-            isFolder ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
-            size: 22,
-            color: RunThruTokens.shellAccent,
+    return _SourceRow(
+      icon: isFolder
+          ? Icons.folder_outlined
+          : Icons.insert_drive_file_outlined,
+      title: source.displayName,
+      detail: detail,
+      showDivider: showDivider,
+      trailing: Semantics(
+        button: true,
+        label: 'Remove ${source.displayName}',
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton(
+            icon: const Icon(Icons.close_rounded, size: 20),
+            color: RunThruTokens.shellInkSoft,
+            tooltip: 'Remove source',
+            onPressed: onRemove,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  source.displayName,
-                  style: RunThruTypography.body.copyWith(
-                    color: RunThruTokens.shellTextPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  detail,
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Semantics(
-            button: true,
-            label: 'Remove ${source.displayName}',
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: IconButton(
-                icon: const Icon(Icons.close_rounded, size: 20),
-                color: RunThruTokens.shellTextSecondary,
-                tooltip: 'Remove source',
-                onPressed: onRemove,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -649,6 +557,7 @@ class _PlainSourceRow extends StatelessWidget {
     required this.status,
     required this.statusColor,
     this.onTap,
+    this.showDivider = false,
   });
 
   final IconData icon;
@@ -657,52 +566,19 @@ class _PlainSourceRow extends StatelessWidget {
   final String status;
   final Color statusColor;
   final VoidCallback? onTap;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    final content = NeumorphicCard(
-      surface: RunThruSurface.shell,
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      borderRadius: 12,
-      size: RunThruShadowSize.small,
-      child: Row(
-        children: [
-          Icon(icon, size: 22, color: RunThruTokens.shellAccent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: RunThruTypography.body.copyWith(
-                    color: RunThruTokens.shellTextPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  detail,
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellTextSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            status,
-            style: RunThruTypography.caption.copyWith(
-              color: statusColor,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.right,
-          ),
-        ],
-      ),
+    final tone = statusColor == RunThruTokens.shellReady
+        ? RunThruStatusTone.ready
+        : RunThruStatusTone.neutral;
+    final content = _SourceRow(
+      icon: icon,
+      title: title,
+      detail: detail,
+      showDivider: showDivider,
+      trailing: RunThruStatusPill(label: status, tone: tone),
     );
 
     if (onTap == null) {
@@ -713,6 +589,88 @@ class _PlainSourceRow extends StatelessWidget {
       button: true,
       label: title,
       child: GestureDetector(onTap: onTap, child: content),
+    );
+  }
+}
+
+/// Shared source row layout: flat icon tile + title/detail + trailing widget.
+class _SourceRow extends StatelessWidget {
+  const _SourceRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.trailing,
+    this.showDivider = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final Widget trailing;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 60),
+        decoration: showDivider
+            ? const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: RunThruTokens.shellDivider,
+                    width: 0.6,
+                  ),
+                ),
+              )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: RunThruTokens.shellTealTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 20, color: RunThruTokens.shellAccent),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: RunThruTypography.rowTitle.copyWith(
+                        color: RunThruTokens.shellTextPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: RunThruTypography.metadata.copyWith(
+                        color: RunThruTokens.shellTextSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              trailing,
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

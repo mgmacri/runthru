@@ -5,11 +5,13 @@ import 'package:runthru/store/models.dart';
 
 void main() {
   group('resumeIndex', () {
-    const doc = ExtractedDocument(sentences: [
-      Sentence(words: ['Hello', 'world', 'foo']), // 0..2
-      Sentence(words: ['bar', 'baz']), // 3..4
-      Sentence(words: ['qux']), // 5
-    ]);
+    const doc = ExtractedDocument(
+      sentences: [
+        Sentence(words: ['Hello', 'world', 'foo']), // 0..2
+        Sentence(words: ['bar', 'baz']), // 3..4
+        Sentence(words: ['qux']), // 5
+      ],
+    );
 
     test('returns 0 for empty document', () {
       const emptyDoc = ExtractedDocument(sentences: []);

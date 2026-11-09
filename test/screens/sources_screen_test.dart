@@ -9,6 +9,7 @@ import 'package:runthru/features/content/providers/google_drive_auth_provider.da
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/services/google_drive_auth_service.dart';
+import 'package:runthru/features/content/services/drive_local_store.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
 import 'package:runthru/screens/home_shell.dart';
@@ -113,7 +114,10 @@ class _FakeGoogleDriveClient extends GoogleDriveClient {
   );
 
   @override
-  Future<List<GoogleDriveFile>> listDriveFiles({String? query}) async {
+  Future<List<GoogleDriveFile>> listDriveFiles({
+    String? query,
+    int maxResults = GoogleDriveClient.defaultMaxListResults,
+  }) async {
     final failure = listError;
     if (failure != null) throw failure;
     return [metadataFile];
@@ -150,9 +154,15 @@ Widget _harness(Widget child) {
         () => _FakeGoogleDriveAuth(const GoogleDriveAuthUnauthenticated()),
       ),
       googleDriveClientProvider.overrideWithValue(_FakeGoogleDriveClient()),
+      // Widget tests run under FakeAsync — real file I/O in the Drive
+      // local-copy lookup would never complete. A null root disables it.
+      driveLocalStoreProvider.overrideWithValue(
+        DriveLocalStore(rootResolver: () async => null),
+      ),
       configProvider.overrideWith(
         () => _FakeConfigNotifier(
           const AppConfig(
+            hasSeenReadingGoalOnboarding: true,
             googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
           ),
         ),
@@ -174,9 +184,15 @@ Widget _harnessWithSources(List<LibrarySource> sources) {
         () => _FakeGoogleDriveAuth(const GoogleDriveAuthUnauthenticated()),
       ),
       googleDriveClientProvider.overrideWithValue(_FakeGoogleDriveClient()),
+      // Widget tests run under FakeAsync — real file I/O in the Drive
+      // local-copy lookup would never complete. A null root disables it.
+      driveLocalStoreProvider.overrideWithValue(
+        DriveLocalStore(rootResolver: () async => null),
+      ),
       configProvider.overrideWith(
         () => _FakeConfigNotifier(
           const AppConfig(
+            hasSeenReadingGoalOnboarding: true,
             googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
           ),
         ),
@@ -223,9 +239,13 @@ Widget _homeShellRouterHarness({
       googleDriveClientProvider.overrideWithValue(
         driveClient ?? _FakeGoogleDriveClient(),
       ),
+      driveLocalStoreProvider.overrideWithValue(
+        DriveLocalStore(rootResolver: () async => null),
+      ),
       configProvider.overrideWith(
         () => _FakeConfigNotifier(
           const AppConfig(
+            hasSeenReadingGoalOnboarding: true,
             googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
           ),
         ),
@@ -404,15 +424,46 @@ void main() {
       await tester.pumpWidget(_harness(const HomeShell()));
       await tester.pump();
 
-      expect(find.text('Library'), findsWidgets);
-      expect(find.text('Sources'), findsWidgets);
-      expect(find.text('Analytics'), findsOneWidget);
-      expect(find.text('Settings'), findsOneWidget);
+      expect(find.bySemanticsLabel('Library'), findsWidgets);
+      expect(find.bySemanticsLabel('Sources'), findsWidgets);
+      expect(find.bySemanticsLabel('Analytics'), findsOneWidget);
+      expect(find.bySemanticsLabel('Settings'), findsOneWidget);
 
-      await tester.tap(find.text('Sources').last);
+      await tester.tap(find.bySemanticsLabel('Sources').last);
       await tester.pumpAndSettle();
 
       expect(find.bySemanticsLabel('Open reading sources'), findsOneWidget);
+    });
+
+    testWidgets('home shell nav morphs active pill into circle while moving', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(const HomeShell()));
+      await tester.pump();
+
+      final librarySize = tester.getSize(
+        find.byKey(const ValueKey('home-nav-indicator-Library')),
+      );
+      expect(librarySize.width, 46);
+      expect(librarySize.height, 46);
+
+      await tester.tap(find.bySemanticsLabel('Sources').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final movingSourcesSize = tester.getSize(
+        find.byKey(const ValueKey('home-nav-indicator-Sources')),
+      );
+      expect(movingSourcesSize.width, closeTo(46, 0.5));
+      expect(movingSourcesSize.height, closeTo(46, 0.5));
+
+      await tester.pumpAndSettle();
+
+      final settledSourcesSize = tester.getSize(
+        find.byKey(const ValueKey('home-nav-indicator-Sources')),
+      );
+      expect(settledSourcesSize.width, 46);
+      expect(settledSourcesSize.height, 46);
     });
 
     testWidgets(
@@ -428,9 +479,9 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Sources').last);
+        await tester.tap(find.bySemanticsLabel('Sources').last);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Library').last);
+        await tester.tap(find.bySemanticsLabel('Library').last);
         await tester.pumpAndSettle();
 
         await tester.tap(find.text('Drive Doc').first);
@@ -466,7 +517,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Sources').last);
+        await tester.tap(find.bySemanticsLabel('Sources').last);
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
           find.text('Drive Doc'),
@@ -504,9 +555,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Sources').last);
+      await tester.tap(find.bySemanticsLabel('Sources').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Library').last);
+      await tester.tap(find.bySemanticsLabel('Library').last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('Drive Doc').first,
@@ -532,7 +583,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Sources').last);
+      await tester.tap(find.bySemanticsLabel('Sources').last);
       await tester.pumpAndSettle();
       final container = ProviderScope.containerOf(
         tester.element(find.byType(HomeShell)),
@@ -575,7 +626,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Sources').last);
+      await tester.tap(find.bySemanticsLabel('Sources').last);
       await tester.pumpAndSettle();
       final container = ProviderScope.containerOf(
         tester.element(find.byType(HomeShell)),

@@ -29,50 +29,69 @@ class SpacingControls extends ConsumerWidget {
           children: [
             const Text('Reading Comfort', style: RunThruTypography.title),
             const SizedBox(height: 20),
-            Semantics(
-              label: 'Letter spacing, currently ${config.letterSpacing} pixels',
+            SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: RunThruTokens.shellAccent,
+                inactiveTrackColor: RunThruTokens.shellDarkShadow,
+                thumbColor: RunThruTokens.shellTextPrimary,
+                overlayColor: RunThruTokens.shellAccent.withAlpha(51),
+                thumbShape:
+                    const RoundSliderThumbShape(enabledThumbRadius: 10),
+                trackHeight: 5,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Slider(
-                    value: config.letterSpacing,
-                    min: 0.0,
-                    max: 5.0,
-                    divisions: 10,
+                  Semantics(
                     label:
-                        'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
-                    onChanged: notifier.setLetterSpacing,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
-                    child: Text(
-                      'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
-                      style: RunThruTypography.body,
+                        'Letter spacing, currently ${config.letterSpacing} pixels',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Slider(
+                          value: config.letterSpacing,
+                          min: 0.0,
+                          max: 5.0,
+                          divisions: 10,
+                          label:
+                              'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
+                          onChanged: notifier.setLetterSpacing,
+                        ),
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                          child: Text(
+                            'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
+                            style: RunThruTypography.body,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Semantics(
-              label: 'Word spacing, currently ${config.wordSpacing} pixels',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Slider(
-                    value: config.wordSpacing,
-                    min: 0.0,
-                    max: 20.0,
-                    divisions: 20,
+                  const SizedBox(height: 12),
+                  Semantics(
                     label:
-                        'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
-                    onChanged: notifier.setWordSpacing,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
-                    child: Text(
-                      'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
-                      style: RunThruTypography.body,
+                        'Word spacing, currently ${config.wordSpacing} pixels',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Slider(
+                          value: config.wordSpacing,
+                          min: 0.0,
+                          max: 20.0,
+                          divisions: 20,
+                          label:
+                              'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
+                          onChanged: notifier.setWordSpacing,
+                        ),
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                          child: Text(
+                            'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
+                            style: RunThruTypography.body,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -86,6 +105,7 @@ class SpacingControls extends ConsumerWidget {
                 children: [
                   Switch.adaptive(
                     value: config.readingRulerEnabled,
+                    activeThumbColor: RunThruTokens.shellAccent, activeTrackColor: RunThruTokens.shellAccent,
                     onChanged: notifier.setReadingRulerEnabled,
                   ),
                   const SizedBox(width: 8),
@@ -110,7 +130,12 @@ class SpacingControls extends ConsumerWidget {
                   notifier.setWordSpacing(0.0);
                   notifier.setReadingRulerEnabled(false);
                 },
-                child: const Text('Reset to defaults'),
+                child: Text(
+                  'Reset to defaults',
+                  style: RunThruTypography.body.copyWith(
+                    color: RunThruTokens.shellBase,
+                  ),
+                ),
               ),
             ),
           ],

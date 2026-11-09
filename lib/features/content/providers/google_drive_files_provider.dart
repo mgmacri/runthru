@@ -6,11 +6,16 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/models/drive_content_identity.dart';
 import 'package:runthru/features/content/models/google_drive_file.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/services/content_normaliser.dart';
+import 'package:runthru/features/content/services/drive_local_store.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
+import 'package:runthru/services/book_identity.dart';
+import 'package:runthru/services/content_identity.dart';
+import 'package:runthru/services/content_store/content_store.dart';
 import 'package:runthru/services/epub_extractor.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/pdf_extractor.dart';
@@ -215,6 +220,8 @@ class GoogleDriveFiles extends _$GoogleDriveFiles {
         'Network connection failed. Check your connection and try again.',
       GoogleDriveFailureKind.unsupportedMimeType =>
         'No supported Drive files were found.',
+      GoogleDriveFailureKind.fileTooLarge =>
+        'That Drive file is too large to import.',
       GoogleDriveFailureKind.unexpectedResponse =>
         'Google Drive returned an unexpected response. Try again.',
     };
@@ -312,7 +319,16 @@ class GoogleDriveImport extends _$GoogleDriveImport {
   @override
   GoogleDriveImportState build() => const GoogleDriveImportIdle();
 
+  /// Import size ceiling for PDFs.
+  static const int maxPdfImportBytes = 200 * 1024 * 1024;
+
+  /// Import size ceiling for EPUBs.
+  static const int maxEpubImportBytes = 50 * 1024 * 1024;
+
   /// Fetches Drive metadata for [fileId], then imports the supported file.
+  ///
+  /// Persisted imports short-circuit: "Continue Reading" serves the local
+  /// copy and the content store — no re-download, no re-extraction (BK-9).
   Future<void> importFileById(
     String fileId, {
     DriveImportOrigin origin = DriveImportOrigin.sources,
@@ -326,6 +342,7 @@ class GoogleDriveImport extends _$GoogleDriveImport {
       );
       return;
     }
+    if (await _tryImportFromLocalCopy(trimmed, origin)) return;
     try {
       final file = await ref
           .read(googleDriveClientProvider)
@@ -365,6 +382,25 @@ class GoogleDriveImport extends _$GoogleDriveImport {
         message: 'That Drive file type is not supported.',
         origin: origin,
         kind: GoogleDriveFailureKind.unsupportedMimeType,
+      );
+      return;
+    }
+    // Size guard before any bytes move (BK-9): oversized files are rejected
+    // with a clear error instead of OOM-ing mid-download.
+    final ceiling = switch (file.mimeType) {
+      pdfMimeType => maxPdfImportBytes,
+      epubMimeType => maxEpubImportBytes,
+      _ => null,
+    };
+    final size = file.sizeBytes;
+    if (ceiling != null && size != null && size > ceiling) {
+      final limitMb = ceiling ~/ (1024 * 1024);
+      state = GoogleDriveImportError(
+        message:
+            '"${file.name}" is too large to import '
+            '(limit $limitMb MB for this file type).',
+        origin: origin,
+        kind: GoogleDriveFailureKind.fileTooLarge,
       );
       return;
     }
@@ -491,27 +527,126 @@ class GoogleDriveImport extends _$GoogleDriveImport {
     return ContentNormaliser.normalise(text, contentType);
   }
 
-  static Future<ExtractedDocument> _importBinaryFile(
+  /// Serves a previously imported Drive file from its local copy and the
+  /// content store. Returns true when the import completed locally.
+  Future<bool> _tryImportFromLocalCopy(
+    String fileId,
+    DriveImportOrigin origin,
+  ) async {
+    try {
+      final local = await ref.read(driveLocalStoreProvider).lookup(fileId);
+      if (local == null) return false;
+      if (local.mimeType != pdfMimeType && local.mimeType != epubMimeType) {
+        return false;
+      }
+      final file = GoogleDriveFile(
+        id: local.fileId,
+        name: local.name,
+        mimeType: local.mimeType,
+      );
+      state = GoogleDriveImportLoading(file: file, origin: origin);
+
+      var document = await ref
+          .read(contentStoreProvider)
+          .getDocument(local.contentHash);
+      if (document == null) {
+        // Store sections were evicted — re-extract from the local copy
+        // (still no network involved).
+        final extractor = local.mimeType == pdfMimeType
+            ? ref.read(googleDrivePdfExtractorProvider)
+            : ref.read(googleDriveEpubExtractorProvider);
+        document = await extractor(local.localPath);
+        await ref
+            .read(contentStoreProvider)
+            .putDocument(
+              BookIdentity(
+                contentHash: local.contentHash,
+                sourceId: 'drive:${local.fileId}',
+                displayName: local.name,
+              ),
+              document,
+            );
+      }
+      state = GoogleDriveImportDone(
+        file: file,
+        identity: DriveContentIdentity.fromGoogleDriveFile(file),
+        document: document,
+        origin: origin,
+      );
+      appLog('google-drive-import', 'served from local copy name=${local.name}');
+      return true;
+    } on Object catch (e) {
+      appLog('google-drive-import', 'local copy import failed: $e');
+      return false; // fall back to the network path
+    }
+  }
+
+  Future<ExtractedDocument> _importBinaryFile(
     GoogleDriveClient client,
     GoogleDriveFile file,
     DocumentFileExtractor extractor,
     Directory tempDir,
   ) async {
-    final bytes = await client.downloadSelectedFile(file);
-    final tempFile = await _writeTempFile(file, bytes, tempDir);
-    return extractor(tempFile.path);
+    final tempFile = _tempFileFor(file, tempDir);
+    try {
+      // Stream straight to disk — memory stays O(buffer) (BK-9).
+      await client.downloadSelectedFileTo(file, tempFile);
+      final document = await extractor(tempFile.path);
+      await _persistLocalCopy(file, tempFile, document);
+      return document;
+    } finally {
+      // Deterministic temp cleanup on success and failure (BK-9).
+      try {
+        if (tempFile.existsSync()) tempFile.deleteSync();
+      } on Object catch (e) {
+        appLog('google-drive-import', 'temp cleanup failed: $e');
+      }
+    }
   }
 
-  static Future<File> _writeTempFile(
+  /// Keeps the downloaded file under its content hash and ingests the
+  /// extracted text into the content store, so future opens are local.
+  /// Failures are non-fatal — the import itself already succeeded.
+  Future<void> _persistLocalCopy(
     GoogleDriveFile file,
-    List<int> bytes,
-    Directory tempDir,
+    File downloaded,
+    ExtractedDocument document,
   ) async {
+    try {
+      final hash = await ref
+          .read(contentIdentityProvider)
+          .ensureHash(downloaded.path);
+      if (hash == null) return;
+      await ref
+          .read(driveLocalStoreProvider)
+          .persist(
+            fileId: file.id,
+            contentHash: hash,
+            name: file.name,
+            mimeType: file.mimeType,
+            sourceFile: downloaded,
+            extension: file.extension,
+          );
+      await ref
+          .read(contentStoreProvider)
+          .putDocument(
+            BookIdentity(
+              contentHash: hash,
+              sourceId: 'drive:${file.id}',
+              displayName: file.name,
+            ),
+            document,
+          );
+    } on Object catch (e) {
+      appLog('google-drive-import', 'persist local copy failed: $e');
+    }
+  }
+
+  static File _tempFileFor(GoogleDriveFile file, Directory tempDir) {
     final safeName = file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
     final hasExtension = safeName.toLowerCase().endsWith('.${file.extension}');
     final name = hasExtension ? safeName : '$safeName.${file.extension}';
-    final tempFile = File('${tempDir.path}/runthru-drive-${file.id}-$name');
-    return tempFile.writeAsBytes(bytes, flush: true);
+    return File('${tempDir.path}/runthru-drive-${file.id}-$name');
   }
 
   static String _messageFor(GoogleDriveFailureKind kind) {
@@ -530,6 +665,8 @@ class GoogleDriveImport extends _$GoogleDriveImport {
         'Network connection failed. Check your connection and try again.',
       GoogleDriveFailureKind.unsupportedMimeType =>
         'That Drive file type is not supported.',
+      GoogleDriveFailureKind.fileTooLarge =>
+        'That Drive file is too large to import.',
       GoogleDriveFailureKind.unexpectedResponse =>
         'Google Drive returned an unexpected response. Try again.',
     };

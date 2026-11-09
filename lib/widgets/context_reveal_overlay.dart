@@ -175,10 +175,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
     _jiggleController.forward(from: 0.0).then((_) {
       if (!mounted) return;
       // Phase 2: Spring back
-      final simulation = RunThruAnimations.jiggleSimulation(
-        from: 1.0,
-        to: 0.0,
-      );
+      final simulation = RunThruAnimations.jiggleSimulation(from: 1.0, to: 0.0);
       _jiggleController.animateWith(simulation).then((_) {
         if (!mounted) return;
         _jiggleController.removeListener(_onJiggleUpdate);
@@ -449,9 +446,7 @@ class _ContextRevealOverlayState extends State<ContextRevealOverlay>
     final style = isFocus
         ? RunThruTypography.readingAnchor(
             fontSize,
-            color: RunThruTokens.stageAnchor.withAlpha(
-              (opacity * 255).round(),
-            ),
+            color: RunThruTokens.stageAnchor.withAlpha((opacity * 255).round()),
             fontFamily: widget.fontFamily,
           )
         : RunThruTypography.readingWord(

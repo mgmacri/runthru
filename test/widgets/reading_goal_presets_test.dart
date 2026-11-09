@@ -41,6 +41,11 @@ class FakeConfigNotifier extends AsyncNotifier<AppConfig>
     );
   }
 
+  @override
+  Future<void> setFocusModeEnabled(bool enabled) async {
+    state = AsyncData(state.requireValue.copyWith(focusModeEnabled: enabled));
+  }
+
   // No-op stubs for other ConfigNotifier methods.
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -173,6 +178,32 @@ void main() {
           isInMutuallyExclusiveGroup: true,
         ),
       );
+    });
+
+    testWidgets('Focus Mode setting writes shared config state', (
+      tester,
+    ) async {
+      final config = FakeConfigNotifier(const AppConfig());
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [configProvider.overrideWith(() => config)],
+          child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Focus Mode'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(Switch).first);
+      await tester.pumpAndSettle();
+
+      expect(config.state.requireValue.focusModeEnabled, isTrue);
     });
   });
 }

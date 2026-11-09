@@ -91,10 +91,7 @@ void main() {
     test('onPointerMove updates position on desktop', () {
       ctrl.start(reducedMotion: false, isDesktop: true);
       // Centre of screen → zero offset
-      ctrl.onPointerMove(
-        const Offset(200, 300),
-        const Size(400, 600),
-      );
+      ctrl.onPointerMove(const Offset(200, 300), const Size(400, 600));
       expect(ctrl.positionNotifier.value, Offset.zero);
     });
 

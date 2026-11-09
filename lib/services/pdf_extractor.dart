@@ -17,6 +17,19 @@ const int previewPageCount = 3;
 /// image-only — the real text often starts a few pages later.
 const int _maxProbePages = 10;
 
+/// Cooperative cancellation for page-range extraction.
+///
+/// pdfrx runs on the main isolate (FFI) and `loadText()` for a single page
+/// cannot be interrupted, so cancellation is checked **between pages**: a
+/// timed-out extraction stops burning the UI thread after at most one more
+/// page instead of finishing the whole book in the background. (pdfrx
+/// exposes no cancellation token for `loadText`, and `Isolate.kill` is not
+/// applicable because FFI pins extraction to the main isolate.)
+class ExtractionCancelToken {
+  /// Whether the extraction should stop at the next page boundary.
+  bool cancelled = false;
+}
+
 /// Message passed to the isolate for page-range extraction.
 class _PageRangeRequest {
   const _PageRangeRequest({
@@ -180,17 +193,21 @@ Stream<double> pdfExtractWithProgress(
 
       if (allSentences.isEmpty) {
         // Graceful: return empty document instead of crashing.
-        onComplete(ExtractedDocument(
-          sentences: const [],
-          pageBoundaries: pageBoundaries,
-          totalPages: totalPages,
-        ));
+        onComplete(
+          ExtractedDocument(
+            sentences: const [],
+            pageBoundaries: pageBoundaries,
+            totalPages: totalPages,
+          ),
+        );
       } else {
-        onComplete(ExtractedDocument(
-          sentences: allSentences,
-          pageBoundaries: pageBoundaries,
-          totalPages: totalPages,
-        ));
+        onComplete(
+          ExtractedDocument(
+            sentences: allSentences,
+            pageBoundaries: pageBoundaries,
+            totalPages: totalPages,
+          ),
+        );
       }
     } on Exception catch (e) {
       onError(e);
@@ -206,7 +223,10 @@ Stream<double> pdfExtractWithProgress(
 /// Extracts text from a specific page range of a PDF.
 /// [startPage] and [endPage] are 0-based inclusive indices.
 /// Also records page boundaries for reading range support.
-Future<PageRangeResult> _pdfExtractPages(_PageRangeRequest request) async {
+Future<PageRangeResult> _pdfExtractPages(
+  _PageRangeRequest request,
+  ExtractionCancelToken cancelToken,
+) async {
   final file = File(request.filePath);
   if (!file.existsSync()) {
     throw FileSystemException('File not found', request.filePath);
@@ -227,6 +247,25 @@ Future<PageRangeResult> _pdfExtractPages(_PageRangeRequest request) async {
     var effectiveEnd = clampedEnd;
 
     for (var i = clampedStart; i <= effectiveEnd; i++) {
+      if (cancelToken.cancelled) {
+        // Abandoned by a timeout: return quietly (the result is discarded)
+        // instead of looping over the rest of the book on the UI thread.
+        appLog(
+          'pdf_extractor',
+          'extraction cancelled at page $i of ${request.filePath}',
+        );
+        return PageRangeResult(
+          document: ExtractedDocument(
+            sentences: allSentences,
+            pageBoundaries: pageBoundaries,
+            totalPages: totalPages,
+          ),
+          totalPages: totalPages,
+          extractedStartPage: clampedStart,
+          extractedEndPage: i - 1,
+          pageBoundaries: pageBoundaries,
+        );
+      }
       final pageText = await document.pages[i].loadText();
       final trimmed = pageText?.fullText.trim() ?? '';
 
@@ -333,9 +372,15 @@ Future<PageRangeResult> extractPdfPagesInIsolate(
     startPage: startPage,
     endPage: endPage,
   );
-  return _pdfExtractPages(request).timeout(
+  final cancelToken = ExtractionCancelToken();
+  return _pdfExtractPages(request, cancelToken).timeout(
     _extractionTimeout,
-    onTimeout: () => throw PdfTimeoutError(filePath),
+    onTimeout: () {
+      // Cancel cleanly: the abandoned loop stops at the next page boundary
+      // instead of burning the main isolate while the retry runs (BK-7).
+      cancelToken.cancelled = true;
+      throw PdfTimeoutError(filePath);
+    },
   );
 }
 

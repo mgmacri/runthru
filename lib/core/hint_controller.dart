@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:runthru/store/config.dart';
 
@@ -12,8 +10,10 @@ abstract final class HintId {
   static const String swipeUp = 'hint_swipe_up';
   static const String swipeLr = 'hint_swipe_lr';
   static const String doubleTap = 'hint_double_tap';
-  static const String longPress = 'hint_long_press';
   static const String clipboard = 'hint_clipboard';
+  static const String focusPause = 'hint_focus_pause';
+  static const String focusBackSentence = 'hint_focus_back_sentence';
+  static const String focusForwardSentence = 'hint_focus_forward_sentence';
 
   /// All recognized hint IDs.
   static const List<String> all = [
@@ -21,8 +21,10 @@ abstract final class HintId {
     swipeUp,
     swipeLr,
     doubleTap,
-    longPress,
     clipboard,
+    focusPause,
+    focusBackSentence,
+    focusForwardSentence,
   ];
 }
 
@@ -53,22 +55,11 @@ class HintInfo {
 /// - `hint_swipe_up`   → after 10 words read
 /// - `hint_swipe_lr`   → after first pause
 /// - `hint_double_tap` → after first sentence navigation
-/// - `hint_long_press` → after first WPM change OR after 2 minutes
 /// - `hint_clipboard`  → on empty library screen (handled separately)
 class HintController {
-  HintController({
-    required this.configNotifier,
-    Timer Function(Duration, void Function())? timerFactory,
-  }) : _timerFactory = timerFactory ?? Timer.new;
+  HintController({required this.configNotifier});
 
   final ConfigNotifier configNotifier;
-  final Timer Function(Duration, void Function()) _timerFactory;
-
-  /// Callback invoked when the long-press hint's 2-minute timer fires.
-  VoidCallback? onLongPressHintTimerFired;
-
-  Timer? _longPressTimer;
-  bool _longPressTimerStarted = false;
 
   /// Check if a hint should be shown for the given [hintId].
   ///
@@ -82,31 +73,25 @@ class HintController {
       HintId.tap => const HintInfo(
         id: HintId.tap,
         message: 'Tap to pause or resume',
-        position: Alignment.center,
+        position: Alignment(0, -0.58),
         slideFrom: AxisDirection.down,
       ),
       HintId.swipeUp => const HintInfo(
         id: HintId.swipeUp,
         message: 'Swipe up to see context',
-        position: Alignment.bottomCenter,
-        slideFrom: AxisDirection.up,
+        position: Alignment(0, -0.58),
+        slideFrom: AxisDirection.down,
       ),
       HintId.swipeLr => const HintInfo(
         id: HintId.swipeLr,
         message: 'Swipe left/right to navigate sentences',
-        position: Alignment.center,
+        position: Alignment(0, -0.58),
         slideFrom: AxisDirection.left,
       ),
       HintId.doubleTap => const HintInfo(
         id: HintId.doubleTap,
         message: 'Double-tap to restart sentence',
-        position: Alignment.center,
-        slideFrom: AxisDirection.down,
-      ),
-      HintId.longPress => const HintInfo(
-        id: HintId.longPress,
-        message: 'Long-press to adjust speed',
-        position: Alignment.center,
+        position: Alignment(0, -0.58),
         slideFrom: AxisDirection.down,
       ),
       HintId.clipboard => const HintInfo(
@@ -115,6 +100,24 @@ class HintController {
         position: Alignment.bottomCenter,
         slideFrom: AxisDirection.up,
       ),
+      HintId.focusPause => const HintInfo(
+        id: HintId.focusPause,
+        message: 'Tap anywhere to pause or resume',
+        position: Alignment(0, -0.58),
+        slideFrom: AxisDirection.down,
+      ),
+      HintId.focusBackSentence => const HintInfo(
+        id: HintId.focusBackSentence,
+        message: 'Swipe right to step back a sentence',
+        position: Alignment(0, -0.58),
+        slideFrom: AxisDirection.right,
+      ),
+      HintId.focusForwardSentence => const HintInfo(
+        id: HintId.focusForwardSentence,
+        message: 'Swipe left to step forward a sentence',
+        position: Alignment(0, -0.58),
+        slideFrom: AxisDirection.left,
+      ),
       _ => null,
     };
   }
@@ -122,35 +125,5 @@ class HintController {
   /// Mark a hint as shown so it never appears again.
   void markShown(String hintId) {
     configNotifier.markHintShown(hintId);
-  }
-
-  /// Start the 2-minute timer for the long-press hint.
-  ///
-  /// If the hint hasn't been shown yet, fires [onLongPressHintTimerFired]
-  /// after 2 minutes. Calling this multiple times is safe — the timer is
-  /// only started once.
-  void startLongPressTimer() {
-    if (_longPressTimerStarted) return;
-    if (configNotifier.hasHintBeenShown(HintId.longPress)) return;
-    _longPressTimerStarted = true;
-    _longPressTimer = _timerFactory(
-      const Duration(minutes: 2),
-      () {
-        if (!configNotifier.hasHintBeenShown(HintId.longPress)) {
-          onLongPressHintTimerFired?.call();
-        }
-      },
-    );
-  }
-
-  /// Cancel the long-press hint timer (e.g. because the user changed WPM
-  /// manually before the timer fired).
-  void cancelLongPressTimer() {
-    _longPressTimer?.cancel();
-    _longPressTimer = null;
-  }
-
-  void dispose() {
-    _longPressTimer?.cancel();
   }
 }

@@ -2,6 +2,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:runthru/core/logger.dart';
@@ -36,6 +37,9 @@ enum GoogleDriveFailureKind {
 
   /// File MIME type is not supported by RunThru.
   unsupportedMimeType,
+
+  /// File exceeds the configured import size ceiling.
+  fileTooLarge,
 
   /// Google returned an unexpected response.
   unexpectedResponse,
@@ -148,10 +152,18 @@ class GoogleDriveClient {
   final Uri _baseUri;
   final GoogleDriveAccessMode _accessMode;
 
-  /// Lists supported Drive files, optionally filtered by [query].
+  /// Default cap on Drive listing results — a huge Drive is searched, not
+  /// paged in full (BK-9).
+  static const int defaultMaxListResults = 500;
+
+  /// Lists supported Drive files, optionally filtered by [query], up to
+  /// [maxResults] entries.
   ///
   /// This is only available in [GoogleDriveAccessMode.fullDriveBrowser].
-  Future<List<GoogleDriveFile>> listDriveFiles({String? query}) async {
+  Future<List<GoogleDriveFile>> listDriveFiles({
+    String? query,
+    int maxResults = defaultMaxListResults,
+  }) async {
     if (_accessMode != GoogleDriveAccessMode.fullDriveBrowser) {
       throw const GoogleDriveException(
         kind: GoogleDriveFailureKind.permission,
@@ -196,9 +208,18 @@ class GoogleDriveClient {
             .where((file) => file.isSupported),
       );
       pageToken = decoded['nextPageToken'] as String?;
+      if (files.length >= maxResults) {
+        appLog(
+          'google-drive-client',
+          'listing capped at $maxResults results — use search to narrow',
+        );
+        break;
+      }
     } while (pageToken != null && pageToken.isNotEmpty);
 
-    return files;
+    return files.length > maxResults
+        ? files.sublist(0, maxResults)
+        : files;
   }
 
   /// Fetches metadata for one Drive file.
@@ -228,6 +249,9 @@ class GoogleDriveClient {
   }
 
   /// Downloads bytes for a user-selected Drive blob file.
+  ///
+  /// Loads the whole file into memory — only safe for small text/HTML
+  /// payloads. Binary books must use [downloadSelectedFileTo] instead.
   Future<List<int>> downloadSelectedFile(GoogleDriveFile file) async {
     if (file.isGoogleDoc) {
       throw const GoogleDriveException(
@@ -245,6 +269,89 @@ class GoogleDriveClient {
     );
     _throwIfFailed(response, 'Could not download Drive file');
     return response.bodyBytes;
+  }
+
+  /// Streams a Drive blob file to [target] on disk. Memory footprint is
+  /// O(stream buffer), not O(file size) — a 200 MB PDF never lands in RAM
+  /// (BK-9). Returns [target].
+  Future<File> downloadSelectedFileTo(
+    GoogleDriveFile file,
+    File target,
+  ) async {
+    if (file.isGoogleDoc) {
+      throw const GoogleDriveException(
+        kind: GoogleDriveFailureKind.unsupportedMimeType,
+        message: 'Google Docs must be exported, not downloaded.',
+      );
+    }
+    const failureMessage = 'Could not download Drive file';
+    final uri = _baseUri.replace(
+      path: '${_baseUri.path}/files/${file.id}',
+      queryParameters: {'alt': 'media'},
+    );
+
+    Future<http.StreamedResponse> sendStreamed() async {
+      final request = http.Request('GET', uri)
+        ..headers.addAll(await _headersProvider());
+      try {
+        return await _httpClient.send(request);
+      } on http.ClientException catch (e) {
+        throw GoogleDriveException(
+          kind: GoogleDriveFailureKind.network,
+          message: 'Network failure: ${e.message}',
+          classification: GoogleDriveFailureClassification.transient,
+        );
+      }
+    }
+
+    var streamed = await sendStreamed();
+    if (streamed.statusCode == 401 || streamed.statusCode == 403) {
+      // Error bodies are small — safe to buffer for classification.
+      final response = await http.Response.fromStream(streamed);
+      final metadata = _classifyDriveAuthFailure(response);
+      final shouldRetry =
+          response.statusCode == 401 &&
+          metadata.kind == _DriveAuthFailureKind.expiredOrInvalidAccessToken;
+      _logAuthorizedSendDecision(
+        statusCode: response.statusCode,
+        metadata: metadata,
+        retryAttempted: shouldRetry,
+      );
+      if (!shouldRetry) {
+        throw _exceptionForAuthFailure(response, metadata, failureMessage);
+      }
+      streamed = await sendStreamed();
+      if (streamed.statusCode == 401 || streamed.statusCode == 403) {
+        final retryResponse = await http.Response.fromStream(streamed);
+        throw _exceptionForAuthFailure(
+          retryResponse,
+          _classifyDriveAuthFailure(retryResponse),
+          failureMessage,
+        );
+      }
+    }
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      final response = await http.Response.fromStream(streamed);
+      _throwIfFailed(response, failureMessage);
+    }
+
+    final sink = target.openWrite();
+    try {
+      await streamed.stream.pipe(sink);
+    } on Object {
+      try {
+        await sink.close();
+        if (target.existsSync()) target.deleteSync();
+      } on Object {
+        // Best-effort cleanup of the partial file.
+      }
+      throw const GoogleDriveException(
+        kind: GoogleDriveFailureKind.network,
+        message: 'Download interrupted while writing to disk.',
+        classification: GoogleDriveFailureClassification.transient,
+      );
+    }
+    return target;
   }
 
   /// Exports a Google Docs file as [exportMimeType].

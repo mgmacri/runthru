@@ -4,6 +4,7 @@ import 'package:runthru/design/design.dart';
 import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/store/analytics_models.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 final _readingStatsProvider = FutureProvider<ReadingStats>((ref) {
   return ref.watch(analyticsServiceProvider).calculateStats();
@@ -19,12 +20,6 @@ class AnalyticsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: RunThruTokens.shellBase,
-      appBar: AppBar(
-        backgroundColor: RunThruTokens.shellBase,
-        elevation: 0,
-        title: const Text('Reading Wins', style: RunThruTypography.title),
-        iconTheme: const IconThemeData(color: RunThruTokens.shellTextPrimary),
-      ),
       body: stats.when(
         data: _buildContent,
         error: (_, __) => const _MessageState(
@@ -53,9 +48,14 @@ class AnalyticsScreen extends ConsumerWidget {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
-      children: [
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 32),
+        children: [
+          const RunThruScreenHeader(
+            title: 'Reading Wins',
+            subtitle: 'Reading wins and rhythm',
+          ),
         _EncouragementCard(stats: stats),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -103,9 +103,10 @@ class AnalyticsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        _RhythmCard(history: stats.readingTimeHistory),
-        _FeelGoodCard(stats: stats),
-      ],
+          _RhythmCard(history: stats.readingTimeHistory),
+          _FeelGoodCard(stats: stats),
+        ],
+      ),
     );
   }
 }
@@ -129,11 +130,7 @@ class _MessageState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 48,
-              color: RunThruTokens.shellTextSecondary.withAlpha(120),
-            ),
+            Icon(icon, size: 42, color: RunThruTokens.shellTealDeep),
             const SizedBox(height: 16),
             Text(
               title,

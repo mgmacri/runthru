@@ -80,7 +80,10 @@ class _FakeGoogleDriveClient extends GoogleDriveClient {
   final metadataIds = <String>[];
 
   @override
-  Future<List<GoogleDriveFile>> listDriveFiles({String? query}) async {
+  Future<List<GoogleDriveFile>> listDriveFiles({
+    String? query,
+    int maxResults = GoogleDriveClient.defaultMaxListResults,
+  }) async {
     final failure = error;
     if (failure != null) throw failure;
     return const [

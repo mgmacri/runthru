@@ -9,7 +9,7 @@ import 'package:runthru/design/design.dart';
 import 'package:runthru/services/document_classifier.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
-import 'package:runthru/store/config.dart';
+import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/range_confirmation_modal.dart';
 
@@ -92,6 +92,10 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
 
   @override
   void dispose() {
+    // Drop the materialized document — the text stays in PdfCache.
+    ref
+        .read(preprocessingQueueProvider.notifier)
+        .releaseDocument(widget.filePath);
     _buttonAnimController.dispose();
     _debounceTimer?.cancel();
     _phaseNotifier.dispose();
@@ -103,14 +107,24 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     super.dispose();
   }
 
-  void _loadExistingRange() {
-    final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-    final bookmark = config.bookmarks[widget.filePath];
+  Future<void> _loadExistingRange() async {
+    await ref.read(bookmarkStoreProvider.future);
+    if (!mounted) return;
+    final bookmark = ref
+        .read(bookmarkStoreProvider.notifier)
+        .resolve(widget.filePath);
     final range = bookmark?.readingRange;
 
-    // Load page boundaries from extracted document.
-    final processed = ref.read(preprocessingQueueProvider);
-    final entry = processed[widget.filePath];
+    // Load page boundaries from the extracted document. The queue releases
+    // documents between sessions, so rehydrate from cache if needed.
+    var entry = ref.read(preprocessingQueueProvider)[widget.filePath];
+    if (entry?.document == null) {
+      await ref
+          .read(preprocessingQueueProvider.notifier)
+          .prioritize(widget.filePath);
+      if (!mounted) return;
+      entry = ref.read(preprocessingQueueProvider)[widget.filePath];
+    }
     if (entry?.document != null) {
       _pageBoundaries = entry!.document!.pageBoundaries;
       _allWords = entry.document!.allWords;
@@ -276,8 +290,9 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     }
 
     // Check for existing progress (Case 5).
-    final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-    final bookmark = config.bookmarks[widget.filePath];
+    final bookmark = ref
+        .read(bookmarkStoreProvider.notifier)
+        .resolve(widget.filePath);
     if (bookmark != null &&
         bookmark.wordIndex > 0 &&
         bookmark.readingRange != null) {
@@ -298,8 +313,8 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
       timestamp: DateTime.now(),
     );
     await ref
-        .read(configProvider.notifier)
-        .updateBookmark(widget.filePath, newBookmark);
+        .read(bookmarkStoreProvider.notifier)
+        .save(widget.filePath, newBookmark);
 
     if (mounted) {
       context.go(
@@ -318,13 +333,11 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
     );
     if (confirmed != true || !mounted) return;
 
-    final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-    final bookmark = config.bookmarks[widget.filePath];
+    final store = ref.read(bookmarkStoreProvider.notifier);
+    final bookmark = store.resolve(widget.filePath);
     if (bookmark != null) {
       final updated = bookmark.copyWith(clearReadingRange: true);
-      await ref
-          .read(configProvider.notifier)
-          .updateBookmark(widget.filePath, updated);
+      await store.save(widget.filePath, updated);
     }
 
     if (mounted) context.pop();
@@ -411,57 +424,63 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
         final canPop = await _onWillPop();
         if (canPop && context.mounted) context.pop();
       },
-      child: Scaffold(
-        backgroundColor: RunThruTokens.shellBase,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // ── Header ──
-              _buildHeader(),
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: 'Range picker screen',
+        child: Scaffold(
+          backgroundColor: RunThruTokens.shellBase,
+          body: SafeArea(
+            child: Column(
+              children: [
+                // ── Header ──
+                _buildHeader(),
 
-              // ── PDF Viewer (isolated from controls) ──
-              Expanded(
-                child: RepaintBoundary(
-                  child: PdfViewer.file(
-                    widget.filePath,
-                    controller: _pdfController,
-                    params: PdfViewerParams(
-                      errorBannerBuilder: (context, error, stackTrace, ref) =>
-                          _PdfViewerErrorBanner(onBack: () => context.pop()),
-                      textSelectionParams: PdfTextSelectionParams(
-                        enabled: true,
-                        onTextSelectionChange: _onTextSelectionChanged,
-                      ),
-                      onPageChanged: (pageNumber) {
-                        if (pageNumber != null) {
-                          _currentPageNotifier.value = pageNumber;
-                          if (_pdfController.isReady) {
-                            _totalPagesNotifier.value =
-                                _pdfController.pageCount;
+                // ── PDF Viewer (isolated from controls) ──
+                Expanded(
+                  child: RepaintBoundary(
+                    child: PdfViewer.file(
+                      widget.filePath,
+                      controller: _pdfController,
+                      params: PdfViewerParams(
+                        errorBannerBuilder: (context, error, stackTrace, ref) =>
+                            _PdfViewerErrorBanner(onBack: () => context.pop()),
+                        textSelectionParams: PdfTextSelectionParams(
+                          enabled: true,
+                          onTextSelectionChange: _onTextSelectionChanged,
+                        ),
+                        onPageChanged: (pageNumber) {
+                          if (pageNumber != null) {
+                            _currentPageNotifier.value = pageNumber;
+                            if (_pdfController.isReady) {
+                              _totalPagesNotifier.value =
+                                  _pdfController.pageCount;
+                            }
                           }
-                        }
-                      },
-                      onViewerReady: (doc, controller) {
-                        _totalPagesNotifier.value = controller.pageCount;
-                        _currentPageNotifier.value = controller.pageNumber ?? 1;
-                      },
+                        },
+                        onViewerReady: (doc, controller) {
+                          _totalPagesNotifier.value = controller.pageCount;
+                          _currentPageNotifier.value =
+                              controller.pageNumber ?? 1;
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              // ── Bottom Controls (self-updating via ListenableBuilder) ──
-              _BottomControls(
-                phaseNotifier: _phaseNotifier,
-                startNotifier: _startNotifier,
-                endNotifier: _endNotifier,
-                errorNotifier: _errorNotifier,
-                currentPageNotifier: _currentPageNotifier,
-                totalPagesNotifier: _totalPagesNotifier,
-                onSetStart: _setStart,
-                onSetEnd: _setEnd,
-              ),
-            ],
+                // ── Bottom Controls (self-updating via ListenableBuilder) ──
+                _BottomControls(
+                  phaseNotifier: _phaseNotifier,
+                  startNotifier: _startNotifier,
+                  endNotifier: _endNotifier,
+                  errorNotifier: _errorNotifier,
+                  currentPageNotifier: _currentPageNotifier,
+                  totalPagesNotifier: _totalPagesNotifier,
+                  onSetStart: _setStart,
+                  onSetEnd: _setEnd,
+                ),
+              ],
+            ),
           ),
         ),
       ),

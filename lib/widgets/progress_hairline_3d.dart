@@ -3,10 +3,7 @@ import 'package:runthru/design/tokens.dart';
 
 /// 1dp progress hairline on the cube's top interior edge.
 class ProgressHairline3D extends StatelessWidget {
-  const ProgressHairline3D({
-    super.key,
-    required this.progress,
-  });
+  const ProgressHairline3D({super.key, required this.progress});
 
   /// Progress as 0.0..1.0.
   final double progress;
@@ -34,10 +31,7 @@ class _ProgressHairlinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final width = size.width * progress.clamp(0.0, 1.0);
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, width, 1),
-      _paint,
-    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, width, 1), _paint);
   }
 
   @override

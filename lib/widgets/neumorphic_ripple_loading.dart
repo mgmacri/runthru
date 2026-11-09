@@ -102,8 +102,7 @@ class _NeumorphicRippleLoadingState extends State<NeumorphicRippleLoading>
                     color: widget.surface == RunThruSurface.shell
                         ? RunThruTokens.shellDarkShadow
                         : RunThruTokens.stageDarkShadow,
-                    borderRadius:
-                        BorderRadius.circular(widget.borderRadius),
+                    borderRadius: BorderRadius.circular(widget.borderRadius),
                   ),
                 ),
               ),

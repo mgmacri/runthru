@@ -25,8 +25,7 @@ double applySmoothing(double current, double raw, double alpha) =>
     current * (1.0 - alpha) + raw * alpha;
 
 /// Snap values within [deadZone] of zero to exactly zero.
-double applyDeadZone(double v, double deadZone) =>
-    v.abs() < deadZone ? 0.0 : v;
+double applyDeadZone(double v, double deadZone) => v.abs() < deadZone ? 0.0 : v;
 
 /// Clamp [angle] to [−maxRad, maxRad] then normalise to [−1, 1].
 double normalizeTilt(double angle, double maxRad) =>
@@ -78,10 +77,7 @@ class MotionParallaxController {
     if (!kIsWeb && !isDesktop) {
       _startGyro();
     } else {
-      _state = _state.copyWith(
-        isAvailable: true,
-        source: MotionSource.pointer,
-      );
+      _state = _state.copyWith(isAvailable: true, source: MotionSource.pointer);
     }
   }
 
@@ -89,21 +85,20 @@ class MotionParallaxController {
     _gyroSub?.cancel();
     _lastGyroTime = DateTime.now();
 
-    _gyroSub = gyroscopeEventStream(
-      samplingPeriod: SensorInterval.uiInterval,
-    ).listen(
-      _onGyro,
-      onError: (_) {
-        // Gyroscope unavailable — fall back to pointer mode.
-        _gyroAvailable = false;
-        _gyroSub?.cancel();
-        _gyroSub = null;
-        _state = _state.copyWith(
-          isAvailable: true,
-          source: MotionSource.pointer,
+    _gyroSub = gyroscopeEventStream(samplingPeriod: SensorInterval.uiInterval)
+        .listen(
+          _onGyro,
+          onError: (_) {
+            // Gyroscope unavailable — fall back to pointer mode.
+            _gyroAvailable = false;
+            _gyroSub?.cancel();
+            _gyroSub = null;
+            _state = _state.copyWith(
+              isAvailable: true,
+              source: MotionSource.pointer,
+            );
+          },
         );
-      },
-    );
     _gyroAvailable = true;
     _state = _state.copyWith(
       isAvailable: true,
@@ -119,8 +114,14 @@ class MotionParallaxController {
     if (dtSec <= 0 || dtSec > 0.5) return; // skip stale / first frames
 
     // Integrate angular velocity → tilt angle, then clamp.
-    var nx = (_tiltAngle.dx + event.y * dtSec).clamp(-_kMaxTiltRad, _kMaxTiltRad);
-    var ny = (_tiltAngle.dy + event.x * dtSec).clamp(-_kMaxTiltRad, _kMaxTiltRad);
+    var nx = (_tiltAngle.dx + event.y * dtSec).clamp(
+      -_kMaxTiltRad,
+      _kMaxTiltRad,
+    );
+    var ny = (_tiltAngle.dy + event.x * dtSec).clamp(
+      -_kMaxTiltRad,
+      _kMaxTiltRad,
+    );
 
     // Low-pass smoothing.
     nx = applySmoothing(_tiltAngle.dx, nx, _kSmoothingAlpha);
@@ -192,7 +193,7 @@ class MotionParallaxController {
 /// Callers are responsible for invoking [MotionParallaxController.start].
 final motionParallaxControllerProvider =
     Provider.autoDispose<MotionParallaxController>((ref) {
-  final controller = MotionParallaxController();
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+      final controller = MotionParallaxController();
+      ref.onDispose(controller.dispose);
+      return controller;
+    });

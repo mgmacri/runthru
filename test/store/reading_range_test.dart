@@ -120,11 +120,13 @@ void main() {
 
   group('resumeIndex with ReadingRange', () {
     test('snaps to range start if bookmark is before range', () {
-      const doc = ExtractedDocument(sentences: [
-        Sentence(words: ['a', 'b', 'c', 'd', 'e']),
-        Sentence(words: ['f', 'g', 'h', 'i', 'j']),
-        Sentence(words: ['k', 'l', 'm']),
-      ]);
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['a', 'b', 'c', 'd', 'e']),
+          Sentence(words: ['f', 'g', 'h', 'i', 'j']),
+          Sentence(words: ['k', 'l', 'm']),
+        ],
+      );
 
       const bookmark = BookmarkData(
         wordIndex: 2, // in first sentence
@@ -141,11 +143,13 @@ void main() {
     });
 
     test('returns normal sentence start when within range', () {
-      const doc = ExtractedDocument(sentences: [
-        Sentence(words: ['a', 'b', 'c', 'd', 'e']),
-        Sentence(words: ['f', 'g', 'h', 'i', 'j']),
-        Sentence(words: ['k', 'l', 'm']),
-      ]);
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['a', 'b', 'c', 'd', 'e']),
+          Sentence(words: ['f', 'g', 'h', 'i', 'j']),
+          Sentence(words: ['k', 'l', 'm']),
+        ],
+      );
 
       const bookmark = BookmarkData(
         wordIndex: 7, // in second sentence
@@ -162,10 +166,12 @@ void main() {
     });
 
     test('works without reading range (backward compat)', () {
-      const doc = ExtractedDocument(sentences: [
-        Sentence(words: ['a', 'b', 'c']),
-        Sentence(words: ['d', 'e', 'f']),
-      ]);
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['a', 'b', 'c']),
+          Sentence(words: ['d', 'e', 'f']),
+        ],
+      );
 
       const bookmark = BookmarkData(wordIndex: 4);
       final result = resumeIndex(bookmark, doc);

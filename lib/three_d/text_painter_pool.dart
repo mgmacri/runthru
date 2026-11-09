@@ -5,9 +5,7 @@ import 'package:flutter/painting.dart';
 class TextPainterPool {
   TextPainterPool() {
     for (var i = 0; i < maxSize; i++) {
-      _pool.add(
-        TextPainter(textDirection: TextDirection.ltr),
-      );
+      _pool.add(TextPainter(textDirection: TextDirection.ltr));
     }
   }
 
@@ -18,11 +16,7 @@ class TextPainterPool {
   TextPainter operator [](int index) => _pool[index];
 
   /// Configure a pooled painter with text and style, then layout.
-  void configure(
-    int index,
-    String text,
-    TextStyle style,
-  ) {
+  void configure(int index, String text, TextStyle style) {
     final tp = _pool[index];
     tp.text = TextSpan(text: text, style: style);
     tp.layout();

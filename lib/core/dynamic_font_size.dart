@@ -6,10 +6,9 @@ import 'package:flutter/widgets.dart';
 /// with a small horizontal margin (90% of available width). Uses a
 /// monospace-equivalent average character width ratio of ~0.6.
 ///
-/// NOTE: This is used only by the non-parallax reading_screen.dart.
-/// The parallax reading screen uses [BackWallFontSizer] from
-/// `lib/three_d/back_wall_font_sizer.dart` which sizes text relative
-/// to the projected back wall width.
+/// Used by both reading screens. The parallax reading screen multiplies the
+/// result by a clamped system text scale before passing it to the word
+/// display widgets and painters.
 double dynamicFontSize(BoxConstraints constraints) {
   // 90% of viewport width to leave margin on each side.
   final availableWidth = constraints.maxWidth * 0.90;

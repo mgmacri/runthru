@@ -11,6 +11,62 @@ import 'package:runthru/features/content/providers/clipboard_detect_provider.dar
 import 'package:runthru/features/content/providers/share_intent_provider.dart';
 import 'package:runthru/navigation/app_router.dart';
 
+/// Root [ThemeData] for RunThru. Exposed so widget tests can assert the real
+/// SnackBar and text styling instead of reconstructing it.
+ThemeData buildRunThruTheme() => ThemeData(
+  useMaterial3: true,
+  scaffoldBackgroundColor: RunThruTokens.shellBase,
+  extensions: const [RunThruTokens.instance],
+  // Central SnackBar styling so normal SnackBars never fall back to
+  // Material defaults. Content text is set explicitly here so it does
+  // NOT resolve to the root textTheme (which is dark ink — unreadable
+  // on the dark shellInk surface).
+  snackBarTheme: SnackBarThemeData(
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: RunThruTokens.shellInk,
+    contentTextStyle: RunThruTypography.body.copyWith(
+      color: RunThruTokens.shellCream,
+    ),
+    // shellAccent (the dialog-button interactive token) is only 2.67:1
+    // on shellInk, below the 3:1 action threshold. shellReady is the
+    // lightest token in the teal/green accent family that clears it
+    // (3.99:1). shellProcessing is NOT used — it is a status color and
+    // only the documented last resort.
+    actionTextColor: RunThruTokens.shellReady,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+  // Root text theme so future Material defaults resolve to RunThru
+  // typography instead of Roboto. Two slots in the original mapping
+  // referenced tokens that do not exist (displaySmall, bodySmall);
+  // they are substituted with the closest existing tokens that
+  // preserve the descending size hierarchy. The limited shell palette
+  // has no regular-weight token between body (16) and caption (12), so
+  // bodyLarge/bodyMedium share `body` — the named-critical distinction
+  // titleMedium (rowTitle, 15 w700) vs bodyMedium (body, 16 w400) still
+  // holds by weight and role.
+  textTheme: const TextTheme(
+    displayLarge: RunThruTypography.display, // 32 w600
+    displayMedium: RunThruTypography.badge, // 24 w600 (subst. displaySmall)
+    displaySmall: RunThruTypography.screenTitle, // 23 w700
+
+    headlineLarge: RunThruTypography.screenTitle, // 23 w700
+    headlineMedium: RunThruTypography.title, // 20 w500
+    headlineSmall: RunThruTypography.title, // 20 w500 (dialog title)
+
+    titleLarge: RunThruTypography.title, // 20 w500 (AppBar title)
+    titleMedium: RunThruTypography.rowTitle, // 15 w700 (ListTile title)
+    titleSmall: RunThruTypography.sectionLabel, // 12 w700
+
+    bodyLarge: RunThruTypography.body, // 16 w400
+    bodyMedium: RunThruTypography.body, // 16 w400 (subst. bodySmall)
+    bodySmall: RunThruTypography.caption, // 12 w400
+
+    labelLarge: RunThruTypography.primaryButton, // 15 w700 (buttons)
+    labelMedium: RunThruTypography.statusPill, // 11 w700
+    labelSmall: RunThruTypography.tinyLabel, // 10 w700
+  ),
+);
+
 /// RunThru MaterialApp with ThemeExtension and go_router.
 class RunThruApp extends ConsumerWidget {
   const RunThruApp({super.key});
@@ -21,11 +77,7 @@ class RunThruApp extends ConsumerWidget {
       child: MaterialApp.router(
         title: 'RunThru',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          scaffoldBackgroundColor: RunThruTokens.shellBase,
-          extensions: const [RunThruTokens.instance],
-        ),
+        theme: buildRunThruTheme(),
         routerConfig: appRouter,
       ),
     );

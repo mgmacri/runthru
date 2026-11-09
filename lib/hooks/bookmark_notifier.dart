@@ -3,7 +3,7 @@ import 'dart:developer' as dev;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:runthru/store/config.dart';
+import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/models.dart';
 
 /// Tracks and persists reading position for a given PDF file.
@@ -28,16 +28,15 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
   Future<void> _persist() async {
     if (state == _lastPersistedIndex) return;
     try {
-      final config = _ref.read(configProvider).valueOrNull ?? const AppConfig();
-      final existing = config.bookmarks[_filePath];
+      // BK-5: bookmarks live in their own store — one entry written per
+      // save, never the whole config blob.
+      final store = _ref.read(bookmarkStoreProvider.notifier);
+      final existing = store.resolve(_filePath);
       final data = (existing ?? const BookmarkData(wordIndex: 0)).copyWith(
         wordIndex: state,
         timestamp: DateTime.now(),
       );
-      await _ref.read(configProvider.notifier).updateBookmark(
-            _filePath,
-            data,
-          );
+      await store.save(_filePath, data);
       _lastPersistedIndex = state;
     } on Object catch (e, st) {
       dev.log(
@@ -71,5 +70,5 @@ class BookmarkNotifier extends StateNotifier<int> with WidgetsBindingObserver {
 /// Family provider keyed by filePath.
 final bookmarkProvider =
     StateNotifierProvider.family<BookmarkNotifier, int, String>(
-  BookmarkNotifier.new,
-);
+      BookmarkNotifier.new,
+    );

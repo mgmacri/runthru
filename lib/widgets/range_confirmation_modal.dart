@@ -65,9 +65,7 @@ class _RangeConfirmationCard extends StatelessWidget {
         margin: const EdgeInsets.all(32),
         padding: const EdgeInsets.all(24),
         constraints: const BoxConstraints(maxWidth: 360),
-        decoration: RunThruDecorations.raisedDecoration(
-          RunThruSurface.shell,
-        ),
+        decoration: RunThruDecorations.raisedDecoration(RunThruSurface.shell),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -98,10 +96,7 @@ class _RangeConfirmationCard extends StatelessWidget {
                     decoration: RunThruDecorations.pillDecoration(
                       RunThruSurface.shell,
                     ),
-                    child: const Text(
-                      'Cancel',
-                      style: RunThruTypography.body,
-                    ),
+                    child: const Text('Cancel', style: RunThruTypography.body),
                   ),
                 ),
                 const SizedBox(width: 16),

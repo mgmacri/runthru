@@ -28,11 +28,13 @@ List<int> _createTestEpub({
   </rootfiles>
 </container>''';
 
-  archive.addFile(ArchiveFile(
-    'META-INF/container.xml',
-    utf8.encode(containerXml).length,
-    utf8.encode(containerXml),
-  ));
+  archive.addFile(
+    ArchiveFile(
+      'META-INF/container.xml',
+      utf8.encode(containerXml).length,
+      utf8.encode(containerXml),
+    ),
+  );
 
   // Build manifest items and spine entries.
   final manifestItems = StringBuffer();
@@ -48,7 +50,8 @@ List<int> _createTestEpub({
   }
 
   // content.opf
-  final opfXml = '''<?xml version="1.0" encoding="UTF-8"?>
+  final opfXml =
+      '''<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>Test EPUB</dc:title>
@@ -59,20 +62,20 @@ $manifestItems  </manifest>
 $spineItems  </spine>
 </package>''';
 
-  archive.addFile(ArchiveFile(
-    'content.opf',
-    utf8.encode(opfXml).length,
-    utf8.encode(opfXml),
-  ));
+  archive.addFile(
+    ArchiveFile('content.opf', utf8.encode(opfXml).length, utf8.encode(opfXml)),
+  );
 
   // Chapter files.
   for (var i = 0; i < chapterContents.length; i++) {
     final content = chapterContents[i];
-    archive.addFile(ArchiveFile(
-      'chapter${i + 1}.xhtml',
-      utf8.encode(content).length,
-      utf8.encode(content),
-    ));
+    archive.addFile(
+      ArchiveFile(
+        'chapter${i + 1}.xhtml',
+        utf8.encode(content).length,
+        utf8.encode(content),
+      ),
+    );
   }
 
   return ZipEncoder().encode(archive);

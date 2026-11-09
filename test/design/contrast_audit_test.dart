@@ -38,28 +38,52 @@ void main() {
       expect(ratio, greaterThanOrEqualTo(3.0));
     });
 
-    test('shellTextPrimary / shellBase ≥ 7:1 (AAA)', () {
+    test('shellInk / shellSand ≥ 7:1 (AAA)', () {
       final ratio = contrastRatio(
-        RunThruTokens.shellTextPrimary,
-        RunThruTokens.shellBase,
+        RunThruTokens.shellInk,
+        RunThruTokens.shellSand,
       );
       expect(ratio, greaterThanOrEqualTo(7.0));
     });
 
-    test('shellTextSecondary / shellBase ≥ 4.5:1 (AA)', () {
+    test('shellInkSoft / shellSand ≥ 4.5:1 (AA)', () {
       final ratio = contrastRatio(
-        RunThruTokens.shellTextSecondary,
-        RunThruTokens.shellBase,
+        RunThruTokens.shellInkSoft,
+        RunThruTokens.shellSand,
       );
       expect(ratio, greaterThanOrEqualTo(4.5));
     });
 
-    test('shellAccent / shellBase ≥ 3:1 (AA Large Text)', () {
+    test('shellTeal / shellSand ≥ 3:1 (AA Large Text)', () {
       final ratio = contrastRatio(
-        RunThruTokens.shellAccent,
-        RunThruTokens.shellBase,
+        RunThruTokens.shellTeal,
+        RunThruTokens.shellSand,
       );
       expect(ratio, greaterThanOrEqualTo(3.0));
+    });
+
+    test('shellCream / shellTealDeep ≥ 4.5:1 (CTA text)', () {
+      final ratio = contrastRatio(
+        RunThruTokens.shellCream,
+        RunThruTokens.shellTealDeep,
+      );
+      expect(ratio, greaterThanOrEqualTo(4.5));
+    });
+
+    test('shellTealDeep / status tint ≥ 4.5:1 (status pill)', () {
+      final ratio = contrastRatio(
+        RunThruTokens.shellTealDeep,
+        RunThruTokens.shellSandHi,
+      );
+      expect(ratio, greaterThanOrEqualTo(4.5));
+    });
+
+    test('metadata text / shellSand ≥ 4.5:1 (row metadata)', () {
+      final ratio = contrastRatio(
+        RunThruTokens.shellInkSoft,
+        RunThruTokens.shellSand,
+      );
+      expect(ratio, greaterThanOrEqualTo(4.5));
     });
   });
 }

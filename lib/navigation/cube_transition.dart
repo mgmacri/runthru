@@ -16,35 +16,37 @@ Page<void> cubeTransitionPage({
     child: child,
     transitionDuration: RunThruAnimations.cubeRotateDuration,
     reverseTransitionDuration: RunThruAnimations.cubeRotateDuration,
-    transitionsBuilder: (
-      BuildContext context,
-      Animation<double> animation,
-      Animation<double> secondaryAnimation,
-      Widget child,
-    ) {
-      final reducedMotion = isReducedMotion(context);
-      if (reducedMotion) return child;
+    transitionsBuilder:
+        (
+          BuildContext context,
+          Animation<double> animation,
+          Animation<double> secondaryAnimation,
+          Widget child,
+        ) {
+          final reducedMotion = isReducedMotion(context);
+          if (reducedMotion) return child;
 
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: RunThruAnimations.cubeRotateCurve,
-      );
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: RunThruAnimations.cubeRotateCurve,
+          );
 
-      return ListenableBuilder(
-        listenable: curved,
-        builder: (BuildContext context, Widget? _) {
-          final angle = direction * (math.pi / 2) * (1 - curved.value);
-          final transform = Matrix4.identity()
-            ..setEntry(3, 2, 0.001)
-            ..rotateY(angle);
-          return Transform(
-            transform: transform,
-            alignment:
-                direction > 0 ? Alignment.centerRight : Alignment.centerLeft,
-            child: child,
+          return ListenableBuilder(
+            listenable: curved,
+            builder: (BuildContext context, Widget? _) {
+              final angle = direction * (math.pi / 2) * (1 - curved.value);
+              final transform = Matrix4.identity()
+                ..setEntry(3, 2, 0.001)
+                ..rotateY(angle);
+              return Transform(
+                transform: transform,
+                alignment: direction > 0
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: child,
+              );
+            },
           );
         },
-      );
-    },
   );
 }

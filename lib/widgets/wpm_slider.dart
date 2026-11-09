@@ -6,11 +6,7 @@ import 'package:runthru/design/design.dart';
 /// Tracks local drag state internally for smooth interaction.
 /// Calls [onChanged] only when the drag finishes (finger lifts).
 class WpmSlider extends StatefulWidget {
-  const WpmSlider({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
+  const WpmSlider({super.key, required this.value, required this.onChanged});
 
   final int value;
   final ValueChanged<int> onChanged;
@@ -38,10 +34,7 @@ class _WpmSliderState extends State<WpmSlider> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${_displayValue.round()} WPM',
-          style: RunThruTypography.badge,
-        ),
+        Text('${_displayValue.round()} WPM', style: RunThruTypography.badge),
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderThemeData(
@@ -49,9 +42,7 @@ class _WpmSliderState extends State<WpmSlider> {
             inactiveTrackColor: RunThruTokens.shellDarkShadow,
             thumbColor: RunThruTokens.shellTextPrimary,
             overlayColor: RunThruTokens.shellAccent.withAlpha(51),
-            thumbShape: const RoundSliderThumbShape(
-              enabledThumbRadius: 12,
-            ),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
             trackHeight: 6,
           ),
           child: Slider(

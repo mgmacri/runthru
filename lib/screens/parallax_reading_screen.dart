@@ -16,33 +16,33 @@ import 'package:runthru/core/gesture_classifier.dart';
 import 'package:runthru/core/gradient_sweep_engine.dart';
 import 'package:runthru/core/hint_controller.dart';
 import 'package:runthru/core/logger.dart';
-import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/core/orp.dart';
 import 'package:runthru/core/reading_range_resolver.dart';
 import 'package:runthru/core/sentence_resolver.dart';
 import 'package:runthru/core/word_timer.dart';
-import 'package:runthru/core/wpm_dial_notifier.dart';
-import 'package:runthru/core/wpm_dial_state.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/reading_progress_sync.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
+import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
+import 'package:runthru/features/reading/widgets/full_page_mode_view.dart';
+import 'package:runthru/features/reading/widgets/mode_switcher.dart';
+import 'package:runthru/features/reading/widgets/paragraph_mode_view.dart';
 import 'package:runthru/hooks/bookmark_notifier.dart';
 import 'package:runthru/services/analytics_service.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
 import 'package:runthru/store/analytics_models.dart';
+import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/three_d/parallax_room.dart';
-import 'package:runthru/three_d/text_painter_pool.dart';
-import 'package:runthru/three_d/word_painter.dart';
 import 'package:runthru/widgets/context_reveal_overlay.dart';
+import 'package:runthru/features/reading/widgets/reading_ruler.dart';
+import 'package:runthru/features/reading/widgets/sentence_mode_view.dart';
 import 'package:runthru/widgets/finished_range_overlay.dart';
 import 'package:runthru/widgets/hint_overlay.dart';
 import 'package:runthru/widgets/pause_fog_3d.dart';
-import 'package:runthru/widgets/progress_hairline_3d.dart';
-import 'package:runthru/widgets/reading_goal_presets.dart';
-import 'package:runthru/widgets/wpm_dial_3d.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Chooses the best local resume index for an imported document.
@@ -107,6 +107,12 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     with WidgetsBindingObserver {
   final ValueNotifier<String> _wordNotifier = ValueNotifier('');
   final FocusNode _focusNode = FocusNode();
+
+  // GlobalKeys for onboarding-tour spotlight targeting.
+  final GlobalKey _stageKey = GlobalKey(debugLabel: 'rsvp-stage');
+  final GlobalKey _playButtonKey = GlobalKey(debugLabel: 'play-button');
+  final GlobalKey _prevButtonKey = GlobalKey(debugLabel: 'prev-button');
+  final GlobalKey _speedSelectorKey = GlobalKey(debugLabel: 'speed-selector');
   List<String> _words = [];
   List<String> _allDocWords = [];
   int _wordAdvanceCount = 0;
@@ -124,7 +130,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   ExtractedDocument? _fullDoc;
 
   bool _isFullScreen = false;
-  bool _showReadingGoalOnboarding = false;
+  Timer? _onboardingCompleteTimer;
 
   // ── ContextReveal ──
   late final GradientSweepEngine _sweepEngine;
@@ -133,6 +139,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   // ── Onboarding Hints (Rule 27) ──
   late final HintController _hintController;
   HintInfo? _activeHint;
+  final List<String> _queuedHintIds = [];
   bool _hasPausedOnce = false;
   bool _hasNavigatedSentence = false;
 
@@ -171,10 +178,6 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Motion parallax controller — provides sensor-driven head position to
   /// [ParallaxRoom] and [PauseFog3D] without double gyroscope subscriptions.
   late final MotionParallaxController _motionCtrl;
-
-  /// TextPainter pool for the flat 2D word painter (None intensity).
-  // P7 Grade C — reused pool avoids paint()-time allocation (Rule 9)
-  final TextPainterPool _flatPainterPool = TextPainterPool();
 
   /// Whether this is an ephemeral clipboard reading session (Rule 28).
   bool get _isClipboard => widget.contentSource == 'clipboard';
@@ -235,7 +238,6 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _hintController = HintController(
       configNotifier: ref.read(configProvider.notifier),
     );
-    _hintController.onLongPressHintTimerFired = _showLongPressHint;
     _motionCtrl = MotionParallaxController();
     appLog('ParallaxReadingScreen', 'initState filePath=${widget.filePath}');
     WidgetsBinding.instance.addObserver(this);
@@ -269,13 +271,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     unawaited(_flushInstapaperProgress());
     unawaited(_progressSync.dispose());
     _restartFlashTimer?.cancel();
+    _onboardingCompleteTimer?.cancel();
     _sentenceGapTimer?.cancel();
-    _hintController.dispose();
     _wordNotifier.dispose();
     _focusNode.dispose();
-    _flatPainterPool.dispose();
     _sweepEngine.dispose();
     _motionCtrl.dispose();
+    // Drop the session's document from queue state — the text stays in
+    // PdfCache and is rehydrated by the next prioritize().
+    _queue.releaseDocument(widget.filePath);
     _queue.resumeBackground();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (_isDesktop && _isFullScreen) windowManager.setFullScreen(false);
@@ -352,6 +356,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         title: _shelfTitle,
         wordIndex: _lastGlobalIndex,
         totalWords: total,
+        contentHash: _queue.contentHashOf(widget.filePath),
       ),
     );
   }
@@ -366,6 +371,22 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (_isInstapaper) return 'instapaper';
     if (_isDrive) return 'drive';
     return 'local';
+  }
+
+  String get _documentTitle {
+    final clipTitle = widget.clipboardDocument?.title.trim();
+    if (clipTitle != null && clipTitle.isNotEmpty) return clipTitle;
+    final base = widget.filePath.split(RegExp(r'[/\\]')).last;
+    final dot = base.lastIndexOf('.');
+    final name = dot > 0 ? base.substring(0, dot) : base;
+    return name.isNotEmpty ? name : widget.filePath;
+  }
+
+  String get _documentSubtitle {
+    if (_isInstapaper) return 'Instapaper';
+    if (_isDrive) return 'Google Drive';
+    if (_isClipboard) return 'Clipboard';
+    return '';
   }
 
   /// Flush current reading position to local storage and Instapaper queue.
@@ -425,6 +446,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     appLog('ParallaxReadingScreen', '_initReading() start');
     final queue = ref.read(preprocessingQueueProvider.notifier);
     await queue.prioritize(widget.filePath);
+    await ref.read(configProvider.future);
+    if (!mounted) return;
+    await ref.read(bookmarkStoreProvider.future);
 
     if (!mounted) return;
     final processed = ref.read(preprocessingQueueProvider);
@@ -472,7 +496,13 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     );
     if (_isDrive) {
       await ref.read(readingProgressProvider.future);
-      await ref.read(configProvider.future);
+    }
+    await ref.read(configProvider.future);
+    if (!mounted) return;
+    // Pure clipboard sessions are ephemeral (Rule 28) — no bookmarks. Only
+    // imported sources need the bookmark store loaded before resume.
+    if (_isInstapaper || _isDrive) {
+      await ref.read(bookmarkStoreProvider.future);
       if (!mounted) return;
     }
     _loadClipboardDocument(clipDoc.document);
@@ -494,7 +524,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final initialProgress = widget.instapaperInitialProgress;
     int startIndex = 0;
     if (_words.isNotEmpty) {
-      final localProgressIndex = _bestImportedResumeIndex(config);
+      final localProgressIndex = _bestImportedResumeIndex();
       if (localProgressIndex != null && localProgressIndex > 0) {
         startIndex = localProgressIndex.clamp(0, _words.length - 1);
       } else if (initialProgress > 0) {
@@ -511,20 +541,20 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _cacheTimerPosition(startIndex);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
-    _sessionStart = DateTime.now();
-    _sessionWordCount = 0;
-    timer.play();
+    _startTimerAfterFirstRunGate();
     appLog(
       'ParallaxReadingScreen',
-      'clipboard timer.play() wpm=${config.defaultWpm} startIndex=$startIndex initialProgress=$initialProgress',
+      'clipboard timer loaded wpm=${config.defaultWpm} startIndex=$startIndex initialProgress=$initialProgress',
     );
   }
 
-  int? _bestImportedResumeIndex(AppConfig config) {
+  int? _bestImportedResumeIndex() {
     if (!_isInstapaper && !_isDrive) return null;
 
     return bestImportedResumeIndex(
-      bookmark: config.bookmarks[widget.filePath],
+      bookmark: ref
+          .read(bookmarkStoreProvider.notifier)
+          .resolve(widget.filePath),
       driveProgress: _isDrive
           ? _shelfProgress.getRecord(widget.filePath)
           : null,
@@ -545,7 +575,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     }
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-    final bookmark = config.bookmarks[widget.filePath];
+    final bookmark = ref
+        .read(bookmarkStoreProvider.notifier)
+        .resolve(widget.filePath);
     final range = bookmark?.readingRange;
 
     if (range != null && doc.hasPageBoundaries) {
@@ -595,9 +627,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         if (_isRangeComplete) {
           timer.pause();
         } else {
-          _sessionStart = DateTime.now();
-          _sessionWordCount = 0;
-          timer.play();
+          _startTimerAfterFirstRunGate();
         }
         appLog(
           'ParallaxReadingScreen',
@@ -616,9 +646,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     appLog('ParallaxReadingScreen', 'startIndex=$startIndex');
 
     _wordNotifier.value = _words[startIndex.clamp(0, _words.length - 1)];
+    // Privacy: log seed length only — never reading content.
     appLog(
       'ParallaxReadingScreen',
-      'wordNotifier seeded: "${_wordNotifier.value}"',
+      'wordNotifier seeded len=${_wordNotifier.value.length}',
     );
 
     final timer = ref.read(wordTimerProvider.notifier);
@@ -626,17 +657,23 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _cacheTimerPosition(startIndex);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
-    _sessionStart = DateTime.now();
-    _sessionWordCount = 0;
+    _startTimerAfterFirstRunGate();
+    appLog('ParallaxReadingScreen', 'timer loaded wpm=${config.defaultWpm}');
+  }
 
-    // P8 Grade B — show reading goal onboarding once before first session
+  void _startTimerAfterFirstRunGate() {
+    final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
+    final timer = ref.read(wordTimerProvider.notifier);
+
+    // P8 Grade B — show reading goal onboarding once before first session.
     if (!config.hasSeenReadingGoalOnboarding) {
       timer.pause();
-      setState(() => _showReadingGoalOnboarding = true);
-    } else {
-      timer.play();
+      return;
     }
-    appLog('ParallaxReadingScreen', 'timer.play() wpm=${config.defaultWpm}');
+
+    _sessionStart = DateTime.now();
+    _sessionWordCount = 0;
+    timer.play();
   }
 
   void _togglePause() {
@@ -755,12 +792,37 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final hint = _activeHint;
     if (hint == null) return;
     _hintController.markShown(hint.id);
-    setState(() => _activeHint = null);
+    final next = _nextQueuedHint();
+    setState(() => _activeHint = next);
   }
 
-  void _showLongPressHint() {
+  HintInfo? _nextQueuedHint() {
+    while (_queuedHintIds.isNotEmpty) {
+      final id = _queuedHintIds.removeAt(0);
+      final hint = _hintController.check(id);
+      if (hint != null) return hint;
+    }
+    return null;
+  }
+
+  Future<void> _setFocusModeEnabled(bool enabled) async {
+    await ref.read(configProvider.notifier).setFocusModeEnabled(enabled);
     if (!mounted) return;
-    _tryShowHint(HintId.longPress);
+    _queuedHintIds.removeWhere(_isFocusModeHint);
+    if (_activeHint != null && _isFocusModeHint(_activeHint!.id)) {
+      setState(() => _activeHint = null);
+    }
+  }
+
+  bool _isFocusModeHint(String id) {
+    return id == HintId.focusPause ||
+        id == HintId.focusBackSentence ||
+        id == HintId.focusForwardSentence;
+  }
+
+  void _selectPausedWpm(int selectedWpm) {
+    ref.read(wordTimerProvider.notifier).setWpm(selectedWpm);
+    _sweepEngine.updateWpm(selectedWpm);
   }
 
   /// Extends reading past the original range end to the end of the document.
@@ -891,27 +953,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   void _onSwipeUp() {
     final crState = ref.read(contextRevealProvider);
     if (!crState.isActive) {
-      appLog('gestures', 'action: swipeUp → entering ContextReveal');
-      // P20 — Enter ContextReveal — pause RSVP immediately
-      ref.read(wordTimerProvider.notifier).pause();
-
-      // v4 — show onboarding hint once before entering CR
-      final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-      if (!config.shownHints.contains('hint_swipe_up')) {
-        setState(() => _showCROnboarding = true);
-        // Auto-dismiss after 3 seconds, then enter CR
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted && _showCROnboarding) {
-            _dismissCROnboarding();
-          }
-        });
-        return;
-      }
-
-      ref
-          .read(contextRevealProvider.notifier)
-          .enterSentence(_currentGlobalIndex);
-      _sweepEngine.start();
+      ref.read(readingModeNotifierProvider.notifier).cycleMode();
+      final mode = ref.read(readingModeNotifierProvider).label;
+      appLog('gestures', 'action: swipeUp → reading mode $mode');
     } else {
       // P1 Grade C — elastic jiggle ceiling feedback
       appLog('gestures', 'action: swipeUp → jiggle (already in sentence view)');
@@ -930,7 +974,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   void _onSwipeDown() {
     final crState = ref.read(contextRevealProvider);
     if (!crState.isActive) {
-      appLog('gestures', 'action: swipeDown → CR not active, ignoring');
+      ref.read(readingModeNotifierProvider.notifier).cycleModeReverse();
+      final mode = ref.read(readingModeNotifierProvider).label;
+      appLog('gestures', 'action: swipeDown → reading mode $mode');
       return;
     }
     appLog('gestures', 'action: swipeDown → dismissing ContextReveal');
@@ -1116,21 +1162,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   // Uses classifySwipe() from gesture_classifier.dart for dual-gate
   // threshold validation (distance ratio + velocity).
   // RULE 24 COMPLIANCE: Listener is used instead of onVerticalDragEnd /
-  // onHorizontalDragEnd to avoid gesture arena conflicts with the WpmDial3D
-  // GestureDetector (which owns drag input while visible). Raw pointer events
-  // bypass the arena and are consistent with Rule 24's intent.
+  // onHorizontalDragEnd so swipe detection never competes in the gesture
+  // arena with overlay GestureDetectors. Raw pointer events bypass the
+  // arena and are consistent with Rule 24's intent.
   void _handlePointerUp(PointerUpEvent event) {
-    if (_showReadingGoalOnboarding) return;
-    // Suppress swipe classification while the WPM dial is visible —
-    // the dial's own GestureDetector handles drag input, but the raw
-    // Listener pointer events still fire and would be misclassified
-    // as directional swipes.
-    if (ref.read(wpmDialProvider).isVisible) {
-      _panStart = null;
-      _panLast = null;
-      _panStartTime = null;
-      return;
-    }
     final start = _panStart;
     final last = _panLast;
     final startTime = _panStartTime;
@@ -1232,10 +1267,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Perf: progress is intentionally NOT watched here — it changes on every
+    // word advance and would rebuild the whole screen at word frequency.
+    // _ProgressRail watches it internally so only the rail rebuilds.
     final isPlaying = ref.watch(wordTimerProvider.select((s) => s.isPlaying));
-    final progress = ref.watch(wordTimerProvider.select((s) => s.progress));
     final wpm = ref.watch(wordTimerProvider.select((s) => s.wpm));
-    final dialState = ref.watch(wpmDialProvider);
     // Select only the config fields used in build() to avoid
     // unnecessary rebuilds from bookmark auto-save every 5s.
     final config = ref.watch(
@@ -1244,21 +1280,27 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         return (
           parallaxIntensity: v.parallaxIntensity,
           anchorColorIndex: v.anchorColorIndex,
-          fontFamily: v.fontFamily,
+          readingFontFamily: v.readingFontFamily,
+          readingRulerEnabled: v.readingRulerEnabled,
+          focusModeEnabled: v.focusModeEnabled,
+          letterSpacing: v.letterSpacing,
+          wordSpacing: v.wordSpacing,
         );
       }),
     );
-
-    // P2 Grade C — pause/resume reading when WPM dial visibility changes
-    ref.listen<WpmDialState>(wpmDialProvider, (prev, next) {
-      if (next.isVisible && !(prev?.isVisible ?? false)) {
-        ref.read(wordTimerProvider.notifier).pause();
-      } else if (!next.isVisible && (prev?.isVisible ?? false)) {
-        ref.read(wordTimerProvider.notifier).play();
-      }
-    });
+    final readingMode = ref.watch(readingModeNotifierProvider);
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
+      // Reading is the host; background extraction is a guest. No new
+      // extraction chunk starts while words are flashing — the queue
+      // scheduler pauses between chunks and resumes when reading stops.
+      if (prev?.isPlaying != next.isPlaying) {
+        if (next.isPlaying) {
+          _queue.pauseBackground();
+        } else {
+          _queue.resumeBackground();
+        }
+      }
       if (prev?.currentIndex != next.currentIndex) {
         final idx = next.currentIndex;
 
@@ -1268,16 +1310,18 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           _wordAdvanceCount++;
           _sessionWordCount++;
           if (_wordAdvanceCount <= 5) {
+            // Privacy: never log word text — reading content must not
+            // appear in the in-app log viewer or DevTools output.
             appLog(
               'ParallaxReadingScreen',
-              'word advance #$_wordAdvanceCount idx=$idx "${_words[idx]}"',
+              'word advance #$_wordAdvanceCount idx=$idx '
+                  'len=${_words[idx].length}',
             );
           }
 
           // P27 — trigger onboarding hints at word milestones
           if (_wordAdvanceCount == 1) {
             _tryShowHint(HintId.tap);
-            _hintController.startLongPressTimer();
           } else if (_wordAdvanceCount == 10) {
             _tryShowHint(HintId.swipeUp);
           }
@@ -1334,494 +1378,1435 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     // P20 — watch ContextReveal state for overlay rendering
     final crState = ref.watch(contextRevealProvider);
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _goBack();
-      },
-      child: KeyboardListener(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKeyEvent: _handleKeyEvent,
-        child: Listener(
-          onPointerSignal: _handlePointerSignal,
-          child: ColoredBox(
-            color: RunThruTokens.roomBackground,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final fontSize = dynamicFontSize(constraints);
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: 'Reading screen',
+      child: Material(
+        color: RunThruTokens.roomBackground,
+        textStyle: const TextStyle(decoration: TextDecoration.none),
+        child: PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            _goBack();
+          },
+          child: KeyboardListener(
+            focusNode: _focusNode,
+            autofocus: true,
+            onKeyEvent: _handleKeyEvent,
+            child: Listener(
+              onPointerSignal: _handlePointerSignal,
+              child: ColoredBox(
+                color: RunThruTokens.roomBackground,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // A11y: honor the system text-size setting on the stage.
+                    // The scale is clamped so a 30-character word still fits
+                    // the viewport; the word is already viewport-proportional.
+                    final textScale = MediaQuery.textScalerOf(
+                      context,
+                    ).scale(1.0).clamp(1.0, 1.3).toDouble();
+                    final fontSize = (dynamicFontSize(constraints) * textScale)
+                        .clamp(16.0, 400.0)
+                        .toDouble();
 
-                return Listener(
-                  // Passive pointer tracking — doesn't compete in the
-                  // gesture arena, so onLongPress can still fire.
-                  onPointerDown: (e) {
-                    _panStart = e.position;
-                    _panStartTime = DateTime.now();
-                  },
-                  onPointerMove: (e) => _panLast = e.position,
-                  onPointerUp: _handlePointerUp,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTap: _togglePause,
-                          onDoubleTap: _handleDoubleTap,
-                          onLongPressStart: (details) {
-                            appLog('gestures', 'detected: longPress');
-                            // P27 — user discovered long-press; cancel hint timer
-                            _hintController.cancelLongPressTimer();
-                            _hintController.markShown(HintId.longPress);
-                            ref
-                                .read(wpmDialProvider.notifier)
-                                .show(details.globalPosition, wpm);
-                          },
-                          child: ValueListenableBuilder<String>(
-                            valueListenable: _wordNotifier,
-                            builder: (context, currentWord, _) {
-                              // P7 Grade C — shared overlay stack for all intensity modes
-                              final overlayStack = Stack(
-                                children: [
-                                  Positioned(
-                                    top: 0,
-                                    left: 0,
-                                    right: 0,
-                                    height: 1,
-                                    child: ProgressHairline3D(
-                                      progress: progress,
-                                    ),
-                                  ),
-                                  if (!crState.isActive)
-                                    Positioned.fill(
-                                      child: PauseFog3D(
-                                        isPaused:
-                                            !isPlaying && _words.isNotEmpty,
-                                        wpm: wpm,
-                                        onResume: _togglePause,
-                                        showUpgradeTip:
-                                            config.parallaxIntensity ==
-                                            ParallaxIntensity.none,
-                                        onUpgradeTap:
-                                            config.parallaxIntensity ==
-                                                ParallaxIntensity.none
-                                            ? () => context.push('/settings')
-                                            : null,
-                                        externalPosition:
-                                            _motionCtrl.positionNotifier,
-                                        onRecalibrate: _motionCtrl.recalibrate,
-                                      ),
-                                    ),
-                                  if (_isRangeComplete && _readingRange != null)
-                                    Positioned.fill(
-                                      child: FinishedRangeOverlay(
-                                        visible: _isRangeComplete,
-                                        startPage: _readingRange!.startPage,
-                                        endPage: _readingRange!.endPage,
-                                        wordCount: _words.length,
-                                        averageWpm: wpm,
-                                        onContinueReading:
-                                            _continueReadingPastRange,
-                                        onSetNewRange: () {
-                                          unawaited(
-                                            ref
-                                                .read(
-                                                  bookmarkProvider(
-                                                    widget.filePath,
-                                                  ).notifier,
-                                                )
-                                                .save(),
-                                          );
-                                          unawaited(_flushInstapaperProgress());
-                                          context.push(
-                                            Uri(
-                                              path: '/range-picker',
-                                              queryParameters: {
-                                                'path': widget.filePath,
-                                              },
-                                            ).toString(),
-                                          );
-                                        },
-                                        onGoToLibrary: () {
-                                          unawaited(
-                                            ref
-                                                .read(
-                                                  bookmarkProvider(
-                                                    widget.filePath,
-                                                  ).notifier,
-                                                )
-                                                .save(),
-                                          );
-                                          unawaited(_flushInstapaperProgress());
-                                          ref
-                                              .read(wordTimerProvider.notifier)
-                                              .pause();
-                                          context.go('/');
-                                        },
-                                      ),
-                                    ),
-                                  // ── ContextReveal Overlay ──
-                                  // IgnorePointer so back button and long-press
-                                  // (WPM dial) pass through — all gestures are
-                                  // handled by the parent Listener/GestureDetector.
-                                  if (crState.isActive)
-                                    Positioned.fill(
-                                      child: IgnorePointer(
-                                        child: Semantics(
-                                          liveRegion: true,
-                                          label:
-                                              'Context reveal: ${crState.tier.name} view. '
-                                              '${_contextRevealWords().join(' ')}. '
-                                              'Swipe down to resume reading.',
-                                          child: ContextRevealOverlay(
-                                            tier: crState.tier,
-                                            words: _contextRevealWords(),
-                                            sweepPosition:
-                                                crState.sweepPosition,
-                                            fontSize: fontSize,
-                                            fontFamily: config.fontFamily,
-                                            isJiggling: crState.isJiggling,
-                                            isSweepPaused:
-                                                crState.isSweepPaused,
-                                            backgroundColor:
-                                                config.parallaxIntensity ==
-                                                    ParallaxIntensity.none
-                                                ? RunThruTokens.stageBase
-                                                : RunThruTokens.cubeBackWall,
-                                            backgroundOpacity:
-                                                config.parallaxIntensity ==
-                                                    ParallaxIntensity.none
-                                                ? 1.0
-                                                : 0.88,
-                                            onJiggleComplete: () => ref
-                                                .read(
-                                                  contextRevealProvider
-                                                      .notifier,
-                                                )
-                                                .clearJiggle(),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  // PauseFog3D in sentence mode — rendered after CR
-                                  // overlay so it's visible on top when sweep is paused.
-                                  if (crState.isActive &&
-                                      crState.isSweepPaused &&
-                                      config.parallaxIntensity !=
-                                          ParallaxIntensity.none)
-                                    Positioned.fill(
-                                      child: IgnorePointer(
-                                        child: PauseFog3D(
-                                          isPaused: crState.isSweepPaused,
-                                          wpm: wpm,
-                                          externalPosition:
-                                              _motionCtrl.positionNotifier,
-                                          onRecalibrate:
-                                              _motionCtrl.recalibrate,
-                                        ),
-                                      ),
-                                    ),
-                                  // Simple dimming for 2D sentence-mode pause
-                                  if (crState.isActive &&
-                                      crState.isSweepPaused &&
-                                      config.parallaxIntensity ==
-                                          ParallaxIntensity.none)
-                                    const Positioned.fill(
-                                      child: IgnorePointer(
-                                        child: ColoredBox(
-                                          color:
-                                              RunThruTokens.stagePauseOverlay,
-                                        ),
-                                      ),
-                                    ),
-                                  // WPM dial — rendered above ContextReveal so it
-                                  // remains visible and interactive during sentence view.
-                                  // Key preserves State across conditional sibling changes.
-                                  Positioned.fill(
-                                    key: const ValueKey('wpm-dial'),
-                                    child: WpmDial3D(
-                                      wpm: dialState.currentWpm,
-                                      visible: dialState.isVisible,
-                                      onWpmChanged: (w) {
-                                        ref
-                                            .read(wpmDialProvider.notifier)
-                                            .updateWpm(w);
-                                        final newWpm = ref
-                                            .read(wpmDialProvider)
-                                            .currentWpm;
-                                        ref
-                                            .read(wordTimerProvider.notifier)
-                                            .setWpm(newWpm);
-                                        _sweepEngine.updateWpm(newWpm);
-                                      },
-                                      onDismissed: () => ref
-                                          .read(wpmDialProvider.notifier)
-                                          .dismiss(),
-                                    ),
-                                  ),
-
-                                  // ── ContextReveal Onboarding (shown once) ──
-                                  if (_showCROnboarding)
-                                    Positioned.fill(
-                                      child: GestureDetector(
-                                        onTap: _dismissCROnboarding,
-                                        child: ColoredBox(
-                                          color: RunThruTokens.stagePauseOverlay
-                                              .withAlpha(230),
-                                          child: Center(
+                    return Listener(
+                      // Passive pointer tracking — doesn't compete in the
+                      // gesture arena, so onLongPress can still fire.
+                      onPointerDown: (e) {
+                        _panStart = e.position;
+                        _panStartTime = DateTime.now();
+                      },
+                      onPointerMove: (e) => _panLast = e.position,
+                      onPointerUp: _handlePointerUp,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: _togglePause,
+                              onDoubleTap: _handleDoubleTap,
+                              child: ValueListenableBuilder<String>(
+                                valueListenable: _wordNotifier,
+                                builder: (context, currentWord, _) {
+                                  // P7 Grade C — shared overlay stack for all intensity modes
+                                  final overlayStack = Stack(
+                                    children: [
+                                      // Live region announcing the current RSVP
+                                      // word to assistive technology. Invisible;
+                                      // shared by the flat-2D and 3D word paths.
+                                      if (currentWord.isNotEmpty &&
+                                          !crState.isActive &&
+                                          readingMode == ReadingMode.singleWord)
+                                        Positioned(
+                                          left: 0,
+                                          top: 0,
+                                          child: IgnorePointer(
                                             child: Semantics(
                                               liveRegion: true,
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 32,
+                                              container: true,
+                                              label: currentWord,
+                                              child: const SizedBox(
+                                                width: 1,
+                                                height: 1,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      if (currentWord.isNotEmpty &&
+                                          !crState.isActive &&
+                                          readingMode ==
+                                              ReadingMode.singleWord &&
+                                          config.parallaxIntensity !=
+                                              ParallaxIntensity.none)
+                                        IgnorePointer(
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: _FocalTourTarget(
+                                              key: _stageKey,
+                                              word: currentWord,
+                                              fontSize: fontSize,
+                                              fontFamily:
+                                                  config.readingFontFamily,
+                                            ),
+                                          ),
+                                        ),
+                                      // The continuous-text modes draw their
+                                      // own reading-band ruler; the flanking
+                                      // hairlines are single-word only.
+                                      if (config.readingRulerEnabled &&
+                                          readingMode == ReadingMode.singleWord)
+                                        Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: ReadingRuler(
+                                              visible: true,
+                                              viewportHeight: MediaQuery.sizeOf(
+                                                context,
+                                              ).height,
+                                            ),
+                                          ),
+                                        ),
+                                      if (!crState.isActive &&
+                                          readingMode != ReadingMode.singleWord)
+                                        Positioned.fill(
+                                          // Perf: the word index changes every
+                                          // advance — scope its watch to this
+                                          // Consumer so only the mode view
+                                          // rebuilds, not the whole screen.
+                                          child: Consumer(
+                                            builder: (context, modeRef, _) {
+                                              final currentIndex = modeRef
+                                                  .watch(
+                                                    wordTimerProvider.select(
+                                                      (s) => s.currentIndex,
                                                     ),
-                                                child: Text(
-                                                  'Swipe up to see surrounding words.\n'
-                                                  'Swipe again for more context.\n'
-                                                  'Swipe down to resume.',
-                                                  textAlign: TextAlign.center,
-                                                  style: RunThruTypography.body
-                                                      .copyWith(
-                                                        color: RunThruTokens
-                                                            .stageText,
+                                                  );
+                                              return AnimatedSwitcher(
+                                                duration:
+                                                    isReducedMotion(context)
+                                                    ? Duration.zero
+                                                    : const Duration(
+                                                        milliseconds: 240,
                                                       ),
+                                                child: switch (readingMode) {
+                                                  ReadingMode.singleWord =>
+                                                    const SizedBox.shrink(),
+                                                  ReadingMode.sentence =>
+                                                    SentenceModeView(
+                                                      key: const ValueKey(
+                                                        'sentence',
+                                                      ),
+                                                      words: _words,
+                                                      currentIndex:
+                                                          currentIndex,
+                                                      letterSpacing:
+                                                          config.letterSpacing,
+                                                      wordSpacing:
+                                                          config.wordSpacing,
+                                                      fontFamily: config
+                                                          .readingFontFamily,
+                                                      fontSize: fontSize,
+                                                    ),
+                                                  ReadingMode.paragraph =>
+                                                    ParagraphModeView(
+                                                      key: const ValueKey(
+                                                        'paragraph',
+                                                      ),
+                                                      words: _words,
+                                                      currentIndex:
+                                                          currentIndex,
+                                                      letterSpacing:
+                                                          config.letterSpacing,
+                                                      wordSpacing:
+                                                          config.wordSpacing,
+                                                      fontFamily: config
+                                                          .readingFontFamily,
+                                                      fontSize: fontSize,
+                                                      wpm: wpm,
+                                                    ),
+                                                  ReadingMode.fullPage =>
+                                                    FullPageModeView(
+                                                      key: const ValueKey(
+                                                        'fullPage',
+                                                      ),
+                                                      words: _words,
+                                                      currentIndex:
+                                                          currentIndex,
+                                                      letterSpacing:
+                                                          config.letterSpacing,
+                                                      wordSpacing:
+                                                          config.wordSpacing,
+                                                      fontFamily: config
+                                                          .readingFontFamily,
+                                                      fontSize: fontSize,
+                                                      wpm: wpm,
+                                                    ),
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      // Mounted in focus mode too — the pause
+                                      // overlay is the only way back out of
+                                      // focus mode (its toggle must appear).
+                                      if (!crState.isActive)
+                                        Positioned.fill(
+                                          child: PauseFog3D(
+                                            isPaused:
+                                                !isPlaying && _words.isNotEmpty,
+                                            wpm: wpm,
+                                            focusModeEnabled:
+                                                config.focusModeEnabled,
+                                            onFocusModeChanged:
+                                                _setFocusModeEnabled,
+                                            externalPosition:
+                                                _motionCtrl.positionNotifier,
+                                            onRecalibrate:
+                                                _motionCtrl.recalibrate,
+                                          ),
+                                        ),
+                                      if (isPlaying &&
+                                          !config.focusModeEnabled &&
+                                          !crState.isActive &&
+                                          readingMode ==
+                                              ReadingMode.singleWord &&
+                                          _words.isNotEmpty)
+                                        Positioned(
+                                          left: 0,
+                                          right: 0,
+                                          bottom:
+                                              MediaQuery.paddingOf(
+                                                context,
+                                              ).bottom +
+                                              26,
+                                          child: const Center(
+                                            child: _TapToPausePrompt(),
+                                          ),
+                                        ),
+                                      if (_isRangeComplete &&
+                                          _readingRange != null)
+                                        Positioned.fill(
+                                          child: FinishedRangeOverlay(
+                                            visible: _isRangeComplete,
+                                            startPage: _readingRange!.startPage,
+                                            endPage: _readingRange!.endPage,
+                                            wordCount: _words.length,
+                                            averageWpm: wpm,
+                                            onContinueReading:
+                                                _continueReadingPastRange,
+                                            onSetNewRange: () {
+                                              unawaited(
+                                                ref
+                                                    .read(
+                                                      bookmarkProvider(
+                                                        widget.filePath,
+                                                      ).notifier,
+                                                    )
+                                                    .save(),
+                                              );
+                                              unawaited(
+                                                _flushInstapaperProgress(),
+                                              );
+                                              context.push(
+                                                Uri(
+                                                  path: '/range-picker',
+                                                  queryParameters: {
+                                                    'path': widget.filePath,
+                                                  },
+                                                ).toString(),
+                                              );
+                                            },
+                                            onGoToLibrary: () {
+                                              unawaited(
+                                                ref
+                                                    .read(
+                                                      bookmarkProvider(
+                                                        widget.filePath,
+                                                      ).notifier,
+                                                    )
+                                                    .save(),
+                                              );
+                                              unawaited(
+                                                _flushInstapaperProgress(),
+                                              );
+                                              ref
+                                                  .read(
+                                                    wordTimerProvider.notifier,
+                                                  )
+                                                  .pause();
+                                              context.go('/');
+                                            },
+                                          ),
+                                        ),
+                                      // ── ContextReveal Overlay ──
+                                      // IgnorePointer so the back button passes
+                                      // through — all gestures are handled by the
+                                      // parent Listener/GestureDetector.
+                                      if (crState.isActive)
+                                        Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: Semantics(
+                                              liveRegion: true,
+                                              label:
+                                                  'Context reveal: ${crState.tier.name} view. '
+                                                  '${_contextRevealWords().join(' ')}. '
+                                                  'Swipe down to resume reading.',
+                                              child: ContextRevealOverlay(
+                                                tier: crState.tier,
+                                                words: _contextRevealWords(),
+                                                sweepPosition:
+                                                    crState.sweepPosition,
+                                                fontSize: fontSize,
+                                                fontFamily:
+                                                    config.readingFontFamily,
+                                                isJiggling: crState.isJiggling,
+                                                isSweepPaused:
+                                                    crState.isSweepPaused,
+                                                backgroundColor:
+                                                    config.parallaxIntensity ==
+                                                        ParallaxIntensity.none
+                                                    ? RunThruTokens.stageBase
+                                                    : RunThruTokens
+                                                          .cubeBackWall,
+                                                backgroundOpacity:
+                                                    config.parallaxIntensity ==
+                                                        ParallaxIntensity.none
+                                                    ? 1.0
+                                                    : 0.88,
+                                                onJiggleComplete: () => ref
+                                                    .read(
+                                                      contextRevealProvider
+                                                          .notifier,
+                                                    )
+                                                    .clearJiggle(),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      // PauseFog3D in sentence mode — rendered after CR
+                                      // overlay so it's visible on top when sweep is paused.
+                                      if (crState.isActive &&
+                                          crState.isSweepPaused &&
+                                          config.parallaxIntensity !=
+                                              ParallaxIntensity.none)
+                                        Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: PauseFog3D(
+                                              isPaused: crState.isSweepPaused,
+                                              wpm: wpm,
+                                              externalPosition:
+                                                  _motionCtrl.positionNotifier,
+                                              onRecalibrate:
+                                                  _motionCtrl.recalibrate,
+                                            ),
+                                          ),
+                                        ),
+                                      // Simple dimming for 2D sentence-mode pause
+                                      if (crState.isActive &&
+                                          crState.isSweepPaused &&
+                                          config.parallaxIntensity ==
+                                              ParallaxIntensity.none)
+                                        const Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: ColoredBox(
+                                              color: RunThruTokens
+                                                  .stagePauseOverlay,
+                                            ),
+                                          ),
+                                        ),
+                                      // ── ContextReveal Onboarding (shown once) ──
+                                      if (_showCROnboarding)
+                                        Positioned.fill(
+                                          child: GestureDetector(
+                                            onTap: _dismissCROnboarding,
+                                            child: ColoredBox(
+                                              color: RunThruTokens
+                                                  .stagePauseOverlay
+                                                  .withAlpha(230),
+                                              child: Center(
+                                                child: Semantics(
+                                                  liveRegion: true,
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 32,
+                                                        ),
+                                                    child: Text(
+                                                      // v4 copy — 2-state model:
+                                                      // none ↔ sentence only.
+                                                      'Swipe up to see the full sentence.\n'
+                                                      'Swipe left or right to move between sentences.\n'
+                                                      'Swipe down to resume.',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style: RunThruTypography
+                                                          .body
+                                                          .copyWith(
+                                                            color: RunThruTokens
+                                                                .stageText,
+                                                          ),
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                  // ── Onboarding Hint Overlay (Rule 27) ──
-                                  if (_activeHint != null)
-                                    HintOverlay(
-                                      text: _activeHint!.message,
-                                      position: _activeHint!.position,
-                                      slideFrom: _activeHint!.slideFrom,
-                                      onDismiss: _dismissActiveHint,
-                                    ),
-                                  // ── Reading Goal Onboarding (shown once) ──
-                                  if (_showReadingGoalOnboarding)
-                                    Positioned.fill(
-                                      child: ColoredBox(
-                                        color: RunThruTokens.shellBase
-                                            .withAlpha(230),
-                                        child: Center(
-                                          child: SingleChildScrollView(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 40,
-                                            ),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  'Choose Your Reading Pace',
-                                                  style: RunThruTypography.title
-                                                      .copyWith(
-                                                        color: RunThruTokens
-                                                            .shellTextPrimary,
-                                                      ),
+                                      // ── Onboarding Hint Overlay (Rule 27) ──
+                                      if (_activeHint != null)
+                                        HintOverlay(
+                                          text: _activeHint!.message,
+                                          position: _activeHint!.position,
+                                          slideFrom: _activeHint!.slideFrom,
+                                          onDismiss: _dismissActiveHint,
+                                        ),
+                                    ],
+                                  );
+
+                                  // P7 Grade C — "None" renders flat 2D, no 3D room geometry
+                                  if (config.parallaxIntensity ==
+                                      ParallaxIntensity.none) {
+                                    return Stack(
+                                      children: [
+                                        // Flat stage background
+                                        Positioned.fill(
+                                          child: Container(
+                                            decoration:
+                                                RunThruDecorations.insetDecoration(
+                                                  RunThruSurface.stage,
+                                                  borderRadius: 0,
                                                 ),
-                                                const SizedBox(height: 16),
-                                                ReadingGoalPresets(
-                                                  onSelected: (goal) {
-                                                    ref
-                                                        .read(
-                                                          configProvider
-                                                              .notifier,
-                                                        )
-                                                        .applyReadingGoalPreset(
-                                                          goal,
-                                                        );
-                                                    ref
-                                                        .read(
-                                                          configProvider
-                                                              .notifier,
-                                                        )
-                                                        .setHasSeenReadingGoalOnboarding(
-                                                          true,
-                                                        );
-                                                    setState(() {
-                                                      _showReadingGoalOnboarding =
-                                                          false;
-                                                    });
-                                                    // Begin reading
-                                                    ref
-                                                        .read(
-                                                          wordTimerProvider
-                                                              .notifier,
-                                                        )
-                                                        .play();
-                                                  },
-                                                ),
-                                                const SizedBox(height: 12),
-                                                GestureDetector(
-                                                  onTap: () {
-                                                    // Skip → default to Comfortable
-                                                    final comfortable =
-                                                        readingGoalConfigs.firstWhere(
-                                                          (c) =>
-                                                              c.preset ==
-                                                              ReadingGoalPreset
-                                                                  .comfortable,
-                                                        );
-                                                    ref
-                                                        .read(
-                                                          configProvider
-                                                              .notifier,
-                                                        )
-                                                        .applyReadingGoalPreset(
-                                                          comfortable,
-                                                        );
-                                                    ref
-                                                        .read(
-                                                          configProvider
-                                                              .notifier,
-                                                        )
-                                                        .setHasSeenReadingGoalOnboarding(
-                                                          true,
-                                                        );
-                                                    setState(() {
-                                                      _showReadingGoalOnboarding =
-                                                          false;
-                                                    });
-                                                    ref
-                                                        .read(
-                                                          wordTimerProvider
-                                                              .notifier,
-                                                        )
-                                                        .play();
-                                                  },
-                                                  child: Text(
-                                                    'Customize later in Settings',
-                                                    style: RunThruTypography
-                                                        .caption
-                                                        .copyWith(
-                                                          color: RunThruTokens
-                                                              .shellAccent,
-                                                          decoration:
-                                                              TextDecoration
-                                                                  .underline,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                ],
-                              );
-
-                              // P7 Grade C — "None" renders flat 2D, no 3D room geometry
-                              if (config.parallaxIntensity ==
-                                  ParallaxIntensity.none) {
-                                return Stack(
-                                  children: [
-                                    // Flat stage background
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration:
-                                            RunThruDecorations.insetDecoration(
-                                              RunThruSurface.stage,
-                                              borderRadius: 0,
+                                        // ORP focal word (hidden during ContextReveal)
+                                        if (currentWord.isNotEmpty &&
+                                            !crState.isActive &&
+                                            readingMode ==
+                                                ReadingMode.singleWord)
+                                          Positioned.fill(
+                                            child: _OrpFocalWord(
+                                              focalTargetKey: _stageKey,
+                                              word: currentWord,
+                                              fontSize: fontSize,
+                                              fontFamily:
+                                                  config.readingFontFamily,
+                                              isPaused: !isPlaying,
+                                              dimWhenPaused: true,
                                             ),
-                                      ),
-                                    ),
-                                    // 2D word painter (hidden during ContextReveal)
-                                    if (currentWord.isNotEmpty &&
-                                        !crState.isActive)
-                                      Positioned.fill(
-                                        child: CustomPaint(
-                                          painter: WordPainter(
-                                            word: currentWord,
-                                            fontSize: fontSize,
-                                            animationValue: 1.0,
-                                            painterPool: _flatPainterPool,
-                                            anchorColor: effectiveAnchorColor,
-                                            fontFamily: config.fontFamily,
                                           ),
-                                        ),
-                                      ),
-                                    // Pause veil is now handled by PauseFog3D
-                                    // inside overlayStack (rising lavender blind).
-                                    // Shared overlays
-                                    Positioned.fill(child: overlayStack),
-                                  ],
-                                );
-                              }
+                                        // Pause veil is now handled by PauseFog3D
+                                        // inside overlayStack (rising lavender blind).
+                                        // Shared overlays
+                                        Positioned.fill(child: overlayStack),
+                                      ],
+                                    );
+                                  }
 
-                              return ValueListenableBuilder<Offset>(
-                                valueListenable: _motionCtrl.positionNotifier,
-                                builder: (context, headPos, _) => ParallaxRoom(
-                                  headX: headPos.dx,
-                                  headY: headPos.dy,
-                                  // Hide RSVP word during ContextReveal
-                                  currentWord: crState.isActive
-                                      ? ''
-                                      : currentWord,
-                                  fontSize: fontSize,
-                                  anchorColor: effectiveAnchorColor,
-                                  isPlaying: isPlaying,
-                                  fontFamily: config.fontFamily,
-                                  wpm: wpm,
-                                  intervalMs: (60000 / wpm).round(),
-                                  parallaxIntensity: config.parallaxIntensity,
-                                  child: overlayStack,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      // Back button — opaque GestureDetector absorbs
-                      // the hit so the translucent GestureDetector behind
-                      // cannot claim the tap for _togglePause.
-                      Positioned(
-                        top: MediaQuery.paddingOf(context).top + 8,
-                        left: 8,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _goBack,
-                          child: const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Icon(
-                              Icons.arrow_back,
-                              color: RunThruTokens.stageText,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_isDesktop)
-                        Positioned(
-                          top: MediaQuery.paddingOf(context).top + 8,
-                          right: 8,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _toggleFullScreen,
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Icon(
-                                _isFullScreen
-                                    ? Icons.fullscreen_exit
-                                    : Icons.fullscreen,
-                                color: RunThruTokens.stageText,
-                                size: 20,
+                                  return ValueListenableBuilder<Offset>(
+                                    valueListenable:
+                                        _motionCtrl.positionNotifier,
+                                    builder: (context, headPos, _) =>
+                                        ParallaxRoom(
+                                          headX: headPos.dx,
+                                          headY: headPos.dy,
+                                          // Hide RSVP word during ContextReveal
+                                          currentWord:
+                                              crState.isActive ||
+                                                  readingMode !=
+                                                      ReadingMode.singleWord
+                                              ? ''
+                                              : currentWord,
+                                          fontSize: fontSize,
+                                          anchorColor: effectiveAnchorColor,
+                                          isPlaying: isPlaying,
+                                          fontFamily: config.readingFontFamily,
+                                          wpm: wpm,
+                                          intervalMs: (60000 / wpm).round(),
+                                          parallaxIntensity:
+                                              config.parallaxIntensity,
+                                          child: overlayStack,
+                                        ),
+                                  );
+                                },
                               ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                );
-              },
+                          // While playing, focus mode swallows everything but
+                          // tap-to-pause. Once paused, taps fall through so
+                          // the pause overlay's Focus Mode toggle stays
+                          // reachable (otherwise focus mode is inescapable).
+                          if (config.focusModeEnabled && isPlaying)
+                            Positioned.fill(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _togglePause,
+                              ),
+                            ),
+                          // Focus mode: minimal back arrow (always a11y visible)
+                          if (config.focusModeEnabled)
+                            Positioned(
+                              top: MediaQuery.paddingOf(context).top + 8,
+                              left: 8,
+                              child: Semantics(
+                                button: true,
+                                label: 'Back: library',
+                                onTap: _goBack,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _goBack,
+                                  excludeFromSemantics: true,
+                                  child: const SizedBox(
+                                    width: RunThruA11y.minTapTarget,
+                                    height: RunThruA11y.minTapTarget,
+                                    child: Center(
+                                      child: ExcludeSemantics(
+                                        child: Icon(
+                                          Icons.arrow_back,
+                                          color: RunThruTokens.stageText,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Non-focus: header row + progress rail + context
+                          // sentence + persistent action tray
+                          if (!config.focusModeEnabled) ...[
+                            // Header + progress rail
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {},
+                                child: SafeArea(
+                                  bottom: false,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          8,
+                                          4,
+                                          8,
+                                          0,
+                                        ),
+                                        child: _ReaderHeaderRow(
+                                          onBack: _goBack,
+                                          title: _documentTitle,
+                                          subtitle: _documentSubtitle,
+                                          onFont: () =>
+                                              context.push('/settings'),
+                                          onFullScreen: _isDesktop
+                                              ? _toggleFullScreen
+                                              : null,
+                                          isFullScreen: _isFullScreen,
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          20,
+                                          6,
+                                          20,
+                                          8,
+                                        ),
+                                        child: _ProgressRail(wpm: wpm),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Sentence below the word (paused + singleWord
+                            // mode) — design reader.jsx: the current sentence
+                            // sits at the bottom of the word stage with the
+                            // live word inked.
+                            if (!isPlaying &&
+                                _words.isNotEmpty &&
+                                !crState.isActive &&
+                                readingMode == ReadingMode.singleWord)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom:
+                                    MediaQuery.paddingOf(context).bottom + 196,
+                                child: IgnorePointer(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 30,
+                                    ),
+                                    // Perf: the parent no longer rebuilds on
+                                    // word-index changes, so the paused panel
+                                    // watches the index itself (only mounted
+                                    // while paused — no per-word cost during
+                                    // playback).
+                                    child: Consumer(
+                                      builder: (context, panelRef, _) {
+                                        panelRef.watch(
+                                          wordTimerProvider.select(
+                                            (s) => s.currentIndex,
+                                          ),
+                                        );
+                                        final globalIdx = _currentGlobalIndex;
+                                        final start = _sentenceStartAt(
+                                          globalIdx,
+                                        );
+                                        return _ContextSentencePanel(
+                                          words: _sentenceWordsAt(globalIdx),
+                                          highlightIndex: globalIdx - start,
+                                          fontFamily: config.readingFontFamily,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            // Persistent action tray (always visible)
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {},
+                                child: SafeArea(
+                                  top: false,
+                                  child: _PersistentActionTray(
+                                    isPlaying: isPlaying,
+                                    wpm: wpm,
+                                    onPlayPause: _togglePause,
+                                    onPrevSentence: _seekToPreviousSentence,
+                                    onNextSentence: _seekToNextSentence,
+                                    onWpmSelected: _selectPausedWpm,
+                                    playButtonKey: _playButtonKey,
+                                    prevButtonKey: _prevButtonKey,
+                                    speedSelectorKey: _speedSelectorKey,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+// ── Reader chrome ─────────────────────────────────────────────────────────────
+
+class _ReaderHeaderRow extends StatelessWidget {
+  const _ReaderHeaderRow({
+    required this.onBack,
+    required this.title,
+    this.subtitle,
+    this.onFont,
+    this.onFullScreen,
+    this.isFullScreen = false,
+  });
+
+  final VoidCallback onBack;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onFont;
+  final VoidCallback? onFullScreen;
+  final bool isFullScreen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _HeadBtn(
+          onTap: onBack,
+          semanticLabel: 'Back: library',
+          child: const Icon(
+            Icons.chevron_left_rounded,
+            color: RunThruTokens.stageText,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: RunThruTypography.rowTitle.copyWith(
+                  color: RunThruTokens.stageText,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+              ),
+              if (subtitle != null && subtitle!.isNotEmpty)
+                Text(
+                  subtitle!,
+                  style: RunThruTypography.tinyLabel.copyWith(
+                    color: RunThruTokens.stageText.withValues(alpha: 0.58),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  textScaler: TextScaler.noScaling,
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (onFont != null) ...[
+          _HeadBtn(
+            onTap: onFont!,
+            semanticLabel: 'Open: reading settings',
+            child: Text(
+              'Aa',
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.stageText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+        if (onFullScreen != null) ...[
+          _HeadBtn(
+            onTap: onFullScreen!,
+            semanticLabel: isFullScreen
+                ? 'Exit: full screen'
+                : 'Enter: full screen',
+            child: Icon(
+              isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+              color: RunThruTokens.stageText,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+        const ModeSwitcher(),
+      ],
+    );
+  }
+}
+
+class _HeadBtn extends StatelessWidget {
+  const _HeadBtn({
+    required this.onTap,
+    required this.semanticLabel,
+    required this.child,
+  });
+
+  final VoidCallback onTap;
+
+  /// Accessibility label in '[Action]: [Subject]' format.
+  final String semanticLabel;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // 38dp visual circle inside a 48dp hit area (RunThruA11y.minTapTarget)
+    // so the compact stage chrome still meets Android tap-target guidance.
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      onTap: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        // The labeled Semantics above is the single tappable node for AT;
+        // without this the detector adds a second, unlabeled tap node.
+        excludeFromSemantics: true,
+        child: SizedBox(
+          width: RunThruA11y.minTapTarget,
+          height: RunThruA11y.minTapTarget,
+          child: Center(
+            child: DecoratedBox(
+              decoration: RunThruDecorations.raisedDecoration(
+                RunThruSurface.stage,
+                size: RunThruShadowSize.small,
+                borderRadius: 999,
+              ),
+              child: SizedBox(
+                width: 38,
+                height: 38,
+                child: Center(child: ExcludeSemantics(child: child)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressRail extends ConsumerWidget {
+  const _ProgressRail({required this.wpm});
+
+  final int wpm;
+
+  String _timeLeft(int remainingWords) {
+    if (wpm <= 0 || remainingWords <= 0) return '';
+    final mins = (remainingWords / wpm).ceil();
+    return mins <= 1 ? '< 1 min left' : '$mins min left';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Perf: progress changes every word advance — watching it here keeps the
+    // per-word rebuild scoped to this small rail instead of the full screen.
+    final (progress, totalWords) = ref.watch(
+      wordTimerProvider.select((s) => (s.progress, s.totalWords)),
+    );
+    final remainingWords = (totalWords * (1.0 - progress)).round();
+    final pct = (progress * 100).round().clamp(0, 100);
+    final timeLabel = _timeLeft(remainingWords);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Neumorphic inset rail with teal fill
+        SizedBox(
+          height: 5,
+          child: DecoratedBox(
+            decoration: RunThruDecorations.insetDecoration(
+              RunThruSurface.stage,
+              size: RunThruShadowSize.small,
+              borderRadius: 999,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: progress.clamp(0.0, 1.0),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          RunThruTokens.shellTeal,
+                          RunThruTokens.shellTealDeep,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Text(
+              '$pct%',
+              style: RunThruTypography.tinyLabel.copyWith(
+                color: RunThruTokens.shellTealDeep,
+                fontWeight: FontWeight.w800,
+              ),
+              textScaler: TextScaler.noScaling,
+            ),
+            const Spacer(),
+            Text(
+              timeLabel.isNotEmpty ? '$timeLabel · $wpm WPM' : '$wpm WPM',
+              style: RunThruTypography.tinyLabel.copyWith(
+                color: RunThruTokens.stageText.withValues(alpha: 0.54),
+              ),
+              textScaler: TextScaler.noScaling,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ContextSentencePanel extends StatelessWidget {
+  const _ContextSentencePanel({
+    required this.words,
+    required this.highlightIndex,
+    required this.fontFamily,
+  });
+
+  final List<String> words;
+  final int highlightIndex;
+  final String fontFamily;
+
+  @override
+  Widget build(BuildContext context) {
+    if (words.isEmpty) return const SizedBox.shrink();
+    final faint = RunThruTypography.body.copyWith(
+      color: RunThruTokens.stageText.withValues(alpha: 0.45),
+      fontFamily: fontFamily,
+      fontSize: 15,
+      fontWeight: FontWeight.w500,
+      height: 1.7,
+    );
+    final inked = faint.copyWith(
+      color: RunThruTokens.stageText,
+      fontWeight: FontWeight.w700,
+    );
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: Semantics(
+          label: words.join(' '),
+          child: ExcludeSemantics(
+            child: RichText(
+              textAlign: TextAlign.center,
+              maxLines: 4,
+              overflow: TextOverflow.fade,
+              textScaler: TextScaler.noScaling,
+              text: TextSpan(
+                children: [
+                  for (var i = 0; i < words.length; i++)
+                    TextSpan(
+                      text: i == words.length - 1
+                          ? words[i]
+                          : '${words[i]} ',
+                      style: i == highlightIndex ? inked : faint,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Persistent action tray ────────────────────────────────────────────────────
+
+class _PersistentActionTray extends StatelessWidget {
+  const _PersistentActionTray({
+    required this.isPlaying,
+    required this.wpm,
+    required this.onPlayPause,
+    required this.onPrevSentence,
+    required this.onNextSentence,
+    required this.onWpmSelected,
+    this.playButtonKey,
+    this.prevButtonKey,
+    this.speedSelectorKey,
+  });
+
+  final bool isPlaying;
+  final int wpm;
+  final VoidCallback onPlayPause;
+  final VoidCallback onPrevSentence;
+  final VoidCallback onNextSentence;
+  final ValueChanged<int> onWpmSelected;
+  final GlobalKey? playButtonKey;
+  final GlobalKey? prevButtonKey;
+  final GlobalKey? speedSelectorKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                key: prevButtonKey,
+                child: _RoundReaderButton(
+                  tooltip: 'Previous sentence',
+                  icon: Icons.keyboard_double_arrow_left_rounded,
+                  onPressed: onPrevSentence,
+                ),
+              ),
+              const SizedBox(width: 18),
+              SizedBox(
+                key: playButtonKey,
+                child: Semantics(
+                  button: true,
+                  label: isPlaying ? 'Pause reading' : 'Resume reading',
+                  child: GestureDetector(
+                    onTap: onPlayPause,
+                    child: DecoratedBox(
+                      decoration: RunThruDecorations.tealButton(
+                        borderRadius: 999,
+                      ),
+                      child: SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: Center(
+                          child: Icon(
+                            isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 40,
+                            color: RunThruTokens.shellCream,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              _RoundReaderButton(
+                tooltip: 'Next sentence',
+                icon: Icons.keyboard_double_arrow_right_rounded,
+                onPressed: onNextSentence,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            key: speedSelectorKey,
+            child: _SpeedSelector(selected: wpm, onSelected: onWpmSelected),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoundReaderButton extends StatelessWidget {
+  const _RoundReaderButton({
+    required this.tooltip,
+    required this.icon,
+    this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: RunThruTokens.stageBase,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: RunThruTokens.stageLightShadow,
+            offset: Offset(-3, -3),
+            blurRadius: 7,
+          ),
+          BoxShadow(
+            color: RunThruTokens.stageDarkShadow,
+            offset: Offset(3, 3),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        onTap: onPressed,
+        child: Tooltip(
+          message: tooltip,
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerUp: onPressed == null ? null : (_) => onPressed!.call(),
+            child: ExcludeSemantics(
+              child: IconButton(
+                onPressed: onPressed == null ? null : () {},
+                icon: Icon(icon, color: RunThruTokens.stageText, size: 24),
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(52, 52),
+                  fixedSize: const Size(52, 52),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: EdgeInsets.zero,
+                  backgroundColor: Colors.transparent,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpeedSelector extends StatelessWidget {
+  const _SpeedSelector({required this.selected, this.onSelected});
+
+  final int selected;
+  final ValueChanged<int>? onSelected;
+
+  static const _values = [200, 300, 400, 500];
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      key: const ValueKey('reader-speed-selector-visible-group'),
+      label: 'Speed selector. Current speed $selected words per minute.',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'SPEED',
+            style: RunThruTypography.tinyLabel.copyWith(
+              color: RunThruTokens.stageText.withValues(alpha: 0.58),
+              fontWeight: FontWeight.w800,
+            ),
+            textScaler: TextScaler.noScaling,
+          ),
+          const SizedBox(width: 8),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: RunThruTokens.stageBase,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  color: RunThruTokens.stageLightShadow,
+                  offset: Offset(-2, -2),
+                  blurRadius: 5,
+                ),
+                BoxShadow(
+                  color: RunThruTokens.stageDarkShadow,
+                  offset: Offset(2, 2),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: _values.map((value) {
+                  final active =
+                      value == selected ||
+                      (value == 300 && !_values.contains(selected));
+                  return Semantics(
+                    button: true,
+                    selected: active,
+                    label: '$value WPM',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onSelected?.call(value),
+                      child: AnimatedContainer(
+                        duration: isReducedMotion(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
+                        width: 58,
+                        constraints: const BoxConstraints(
+                          minHeight: RunThruA11y.minTapTarget,
+                        ),
+                        alignment: Alignment.center,
+                        decoration: active
+                            ? BoxDecoration(
+                                color: RunThruTokens.stageBase,
+                                borderRadius: BorderRadius.circular(999),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: RunThruTokens.stageLightShadow,
+                                    offset: Offset(-2, -2),
+                                    blurRadius: 5,
+                                  ),
+                                  BoxShadow(
+                                    color: RunThruTokens.stageDarkShadow,
+                                    offset: Offset(2, 2),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              )
+                            : null,
+                        child: Text(
+                          '$value',
+                          style: RunThruTypography.caption.copyWith(
+                            color: active
+                                ? RunThruTokens.shellAccent
+                                : RunThruTokens.stageText.withValues(
+                                    alpha: 0.62,
+                                  ),
+                            fontWeight: active
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TapToPausePrompt extends StatelessWidget {
+  const _TapToPausePrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = RunThruTokens.stageText.withValues(alpha: 0.56);
+
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 8,
+              height: 12,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _PauseBar(color: color),
+                  _PauseBar(color: color),
+                ],
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              'Tap to pause',
+              style: RunThruTypography.tinyLabel.copyWith(color: color),
+              textScaler: TextScaler.noScaling,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PauseBar extends StatelessWidget {
+  const _PauseBar({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: const SizedBox(width: 2.5, height: 12),
+    );
+  }
+}
+
+// ── ORP Focal Word ────────────────────────────────────────────────────────────
+
+const _readerFocalGuideLineHeight = 16.0;
+const _readerFocalGuideGap = 34.0;
+const _readerFocalTargetBreathingRoom = 8.0;
+
+EdgeInsets _focalTargetPadding(double fontSize) {
+  return EdgeInsets.symmetric(
+    horizontal: (fontSize * 0.18).clamp(8.0, 18.0),
+    vertical:
+        _readerFocalGuideGap +
+        _readerFocalGuideLineHeight +
+        _readerFocalTargetBreathingRoom,
+  );
+}
+
+class _FocalTourTarget extends StatelessWidget {
+  const _FocalTourTarget({
+    super.key,
+    required this.word,
+    required this.fontSize,
+    required this.fontFamily,
+  });
+
+  final String word;
+  final double fontSize;
+  final String fontFamily;
+
+  @override
+  Widget build(BuildContext context) {
+    final padding = _focalTargetPadding(fontSize);
+    // fontSize arrives pre-scaled by the clamped system text scale (see the
+    // reading screen LayoutBuilder), so no additional textScaler is applied —
+    // this keeps the measured box identical to the rendered word.
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: word,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontFamily: fontFamily,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+      textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
+    )..layout();
+
+    return SizedBox(
+      width: textPainter.width + padding.horizontal,
+      height: textPainter.height + padding.vertical,
+    );
+  }
+}
+
+class _OrpFocalWord extends StatelessWidget {
+  const _OrpFocalWord({
+    this.focalTargetKey,
+    required this.word,
+    required this.fontSize,
+    required this.fontFamily,
+    required this.isPaused,
+    this.dimWhenPaused = true,
+  });
+
+  final GlobalKey? focalTargetKey;
+  final String word;
+  final double fontSize;
+  final String fontFamily;
+  final bool isPaused;
+  final bool dimWhenPaused;
+
+  @override
+  Widget build(BuildContext context) {
+    if (word.isEmpty) return const SizedBox.shrink();
+
+    final stripped = word.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    if (stripped.isEmpty) return const SizedBox.shrink();
+
+    final orpIdx = bucketedOrpIndex(word);
+    final leadingPunc = word.length - stripped.length;
+    final displayOrpIdx = (leadingPunc + orpIdx).clamp(0, word.length - 1);
+
+    final style = TextStyle(
+      fontSize: fontSize,
+      color: RunThruTokens.stageText,
+      fontFamily: fontFamily,
+      fontWeight: FontWeight.w400,
+      height: 1.0,
+    );
+    final direction = Directionality.of(context);
+
+    // Spritz-style ORP pinning: the word shifts so the anchor letter's
+    // centre sits exactly on the fixed centre column (design reader.jsx
+    // FocalWord). Widths are measured synchronously so the pin never lags
+    // a frame behind the word flash.
+    final prefixWidth = _textWidth(
+      word.substring(0, displayOrpIdx),
+      style,
+      direction,
+    );
+    final letterWidth = _textWidth(word[displayOrpIdx], style, direction);
+    final wordWidth = _textWidth(word, style, direction);
+    final shift = wordWidth / 2 - (prefixWidth + letterWidth / 2);
+
+    final guideLineColor = RunThruTokens.stageFocalRed.withValues(alpha: 0.55);
+    const guideLineWidth = 2.0;
+    const guideLineRadius = 2.0;
+    final guideOffset =
+        fontSize / 2 + _readerFocalGuideGap + _readerFocalGuideLineHeight / 2;
+
+    final guideLine = DecoratedBox(
+      decoration: BoxDecoration(
+        color: guideLineColor,
+        borderRadius: BorderRadius.circular(guideLineRadius),
+      ),
+      child: const SizedBox(
+        width: guideLineWidth,
+        height: _readerFocalGuideLineHeight,
+      ),
+    );
+
+    final wordWidget = Stack(
+      fit: StackFit.expand,
+      children: [
+        // Fixed centre-column guide ticks — these never move; each word
+        // aligns its anchor letter to them.
+        Align(
+          alignment: Alignment.center,
+          child: Transform.translate(
+            offset: Offset(0, -guideOffset),
+            child: guideLine,
+          ),
+        ),
+        Align(
+          alignment: Alignment.center,
+          child: Transform.translate(
+            offset: Offset(0, guideOffset),
+            child: guideLine,
+          ),
+        ),
+        Align(
+          alignment: Alignment.center,
+          child: Transform.translate(
+            offset: Offset(shift, 0),
+            child: Padding(
+              key: focalTargetKey,
+              padding: _focalTargetPadding(fontSize),
+              child: RichText(
+                textScaler: TextScaler.noScaling,
+                text: TextSpan(
+                  children: [
+                    TextSpan(text: word.substring(0, displayOrpIdx)),
+                    TextSpan(
+                      text: word[displayOrpIdx],
+                      style: const TextStyle(
+                        color: RunThruTokens.stageFocalRed,
+                      ),
+                    ),
+                    TextSpan(text: word.substring(displayOrpIdx + 1)),
+                  ],
+                  style: style,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (!isPaused || !dimWhenPaused) {
+      return wordWidget;
+    }
+
+    return AnimatedOpacity(
+      opacity: 0.32,
+      duration: isReducedMotion(context)
+          ? Duration.zero
+          : const Duration(milliseconds: RunThruTiming.hintSlideInMs),
+      child: wordWidget,
+    );
+  }
+
+  double _textWidth(String text, TextStyle style, TextDirection direction) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: direction,
+      maxLines: 1,
+    )..layout();
+    return painter.width;
   }
 }

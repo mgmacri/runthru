@@ -1,106 +1,122 @@
-# RunThru — Privacy Policy
+# RunThru Privacy Policy
 
-**Effective**: 2026-05-06
-**Last updated**: 2026-05-06
-**Contact**: support@runthruapp.com
+**Effective date: June 10, 2026**
 
-## Plain-language summary
+RunThru is a paced reading app. This policy explains exactly what data the app
+touches, where that data goes, and what never leaves your device. It is written
+in plain language because you deserve to understand it without a lawyer.
 
-RunThru is a paced reading app that runs entirely on your device. Your reading
-content — PDFs, EPUBs, clipboard text, and articles — stays on your phone. We
-do not run analytics SDKs, we do not show ads, and we do not track you. The
-only time RunThru talks to the internet is when you choose to sign in to
-Instapaper and tap refresh or import; that connection goes to Instapaper and
-nowhere else.
+The short version: **your reading content stays on your device.** The only
+service that ever receives information about your reading activity is
+Instapaper, and only if you connect an Instapaper account yourself.
 
-## What we collect
+---
 
-Everything in this list lives on your device. Nothing here is sent to us or to
-any server we control, because we do not run a server.
+## What stays on your device
 
-- **Reading content** (PDFs, EPUBs, articles, and text you import). Stored in
-  the app's documents directory. Clipboard text is held only for the current
-  session and discarded when you leave the screen. Stays on your device.
-- **Reading sessions** (when a session started, when it ended, how many words
-  you read, your average words-per-minute, and the file path of what you were
-  reading). Stored locally in app preferences. Capped at the most recent 1000
-  sessions — older entries are dropped automatically. Stays on your device.
-- **Your preferences** (words-per-minute, theme, spacing, pacing settings, and
-  similar choices). Stored locally in app preferences. Stays on your device.
-- **Instapaper sign-in tokens**, only if you sign in to Instapaper. Stored in
-  your device's secure enclave through `flutter_secure_storage`. Used only to
-  call the Instapaper API on your behalf. Stays on your device.
-- **Instapaper bookmarks and article text**, only when you tap refresh or
-  import. Fetched live from Instapaper, then cached on your device for the
-  rest of your session.
+### Clipboard text
+When you paste or share text into RunThru, the app reads it locally, splits it
+into words, and shows it to you. Clipboard reading sessions are ephemeral: the
+text is held in memory for the session and is not transmitted anywhere. The
+app checks the clipboard only when it is opened or resumed, and only to offer
+you the option to read what you copied — it never sends clipboard contents off
+the device.
 
-## What we do not collect
+### Local files (PDF and EPUB)
+Files you open from your device are read locally. RunThru extracts the text and
+stores that extracted text in the app's private cache on your device so the
+file opens faster next time. Nothing from your files is uploaded.
 
-- We do not collect crash reports.
-- We do not use analytics SDKs.
-- We do not collect advertising identifiers.
-- We do not collect your name, email, phone number, or contacts.
-- We do not collect your location.
-- We do not sell data — there is no data to sell.
+### Reading positions, settings, and stats
+Your bookmarks, reading speed, reading goals, display preferences, and local
+reading statistics (words read, session lengths) are stored on your device
+only.
 
-## Third-party services
+### Diagnostic logs
+RunThru keeps a small, on-device log of technical events (for example, "a file
+failed to open") to help diagnose problems. These logs do not contain the text
+you read, are never transmitted automatically, and are overwritten regularly.
 
-- **Instapaper** (optional). If you sign in to Instapaper, RunThru uses your
-  credentials to fetch your saved articles. Your sign-in tokens are stored in
-  your device's secure enclave (`flutter_secure_storage`). RunThru does not
-  proxy your tokens through any server we control — the connection is direct
-  from your device to Instapaper. Instapaper's privacy policy applies to data
-  Instapaper holds: <https://www.instapaper.com/privacy>.
+---
 
-This is the only third-party service RunThru talks to, and it is only active
-when you sign in and tap refresh or import.
+## Services you can choose to connect
 
-## Data retention
+RunThru works fully without any account. Two optional connections exist, and
+each one activates only when you sign in to it yourself.
 
-- **Reading sessions**: kept up to a maximum of 1000. Once you cross that, the
-  oldest session is dropped automatically.
-- **Preferences**: kept until you clear app data or uninstall RunThru.
-- **Reading content**: kept until you delete the file from your library, clear
-  app data, or uninstall RunThru.
-- **Instapaper tokens**: kept until you sign out of Instapaper inside RunThru,
-  clear app data, or uninstall.
+### Google Drive (inbound only)
+If you connect Google Drive, RunThru asks Google for permission to list and
+download the documents you pick. The file content travels from Google to your
+device for import; RunThru does not upload anything to Drive and does not store
+your documents on any server. Your Google sign-in token is stored in your
+device's secure storage. Disconnecting Drive in Settings deletes the stored
+token.
 
-## Your rights
+### Instapaper (the only outbound connection)
+If you connect Instapaper, RunThru:
 
-You have the following rights over the data RunThru holds on your device.
-Because all of that data lives on your device, you can exercise most of these
-rights yourself, immediately, without contacting us.
+- fetches your bookmark list from the Instapaper API and caches it on your
+  device;
+- sends your reading progress for an article back to Instapaper — this happens
+  when you pause, leave an article, or finish it, so your position stays in
+  sync with your Instapaper account;
+- archives an article in your Instapaper account when you finish reading it.
 
-- **See your data**: open the Stats screen to see your reading sessions, or
-  use your device's file manager to inspect the app's documents directory.
-- **Delete your data**: tap "Clear all data" in Stats to delete reading
-  sessions, delete files from the library to remove reading content, sign out
-  of Instapaper to discard your tokens, or clear app data / uninstall RunThru
-  to remove everything in one step.
-- **Take your data with you**: reading content is stored as the original PDF,
-  EPUB, or text file in the app's documents directory and can be copied out.
-- **Opt out of sale**: not applicable. We do not sell your data.
-- **Object or restrict processing**: stop using the relevant feature (for
-  example, sign out of Instapaper to stop the only network connection).
+This is the only situation in which information about your reading activity
+leaves your device, and it goes only to Instapaper, under the account you
+connected. Sign-in uses OAuth; your Instapaper password is exchanged directly
+with Instapaper for an access token, which is stored in your device's secure
+storage. Logging out deletes the stored token.
 
-If you have questions or want to ask us to do something on your behalf,
-contact us using the email or link at the top of this policy.
+### Shared web links
+When you share a web link into RunThru, the app downloads that page over an
+encrypted (HTTPS) connection to extract its readable text on your device. The
+extracted text is treated like any other local reading content.
+
+---
+
+## What RunThru does not do
+
+- **No analytics services.** The app contains no third-party analytics,
+  tracking, or advertising SDKs.
+- **No crash-reporting services.** There is no crash-analytics SDK; diagnostic
+  logs stay on the device as described above.
+- **No ads.** RunThru shows no advertising and shares no data with ad
+  networks.
+- **No accounts.** RunThru itself has no account system and no server that
+  stores your data.
+- **No sale or sharing of data.** RunThru has nothing to sell or share —
+  your data is not collected in the first place.
+
+---
+
+## Permissions the app requests
+
+- **Internet** — used only for the optional connections above (Google Drive,
+  Instapaper, shared web links).
+- **Notifications** (Android 13+) — used only if you enable reading reminders.
+- **Camera** — declared for optional head-tracking experiments; the camera is
+  not required, and the feature works without it. No images are stored or
+  transmitted.
+
+---
 
 ## Children
 
-RunThru is not designed for children and does not have age-gated features. We
-do not knowingly collect data from anyone, including children under 13,
-because we do not collect data from anyone — everything stays on the device.
-If a child has imported content into RunThru on a shared device, you can
-remove it by clearing app data in your operating system settings.
+RunThru does not collect personal data from anyone, including children.
 
-## Changes
+---
 
-If we change this policy, we update the **Effective** and **Last updated**
-dates at the top and post the new policy here. We do not have an email list,
-so we cannot email you about changes — please check this page if you want to
-see the latest version.
+## Changes to this policy
+
+When this policy changes, the new version ships with the app update and the
+effective date above is revised. Each version of the app contains the policy
+that applies to it.
+
+---
 
 ## Contact
 
-Questions, requests, or concerns: support@runthruapp.com.
+Questions about this policy are welcome.
+
+<!-- TODO: add support contact -->

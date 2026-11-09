@@ -22,15 +22,9 @@ void main() {
     });
 
     test('copyWith overrides specified fields', () {
-      const entry = PdfEntry(
-        filePath: '/test.pdf',
-        fileName: 'test.pdf',
-      );
+      const entry = PdfEntry(filePath: '/test.pdf', fileName: 'test.pdf');
 
-      final copy = entry.copyWith(
-        status: PdfStatus.ready,
-        retryCount: 1,
-      );
+      final copy = entry.copyWith(status: PdfStatus.ready, retryCount: 1);
 
       expect(copy.status, PdfStatus.ready);
       expect(copy.retryCount, 1);
@@ -44,25 +38,28 @@ void main() {
   group('PdfStatus', () {
     test('has all required states', () {
       expect(
-          PdfStatus.values,
-          containsAll([
-            PdfStatus.pending,
-            PdfStatus.queued,
-            PdfStatus.processing,
-            PdfStatus.ready,
-            PdfStatus.error,
-            PdfStatus.unsupported,
-            PdfStatus.permanentlyFailed,
-          ]));
+        PdfStatus.values,
+        containsAll([
+          PdfStatus.pending,
+          PdfStatus.queued,
+          PdfStatus.processing,
+          PdfStatus.ready,
+          PdfStatus.error,
+          PdfStatus.unsupported,
+          PdfStatus.permanentlyFailed,
+        ]),
+      );
     });
   });
 
   group('ExtractedDocument', () {
     test('allWords flattens sentences', () {
-      const doc = ExtractedDocument(sentences: [
-        Sentence(words: ['Hello', 'world']),
-        Sentence(words: ['foo', 'bar']),
-      ]);
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['Hello', 'world']),
+          Sentence(words: ['foo', 'bar']),
+        ],
+      );
 
       expect(doc.allWords, ['Hello', 'world', 'foo', 'bar']);
       expect(doc.totalWords, 4);
@@ -75,10 +72,12 @@ void main() {
     });
 
     test('fromJson / toJson round-trip', () {
-      const doc = ExtractedDocument(sentences: [
-        Sentence(words: ['Hello', 'world']),
-        Sentence(words: ['test']),
-      ]);
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(words: ['Hello', 'world']),
+          Sentence(words: ['test']),
+        ],
+      );
 
       final json = doc.toJson();
       final restored = ExtractedDocument.fromJson(json);
@@ -87,56 +86,91 @@ void main() {
       expect(restored.allWords, doc.allWords);
     });
 
-    test('merge offsets phase-2 pageBoundary startWordIndex by phase-1 totalWords', () {
-      // Phase 1: chapters 0-1, 5 words total.
-      const phase1 = ExtractedDocument(
-        sentences: [
-          Sentence(words: ['a', 'b', 'c']),
-          Sentence(words: ['d', 'e']),
-        ],
-        pageBoundaries: [
-          PageBoundary(pageNumber: 0, startSentenceIndex: 0, startWordIndex: 0, firstWords: 'a b c'),
-          PageBoundary(pageNumber: 1, startSentenceIndex: 1, startWordIndex: 3, firstWords: 'd e'),
-        ],
-        totalPages: 4,
-      );
+    test(
+      'merge offsets phase-2 pageBoundary startWordIndex by phase-1 totalWords',
+      () {
+        // Phase 1: chapters 0-1, 5 words total.
+        const phase1 = ExtractedDocument(
+          sentences: [
+            Sentence(words: ['a', 'b', 'c']),
+            Sentence(words: ['d', 'e']),
+          ],
+          pageBoundaries: [
+            PageBoundary(
+              pageNumber: 0,
+              startSentenceIndex: 0,
+              startWordIndex: 0,
+              firstWords: 'a b c',
+            ),
+            PageBoundary(
+              pageNumber: 1,
+              startSentenceIndex: 1,
+              startWordIndex: 3,
+              firstWords: 'd e',
+            ),
+          ],
+          totalPages: 4,
+        );
 
-      // Phase 2: chapters 2-3. Extractor starts its own globalWordIndex from 0.
-      const phase2 = ExtractedDocument(
-        sentences: [
-          Sentence(words: ['f', 'g']),
-          Sentence(words: ['h']),
-        ],
-        pageBoundaries: [
-          PageBoundary(pageNumber: 2, startSentenceIndex: 0, startWordIndex: 0, firstWords: 'f g'),
-          PageBoundary(pageNumber: 3, startSentenceIndex: 1, startWordIndex: 2, firstWords: 'h'),
-        ],
-        totalPages: 4,
-      );
+        // Phase 2: chapters 2-3. Extractor starts its own globalWordIndex from 0.
+        const phase2 = ExtractedDocument(
+          sentences: [
+            Sentence(words: ['f', 'g']),
+            Sentence(words: ['h']),
+          ],
+          pageBoundaries: [
+            PageBoundary(
+              pageNumber: 2,
+              startSentenceIndex: 0,
+              startWordIndex: 0,
+              firstWords: 'f g',
+            ),
+            PageBoundary(
+              pageNumber: 3,
+              startSentenceIndex: 1,
+              startWordIndex: 2,
+              firstWords: 'h',
+            ),
+          ],
+          totalPages: 4,
+        );
 
-      final merged = phase1.merge(phase2);
+        final merged = phase1.merge(phase2);
 
-      // Sentences are all 8 words in order.
-      expect(merged.totalWords, 8);
-      expect(merged.allWords, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+        // Sentences are all 8 words in order.
+        expect(merged.totalWords, 8);
+        expect(merged.allWords, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
 
-      // Phase-1 boundaries unchanged.
-      expect(merged.pageBoundaries[0].startWordIndex, 0);
-      expect(merged.pageBoundaries[1].startWordIndex, 3);
+        // Phase-1 boundaries unchanged.
+        expect(merged.pageBoundaries[0].startWordIndex, 0);
+        expect(merged.pageBoundaries[1].startWordIndex, 3);
 
-      // Phase-2 boundaries must be offset by phase-1's 5 words and 2 sentences.
-      expect(merged.pageBoundaries[2].startWordIndex, 5,
-          reason: 'chapter 2 should start at word 5 (phase-1 had 5 words)');
-      expect(merged.pageBoundaries[3].startWordIndex, 7,
-          reason: 'chapter 3 should start at word 7');
-      expect(merged.pageBoundaries[2].startSentenceIndex, 2,
-          reason: 'chapter 2 sentence index should be offset by phase-1 sentence count (2)');
-      expect(merged.pageBoundaries[3].startSentenceIndex, 3);
-    });
+        // Phase-2 boundaries must be offset by phase-1's 5 words and 2 sentences.
+        expect(
+          merged.pageBoundaries[2].startWordIndex,
+          5,
+          reason: 'chapter 2 should start at word 5 (phase-1 had 5 words)',
+        );
+        expect(
+          merged.pageBoundaries[3].startWordIndex,
+          7,
+          reason: 'chapter 3 should start at word 7',
+        );
+        expect(
+          merged.pageBoundaries[2].startSentenceIndex,
+          2,
+          reason:
+              'chapter 2 sentence index should be offset by phase-1 sentence count (2)',
+        );
+        expect(merged.pageBoundaries[3].startSentenceIndex, 3);
+      },
+    );
 
     test('merge with empty phase-2 pageBoundaries leaves phase-1 intact', () {
       const phase1 = ExtractedDocument(
-        sentences: [Sentence(words: ['a', 'b'])],
+        sentences: [
+          Sentence(words: ['a', 'b']),
+        ],
         pageBoundaries: [
           PageBoundary(pageNumber: 0, startSentenceIndex: 0, startWordIndex: 0),
         ],
@@ -165,10 +199,7 @@ void main() {
 
   group('Dead letter queue', () {
     test('entry becomes permanently failed after max retries', () {
-      var entry = const PdfEntry(
-        filePath: '/bad.pdf',
-        fileName: 'bad.pdf',
-      );
+      var entry = const PdfEntry(filePath: '/bad.pdf', fileName: 'bad.pdf');
 
       // Simulate 3 retries
       for (var i = 0; i < PdfEntry.maxRetries; i++) {

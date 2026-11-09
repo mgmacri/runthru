@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/clipboard_detect_provider.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Displays a non-intrusive prompt when clipboard text is detected.
 ///
@@ -33,11 +34,7 @@ class ClipboardPrompt extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(16),
-        decoration: RunThruDecorations.raisedDecoration(
-          RunThruSurface.shell,
-          size: RunThruShadowSize.small,
-          borderRadius: 12,
-        ),
+        decoration: RunThruDecorations.designerRaisedSmall(borderRadius: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,24 +102,9 @@ class ClipboardPrompt extends ConsumerWidget {
                   label: 'Import clipboard text to library',
                   child: GestureDetector(
                     onTap: () => _handleImport(ref),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      constraints: const BoxConstraints(minHeight: 48),
-                      decoration: RunThruDecorations.raisedDecoration(
-                        RunThruSurface.shell,
-                        size: RunThruShadowSize.small,
-                        borderRadius: 8,
-                      ),
-                      child: Text(
-                        'Import to Library',
-                        style: RunThruTypography.body.copyWith(
-                          color: RunThruTokens.shellAccent,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                    child: RunThruPrimaryButton(
+                      label: 'Import to Library',
+                      onPressed: () => _handleImport(ref),
                     ),
                   ),
                 ),

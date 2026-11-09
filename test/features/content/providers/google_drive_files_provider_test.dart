@@ -6,7 +6,10 @@ import 'package:runthru/features/content/models/google_drive_file.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
 import 'package:runthru/features/content/services/google_drive_auth_service.dart';
+import 'package:runthru/features/content/services/drive_local_store.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
+import 'package:runthru/services/content_identity.dart';
+import 'package:runthru/services/content_store/content_store.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
@@ -85,7 +88,10 @@ class _FakeGoogleDriveClient extends GoogleDriveClient {
   final metadataIds = <String>[];
 
   @override
-  Future<List<GoogleDriveFile>> listDriveFiles({String? query}) async {
+  Future<List<GoogleDriveFile>> listDriveFiles({
+    String? query,
+    int maxResults = GoogleDriveClient.defaultMaxListResults,
+  }) async {
     listCalls++;
     if (listCalls <= listErrors.length) throw listErrors[listCalls - 1];
     if (error != null) throw error!;
@@ -110,12 +116,26 @@ class _FakeGoogleDriveClient extends GoogleDriveClient {
     GoogleDriveFile file, {
     String exportMimeType = plainTextMimeType,
   }) async {
+    if (error != null) throw error!;
     return exportedText;
   }
 
   @override
   Future<List<int>> downloadSelectedFile(GoogleDriveFile file) async {
+    bufferedDownloadCalls++;
+    if (error != null) throw error!;
     return downloadedBytes;
+  }
+
+  var bufferedDownloadCalls = 0;
+  var streamedDownloadCalls = 0;
+
+  @override
+  Future<File> downloadSelectedFileTo(GoogleDriveFile file, File target) async {
+    streamedDownloadCalls++;
+    if (error != null) throw error!;
+    await target.writeAsBytes(downloadedBytes, flush: true);
+    return target;
   }
 }
 
@@ -150,6 +170,16 @@ ProviderContainer _container({
       googleDriveTempDirectoryProvider.overrideWith(
         (ref) async =>
             Directory.systemTemp.createTempSync('runthru_drive_test_'),
+      ),
+      // Keep persistence layers off the real filesystem in tests.
+      driveLocalStoreProvider.overrideWithValue(
+        DriveLocalStore(rootResolver: () async => null),
+      ),
+      contentStoreProvider.overrideWithValue(
+        ContentStore(rootResolver: () async => null),
+      ),
+      contentIdentityProvider.overrideWithValue(
+        ContentIdentityService(rootResolver: () async => null),
       ),
     ],
   );
@@ -644,5 +674,326 @@ void main() {
         expect(error.message, contains('file may no longer be available'));
       },
     );
+
+    test('imports plain text files and normalises content', () async {
+      final container = _container(
+        client: _FakeGoogleDriveClient(
+          downloadedBytes: 'Hello world. Plain text.'.codeUnits,
+        ),
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'txt1',
+              name: 'notes.txt',
+              mimeType: plainTextMimeType,
+            ),
+          );
+
+      final state = container.read(googleDriveImportProvider);
+      expect(state, isA<GoogleDriveImportDone>());
+      final done = state as GoogleDriveImportDone;
+      expect(done.identity.sourceId, 'drive://txt1');
+      expect(done.document.totalWords, greaterThan(0));
+    });
+
+    test('imports HTML files and normalises content', () async {
+      const html = '<p>First sentence.</p><p>Second sentence.</p>';
+      final container = _container(
+        client: _FakeGoogleDriveClient(
+          downloadedBytes: html.codeUnits,
+        ),
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'html1',
+              name: 'page.html',
+              mimeType: htmlMimeType,
+            ),
+          );
+
+      final state = container.read(googleDriveImportProvider);
+      expect(state, isA<GoogleDriveImportDone>());
+      final done = state as GoogleDriveImportDone;
+      expect(done.identity.sourceId, 'drive://html1');
+      expect(done.document.totalWords, greaterThan(0));
+    });
+
+    test('network import errors expose typed kind and retry copy', () async {
+      final container = _container(
+        client: _FakeGoogleDriveClient(
+          error: const GoogleDriveException(
+            kind: GoogleDriveFailureKind.network,
+            message: 'offline',
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'doc1',
+              name: 'Doc',
+              mimeType: googleDocsMimeType,
+            ),
+          );
+
+      final state = container.read(googleDriveImportProvider);
+      expect(state, isA<GoogleDriveImportError>());
+      final error = state as GoogleDriveImportError;
+      expect(error.kind, GoogleDriveFailureKind.network);
+      expect(error.message, contains('Network'));
+    });
+
+    test('rate-limit import errors expose typed kind and wait copy', () async {
+      final container = _container(
+        client: _FakeGoogleDriveClient(
+          error: const GoogleDriveException(
+            kind: GoogleDriveFailureKind.rateLimit,
+            message: 'quota exceeded',
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(googleDriveImportProvider.notifier)
+          .importFile(
+            const GoogleDriveFile(
+              id: 'doc1',
+              name: 'Doc',
+              mimeType: googleDocsMimeType,
+            ),
+          );
+
+      final state = container.read(googleDriveImportProvider);
+      expect(state, isA<GoogleDriveImportError>());
+      final error = state as GoogleDriveImportError;
+      expect(error.kind, GoogleDriveFailureKind.rateLimit);
+      expect(error.message, contains('rate-limit'));
+    });
+  });
+
+  group('GoogleDriveImport hardening (Phase 6)', () {
+    test('rejects an oversized PDF with a clear error, no download', () async {
+      final client = _FakeGoogleDriveClient();
+      final container = _container(client: client);
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container.read(googleDriveImportProvider.notifier).importFile(
+        const GoogleDriveFile(
+          id: 'huge',
+          name: 'Scanned.pdf',
+          mimeType: pdfMimeType,
+          sizeBytes: GoogleDriveImport.maxPdfImportBytes + 1,
+        ),
+      );
+
+      final state = container.read(googleDriveImportProvider);
+      expect(state, isA<GoogleDriveImportError>());
+      final error = state as GoogleDriveImportError;
+      expect(error.kind, GoogleDriveFailureKind.fileTooLarge);
+      expect(error.message, contains('too large'));
+      expect(client.streamedDownloadCalls, 0, reason: 'no bytes moved');
+      expect(client.bufferedDownloadCalls, 0);
+    });
+
+    test('a PDF within the limit streams to disk — never bodyBytes', () async {
+      final client = _FakeGoogleDriveClient(downloadedBytes: [37, 80, 68, 70]);
+      final container = _container(
+        client: client,
+        pdfDocument: const ExtractedDocument(
+          sentences: [
+            Sentence(words: ['ok']),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container.read(googleDriveImportProvider.notifier).importFile(
+        const GoogleDriveFile(
+          id: 'ok-pdf',
+          name: 'Fine.pdf',
+          mimeType: pdfMimeType,
+          sizeBytes: GoogleDriveImport.maxPdfImportBytes - 1,
+        ),
+      );
+
+      expect(
+        container.read(googleDriveImportProvider),
+        isA<GoogleDriveImportDone>(),
+      );
+      expect(client.streamedDownloadCalls, 1);
+      expect(
+        client.bufferedDownloadCalls,
+        0,
+        reason: 'binary imports must never buffer the file in memory (BK-9)',
+      );
+    });
+
+    test('temp file is cleaned up after a successful import', () async {
+      final tempDir = Directory.systemTemp.createTempSync('runthru_drive_t6');
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+      final container = ProviderContainer(
+        overrides: [
+          googleDriveAuthProvider.overrideWith(
+            () => _FakeGoogleDriveAuth(_connected),
+          ),
+          configProvider.overrideWith(() => _FakeConfigNotifier(
+            const AppConfig(
+              googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+            ),
+          )),
+          googleDriveClientProvider.overrideWithValue(
+            _FakeGoogleDriveClient(downloadedBytes: [1, 2, 3]),
+          ),
+          googleDrivePdfExtractorProvider.overrideWithValue(
+            (_) async => const ExtractedDocument(
+              sentences: [
+                Sentence(words: ['x']),
+              ],
+            ),
+          ),
+          googleDriveEpubExtractorProvider.overrideWithValue(
+            (_) async => const ExtractedDocument(sentences: []),
+          ),
+          googleDriveTempDirectoryProvider.overrideWith((ref) async => tempDir),
+          driveLocalStoreProvider.overrideWithValue(
+            DriveLocalStore(rootResolver: () async => null),
+          ),
+          contentStoreProvider.overrideWithValue(
+            ContentStore(rootResolver: () async => null),
+          ),
+          contentIdentityProvider.overrideWithValue(
+            ContentIdentityService(rootResolver: () async => null),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container.read(googleDriveImportProvider.notifier).importFile(
+        const GoogleDriveFile(
+          id: 'clean1',
+          name: 'Tidy.pdf',
+          mimeType: pdfMimeType,
+        ),
+      );
+
+      expect(
+        container.read(googleDriveImportProvider),
+        isA<GoogleDriveImportDone>(),
+      );
+      final leftovers = tempDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.contains('runthru-drive-'))
+          .toList();
+      expect(leftovers, isEmpty, reason: 'temp dir clean after import');
+    });
+
+    test('temp file is cleaned up after a failed extraction', () async {
+      final tempDir = Directory.systemTemp.createTempSync('runthru_drive_t6f');
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+      final container = ProviderContainer(
+        overrides: [
+          googleDriveAuthProvider.overrideWith(
+            () => _FakeGoogleDriveAuth(_connected),
+          ),
+          configProvider.overrideWith(() => _FakeConfigNotifier(
+            const AppConfig(
+              googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
+            ),
+          )),
+          googleDriveClientProvider.overrideWithValue(
+            _FakeGoogleDriveClient(downloadedBytes: [1, 2, 3]),
+          ),
+          googleDrivePdfExtractorProvider.overrideWithValue(
+            (_) async => throw const UnsupportedPdfError('no text'),
+          ),
+          googleDriveEpubExtractorProvider.overrideWithValue(
+            (_) async => const ExtractedDocument(sentences: []),
+          ),
+          googleDriveTempDirectoryProvider.overrideWith((ref) async => tempDir),
+          driveLocalStoreProvider.overrideWithValue(
+            DriveLocalStore(rootResolver: () async => null),
+          ),
+          contentStoreProvider.overrideWithValue(
+            ContentStore(rootResolver: () async => null),
+          ),
+          contentIdentityProvider.overrideWithValue(
+            ContentIdentityService(rootResolver: () async => null),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        googleDriveImportProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container.read(googleDriveImportProvider.notifier).importFile(
+        const GoogleDriveFile(
+          id: 'fail1',
+          name: 'Broken.pdf',
+          mimeType: pdfMimeType,
+        ),
+      );
+
+      expect(
+        container.read(googleDriveImportProvider),
+        isA<GoogleDriveImportError>(),
+      );
+      final leftovers = tempDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.contains('runthru-drive-'))
+          .toList();
+      expect(leftovers, isEmpty, reason: 'temp dir clean after failure too');
+    });
   });
 }

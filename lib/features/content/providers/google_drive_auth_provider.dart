@@ -267,6 +267,8 @@ class GoogleDriveAuth extends _$GoogleDriveAuth {
         'Google Drive is rate-limiting this connection. Try again later.',
       GoogleDriveFailureKind.network =>
         'Network connection failed. Check your connection and try again.',
+      GoogleDriveFailureKind.fileTooLarge =>
+        'That Drive file is too large to import.',
       GoogleDriveFailureKind.unsupportedMimeType =>
         'That Drive file type is not supported.',
       GoogleDriveFailureKind.unexpectedResponse =>

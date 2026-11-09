@@ -16,14 +16,12 @@ mcp = FastMCP("RepoCanonicalMemory")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 CANONICAL_PATTERNS = [
-    "doc/runthru-backlog.json",
-    "AGENTS.md",
     "CLAUDE.md",
-    ".github/instructions/**",
-    ".github/prompts/**",
-    ".github/agents/**",
-    "doc/sop/**",
-    "doc/specs/active/**/*.md",
+    "AGENTS.md",
+    "doc/release/**/*.md",
+    "doc/architecture/**/*.md",
+    "doc/legal/**/*.md",
+    ".claude/agents/**/*.md",
 ]
 
 

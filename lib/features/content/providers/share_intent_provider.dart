@@ -244,10 +244,24 @@ class ShareIntent extends _$ShareIntent {
       }
     }
 
+    // Security: never fetch over cleartext. Dart's HttpClient bypasses the
+    // platform cleartext blocks (Android networkSecurityConfig / iOS ATS),
+    // so http:// links are upgraded to https before the request is made.
+    var fetchUri = Uri.parse(url);
+    if (fetchUri.scheme == 'http') {
+      fetchUri = fetchUri.replace(scheme: 'https');
+    }
+    if (fetchUri.scheme != 'https') {
+      throw Exception(
+        'Only web links can be fetched. '
+        'Try copying the text and pasting it in RunThru instead.',
+      );
+    }
+
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.getUrl(Uri.parse(url));
+      final request = await client.getUrl(fetchUri);
       // Identify as a browser so sites return full HTML, not API responses.
       request.headers.set(
         HttpHeaders.userAgentHeader,
@@ -259,6 +273,13 @@ class ShareIntent extends _$ShareIntent {
       request.maxRedirects = 5;
 
       final response = await request.close();
+      // Security: reject any redirect hop that downgraded to cleartext.
+      if (response.redirects.any((r) => r.location.scheme == 'http')) {
+        throw Exception(
+          'The shared link redirected to an insecure connection. '
+          'Try copying the text and pasting it in RunThru instead.',
+        );
+      }
       if (response.statusCode != 200) {
         throw Exception(
           'Could not fetch the shared link (HTTP ${response.statusCode}). '
