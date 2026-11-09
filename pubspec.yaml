@@ -2,7 +2,7 @@
 name: runthru
 description: "RunThru — Paced reading for focus. Your attention isn't broken, it just needs a better direction."
 publish_to: 'none'
-version: 2.0.0+15
+version: 2.0.0+16
 
 environment:
   sdk: ^3.11.0
