@@ -12,6 +12,135 @@ const int kContentStoreSchemaVersion = 1;
 /// hundred KB of Dart strings) regardless of book size.
 const int kSectionTargetWords = 1500;
 
+/// Identifiers for the per-section model tasks. Also the key under which a
+/// task's [ModelAnnotation] is stored in [SectionMetadata.modelAnnotations].
+abstract final class ModelTask {
+  /// 1–2 plain sentences describing the section.
+  static const String summarize = 'summarize';
+
+  /// `{score: 0–1, hardWords: [...]}` — a pacing *hint*, never a speed change.
+  static const String difficulty = 'difficulty';
+
+  /// Every task the queue accepts.
+  static const Set<String> all = {summarize, difficulty};
+
+  /// Whether [task] is a defined task identifier.
+  static bool isKnown(String task) => all.contains(task);
+}
+
+/// One model result for one section, stored in
+/// [SectionMetadata.modelAnnotations] under its [task] key.
+///
+/// [version] identifies the model/prompt that produced it so stale results
+/// can be regenerated; [payload] is task-specific plain JSON.
+class ModelAnnotation {
+  /// Creates an annotation.
+  const ModelAnnotation({
+    required this.task,
+    required this.version,
+    required this.createdAt,
+    required this.payload,
+  });
+
+  /// A `summarize` result.
+  factory ModelAnnotation.summarize({
+    required String text,
+    required int version,
+    required DateTime createdAt,
+  }) {
+    return ModelAnnotation(
+      task: ModelTask.summarize,
+      version: version,
+      createdAt: createdAt,
+      payload: {'text': text.trim()},
+    );
+  }
+
+  /// A `difficulty` result. [score] is clamped to 0–1.
+  factory ModelAnnotation.difficulty({
+    required double score,
+    required List<String> hardWords,
+    required int version,
+    required DateTime createdAt,
+  }) {
+    return ModelAnnotation(
+      task: ModelTask.difficulty,
+      version: version,
+      createdAt: createdAt,
+      payload: {
+        'score': score.clamp(0.0, 1.0),
+        'hardWords': List<String>.unmodifiable(hardWords),
+      },
+    );
+  }
+
+  /// Parses from JSON; null when malformed or the task is unknown.
+  static ModelAnnotation? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final task = json['task'];
+    final version = json['version'];
+    final createdAt = json['createdAt'];
+    final payload = json['payload'];
+    if (task is! String || !ModelTask.isKnown(task)) return null;
+    if (version is! int || createdAt is! String || payload is! Map) {
+      return null;
+    }
+    final parsedAt = DateTime.tryParse(createdAt);
+    if (parsedAt == null) return null;
+    return ModelAnnotation(
+      task: task,
+      version: version,
+      createdAt: parsedAt,
+      payload: Map<String, Object?>.from(payload),
+    );
+  }
+
+  /// A [ModelTask] identifier.
+  final String task;
+
+  /// Model/prompt version that produced this result.
+  final int version;
+
+  /// When the result was produced.
+  final DateTime createdAt;
+
+  /// Task-specific result data (plain JSON).
+  final Map<String, Object?> payload;
+
+  /// `summarize` text, or null for other tasks / malformed payloads.
+  String? get summaryText {
+    if (task != ModelTask.summarize) return null;
+    final text = payload['text'];
+    return text is String && text.isNotEmpty ? text : null;
+  }
+
+  /// `difficulty` score in 0–1, or null for other tasks / malformed payloads.
+  double? get difficultyScore {
+    if (task != ModelTask.difficulty) return null;
+    final score = payload['score'];
+    return score is num ? score.toDouble().clamp(0.0, 1.0) : null;
+  }
+
+  /// `difficulty` hard words; empty for other tasks / malformed payloads.
+  List<String> get hardWords {
+    if (task != ModelTask.difficulty) return const [];
+    final raw = payload['hardWords'];
+    if (raw is! List) return const [];
+    return raw.whereType<String>().toList(growable: false);
+  }
+
+  /// The map to merge into [SectionMetadata.modelAnnotations].
+  Map<String, Object?> toAnnotations() => {task: toJson()};
+
+  /// Serialises to JSON (`createdAt` as UTC ISO-8601).
+  Map<String, Object?> toJson() => {
+    'task': task,
+    'version': version,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+    'payload': payload,
+  };
+}
+
 /// Metadata describing one section without its text.
 class SectionMetadata {
   /// Creates section metadata.
@@ -86,6 +215,13 @@ class SectionMetadata {
     final raw = modelAnnotations['difficultyPerWord'];
     if (raw is! List) return null;
     return [for (final v in raw) (v as num).toDouble()];
+  }
+
+  /// The typed result for [task] (a [ModelTask] id), or null when absent
+  /// or malformed.
+  ModelAnnotation? annotationFor(String task) {
+    final annotation = ModelAnnotation.fromJson(modelAnnotations[task]);
+    return annotation?.task == task ? annotation : null;
   }
 
   /// Serialises to JSON.
