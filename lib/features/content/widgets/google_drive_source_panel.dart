@@ -371,7 +371,9 @@ class _ConnectionRow extends StatelessWidget {
     }
 
     return Semantics(
-      label: isAuthenticated ? 'Google Drive connected' : 'Connect Google Drive',
+      label: isAuthenticated
+          ? 'Google Drive connected'
+          : 'Connect Google Drive',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
@@ -406,25 +408,27 @@ class _ConnectionRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
+                      // Wrap, not Row: on narrow phones (390pt) and at
+                      // larger text scales the status pill drops to its own
+                      // line instead of overflowing.
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Flexible(
-                            child: Text(
-                              'Google Drive',
-                              style: RunThruTypography.rowTitle.copyWith(
-                                color: RunThruTokens.shellTextPrimary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            'Google Drive',
+                            style: RunThruTypography.rowTitle.copyWith(
+                              color: RunThruTokens.shellTextPrimary,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          if (statusLabel != null) ...[
-                            const SizedBox(width: 7),
+                          if (statusLabel != null)
                             RunThruStatusPill(
                               label: statusLabel,
                               tone: statusTone,
                             ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 2),
