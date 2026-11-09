@@ -156,5 +156,24 @@ void main() {
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
       handle.dispose();
     });
+
+    testWidgets('primary button announces its label once and is tappable', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: RunThruPrimaryButton(label: 'Go', onPressed: () => taps++),
+          ),
+        ),
+      );
+
+      expect(find.bySemanticsLabel('Go'), findsOneWidget);
+      tester.semantics.tap(find.semantics.byLabel('Go'));
+      expect(taps, 1);
+      handle.dispose();
+    });
   });
 }

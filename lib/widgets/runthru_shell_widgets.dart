@@ -454,10 +454,14 @@ class RunThruPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
+    // The Semantics node owns the label and the tap; excluding the child
+    // stops screen readers announcing the label twice.
     return Semantics(
       button: true,
       enabled: enabled,
       label: label,
+      onTap: onPressed,
+      excludeSemantics: true,
       child: GestureDetector(
         onTap: onPressed,
         child: Opacity(
