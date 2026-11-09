@@ -49,7 +49,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
-| A-01 | Define `summarize` and `difficulty` tasks + annotation schema | P2 | in-progress | swarm/A-01 | `lib/services/edge_ai_queue.dart`, `lib/services/content_store/section_models.dart` | unit tests |
+| A-01 | Define `summarize` and `difficulty` tasks + annotation schema | P2 | done | swarm/A-01 | `lib/services/edge_ai_queue.dart`, `lib/services/content_store/section_models.dart` | c45ca7f |
 | A-02 | Implement a `ModelProcessor` behind an opt-in flag (default off) | P2 | todo | | `lib/services/edge_ai_queue.dart`, new `lib/services/ai/` | unit tests with fake transport |
 | A-03 | Consent + settings toggle; privacy policy addendum draft | P2 | todo | | `lib/screens/settings_screen.dart`, `doc/legal/privacy_policy.md` | a11y guideline tests |
 
