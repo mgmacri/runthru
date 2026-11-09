@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
@@ -90,13 +91,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final activePaths = pdfListAsync.valueOrNull
         ?.map((e) => e.filePath)
         .toSet();
-    final shelf = activePaths == null
-        ? rawShelf
-        : rawShelf
-              .where(
-                (r) => r.source != 'local' || activePaths.contains(r.contentId),
-              )
-              .toList();
+    // R-04: a build without Drive OAuth config cannot resume Drive items.
+    final driveAvailable = ref.watch(googleDriveAvailableProvider);
+    final shelf = rawShelf
+        .where(
+          (r) =>
+              (activePaths == null ||
+                  r.source != 'local' ||
+                  activePaths.contains(r.contentId)) &&
+              (driveAvailable || !r.contentId.startsWith('drive://')),
+        )
+        .toList();
     final authState = ref.watch(instapaperAuthProvider);
     final sourceCount = 1 + (authState is InstapaperAuthAuthenticated ? 1 : 0);
     final normalizedSearchQuery = _searchQuery.trim().toLowerCase();
