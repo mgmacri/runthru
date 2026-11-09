@@ -1,8 +1,15 @@
+/// Store-screenshot generator, not a gate test. Excluded from the default
+/// `flutter test` run via `dart_test.yaml`. Generate with:
+///   flutter test --tags screenshots test/screenshots
+@Tags(['screenshots'])
+library;
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/app.dart';
@@ -36,6 +43,12 @@ void main() {
   });
 
   testWidgets('captures app screens', (tester) async {
+    // The reading screen enters desktop fullscreen when the host is
+    // Linux/macOS/Windows; stub the plugin channel so it is a no-op here.
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('window_manager'),
+      (_) async => null,
+    );
     await tester.binding.setSurfaceSize(phoneSize);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -104,6 +117,10 @@ void main() {
         hasSeenReadingGoalOnboarding: true,
       ),
     );
+
+    // Unmount and drain timers left by the reading screen (hints, autosave).
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 10));
   });
 }
 
@@ -139,13 +156,16 @@ Future<void> _capture(
 
   final boundary =
       key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-  final image = await boundary.toImage(pixelRatio: 3);
-  final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-  image.dispose();
-
-  File(
-    '${outputDir.path}/$filename',
-  ).writeAsBytesSync(byteData!.buffer.asUint8List());
+  // toImage/toByteData complete on the real event loop; under testWidgets'
+  // fake async they never resolve and the test hangs until timeout.
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 3);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    File(
+      '${outputDir.path}/$filename',
+    ).writeAsBytesSync(byteData!.buffer.asUint8List());
+  });
 }
 
 Widget _providers({required AppConfig config, required Widget child}) {
