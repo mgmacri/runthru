@@ -175,6 +175,8 @@ Widget _providers({required AppConfig config, required Widget child}) {
       googleDriveAuthProvider.overrideWith(
         () => _FakeGoogleDriveAuth(const GoogleDriveAuthUnauthenticated()),
       ),
+      // Store builds ship with Drive OAuth config; show the source.
+      googleDriveAvailableProvider.overrideWithValue(true),
       googleDriveClientProvider.overrideWithValue(_FakeGoogleDriveClient()),
       driveLocalStoreProvider.overrideWithValue(
         DriveLocalStore(rootResolver: () async => null),

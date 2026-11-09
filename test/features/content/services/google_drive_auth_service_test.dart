@@ -205,6 +205,69 @@ void main() {
     });
   });
 
+  // R-04: the UI hides Drive when this is false.
+  group('GoogleDriveAuthService.isConfigured', () {
+    const validId =
+        '726962831034-r1qhhcdl8vk8l26l6giipnuh8j5t7626.apps.googleusercontent.com';
+
+    GoogleDriveAuthService build({
+      required bool android,
+      required bool ios,
+      String? iosClientId,
+      String? webClientId,
+      bool googleServicesJson = false,
+    }) => GoogleDriveAuthService(
+      signInAdapter: _FakeSignInAdapter(),
+      tokenStore: _MemoryTokenStore(),
+      isAndroid: android,
+      isIOS: ios,
+      iosClientId: iosClientId,
+      androidServerClientId: webClientId,
+      androidUsesGoogleServicesJson: googleServicesJson,
+    );
+
+    test('Android with a valid web client ID is configured', () {
+      expect(
+        build(android: true, ios: false, webClientId: validId).isConfigured,
+        isTrue,
+      );
+    });
+
+    test('Android with no ID or a placeholder is not configured', () {
+      expect(build(android: true, ios: false).isConfigured, isFalse);
+      expect(
+        build(
+          android: true,
+          ios: false,
+          webClientId: 'your_web_oauth_client_id.apps.googleusercontent.com',
+        ).isConfigured,
+        isFalse,
+      );
+    });
+
+    test('Android google-services.json opt-in counts as configured', () {
+      expect(
+        build(android: true, ios: false, googleServicesJson: true).isConfigured,
+        isTrue,
+      );
+    });
+
+    test('iOS needs a valid iOS client ID', () {
+      expect(build(android: false, ios: true).isConfigured, isFalse);
+      expect(
+        build(android: false, ios: true, iosClientId: validId).isConfigured,
+        isTrue,
+      );
+    });
+
+    test('desktop/test hosts are never configured', () {
+      expect(
+        build(android: false, ios: false, webClientId: validId).isConfigured,
+        isFalse,
+      );
+    });
+  });
+
   group('GoogleDriveAuthService google_sign_in lifecycle', () {
     test('Android initializes google_sign_in with GOOGLE_WEB_CLIENT_ID', () async {
       final adapter = _FakeSignInAdapter();

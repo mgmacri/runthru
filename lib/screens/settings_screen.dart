@@ -5,6 +5,7 @@ import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
 import 'package:runthru/core/wcag_contrast.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/settings/widgets/pacing_panel.dart';
 import 'package:runthru/features/settings/widgets/spacing_controls.dart';
 import 'package:runthru/store/config.dart';
@@ -282,51 +283,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
 
-            NeumorphicCard(
-              key: _googleDriveBrowserSettingKey,
-              surface: RunThruSurface.shell,
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.manage_search_rounded,
-                    size: 22,
-                    color: RunThruTokens.shellAccent,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Use full Drive browser',
-                          style: RunThruTypography.title,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Browse supported files across Google Drive. This requires broader Drive access and may not be available in some organizations.',
-                          style: RunThruTypography.caption.copyWith(
-                            color: RunThruTokens.shellTextSecondary,
+            // R-04: hidden when the build has no Drive OAuth config.
+            if (ref.watch(googleDriveAvailableProvider))
+              NeumorphicCard(
+                key: _googleDriveBrowserSettingKey,
+                surface: RunThruSurface.shell,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.manage_search_rounded,
+                      size: 22,
+                      color: RunThruTokens.shellAccent,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Use full Drive browser',
+                            style: RunThruTypography.title,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Browse supported files across Google Drive. This requires broader Drive access and may not be available in some organizations.',
+                            style: RunThruTypography.caption.copyWith(
+                              color: RunThruTokens.shellTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Switch.adaptive(
-                    value:
-                        config.googleDriveAccessMode ==
-                        GoogleDriveAccessMode.fullDriveBrowser,
-                    activeThumbColor: RunThruTokens.shellAccent,
-                    activeTrackColor: RunThruTokens.shellAccent,
-                    onChanged: (enabled) => notifier.setGoogleDriveAccessMode(
-                      enabled
-                          ? GoogleDriveAccessMode.fullDriveBrowser
-                          : GoogleDriveAccessMode.selectedFilesOnly,
+                    const SizedBox(width: 12),
+                    Switch.adaptive(
+                      value:
+                          config.googleDriveAccessMode ==
+                          GoogleDriveAccessMode.fullDriveBrowser,
+                      activeThumbColor: RunThruTokens.shellAccent,
+                      activeTrackColor: RunThruTokens.shellAccent,
+                      onChanged: (enabled) => notifier.setGoogleDriveAccessMode(
+                        enabled
+                            ? GoogleDriveAccessMode.fullDriveBrowser
+                            : GoogleDriveAccessMode.selectedFilesOnly,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
             // ── 3D Mode ──
             NeumorphicCard(

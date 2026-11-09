@@ -78,6 +78,15 @@ final googleDriveAuthServiceProvider = Provider<GoogleDriveAuthService>((ref) {
   );
 });
 
+/// Whether Google Drive should be offered anywhere in the UI.
+///
+/// False when the build lacks OAuth dart-defines for this platform. Every
+/// Drive entry point (Sources panel, add-source action, settings) checks this
+/// so users never see a source that cannot connect.
+final googleDriveAvailableProvider = Provider<bool>(
+  (ref) => ref.watch(googleDriveAuthServiceProvider).isConfigured,
+);
+
 /// Manages the Google Drive authentication lifecycle.
 @Riverpod(keepAlive: true)
 class GoogleDriveAuth extends _$GoogleDriveAuth {

@@ -51,8 +51,11 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
         .toList();
     final authState = ref.watch(instapaperAuthProvider);
     final isInstapaperConnected = authState is InstapaperAuthAuthenticated;
+    // R-04: builds without OAuth dart-defines hide Drive entirely.
+    final driveAvailable = ref.watch(googleDriveAvailableProvider);
     final driveAuthState = ref.watch(googleDriveAuthProvider);
-    final isDriveConnected = driveAuthState is GoogleDriveAuthAuthenticated;
+    final isDriveConnected =
+        driveAvailable && driveAuthState is GoogleDriveAuthAuthenticated;
     // Clipboard is always available, plus each user source and connected service.
     final sourceCount =
         1 +
@@ -176,7 +179,8 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                       showDivider: true,
                     ),
                   ),
-                  const SliverToBoxAdapter(child: GoogleDriveSourcePanel()),
+                  if (driveAvailable)
+                    const SliverToBoxAdapter(child: GoogleDriveSourcePanel()),
                 ],
                 if (_filter == _SourcesFilter.all ||
                     _filter == _SourcesFilter.articles) ...[
@@ -227,13 +231,14 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   semanticsLabel: 'Add from Instapaper',
                   onTap: () => _handleInstapaperAction(context),
                 ),
-                LibrarySourceAction(
-                  icon: Icons.cloud_outlined,
-                  iconWidget: const GoogleDriveBrandIcon(size: 20),
-                  label: 'Drive',
-                  semanticsLabel: 'Add from Google Drive',
-                  onTap: () => _handleGoogleDriveAction(context),
-                ),
+                if (driveAvailable)
+                  LibrarySourceAction(
+                    icon: Icons.cloud_outlined,
+                    iconWidget: const GoogleDriveBrandIcon(size: 20),
+                    label: 'Drive',
+                    semanticsLabel: 'Add from Google Drive',
+                    onTap: () => _handleGoogleDriveAction(context),
+                  ),
               ],
             ),
           ],

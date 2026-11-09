@@ -258,6 +258,30 @@ class GoogleDriveAuthService {
 
   bool get _isIOS => _isIOSOverride ?? Platform.isIOS;
 
+  /// Whether this build carries usable OAuth configuration for the current
+  /// platform. When false the UI hides Google Drive entirely rather than
+  /// showing a source that can only fail (release rule R-04).
+  ///
+  /// iOS needs a well-formed `GOOGLE_IOS_CLIENT_ID`; Android needs a
+  /// well-formed `GOOGLE_WEB_CLIENT_ID` or google-services.json opt-in.
+  /// Other platforms are unsupported.
+  bool get isConfigured {
+    if (_isIOS) {
+      final id = _iosClientId?.trim();
+      return id != null &&
+          id.isNotEmpty &&
+          validateAndroidServerClientId(id) == null;
+    }
+    if (_isAndroid) {
+      return validateAndroidServerClientId(
+            _androidServerClientId,
+            allowGoogleServicesJson: _androidUsesGoogleServicesJson,
+          ) ==
+          null;
+    }
+    return false;
+  }
+
   /// Restores a lightweight Google Sign-In session if available.
   Future<GoogleDriveUser?> restoreSession() async {
     try {

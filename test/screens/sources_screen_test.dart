@@ -143,10 +143,12 @@ class _FakeGoogleDriveClient extends GoogleDriveClient {
   }
 }
 
-Widget _harness(Widget child) {
+Widget _harness(Widget child, {bool driveAvailable = true}) {
   SharedPreferences.setMockInitialValues({});
   return ProviderScope(
     overrides: [
+      // Tests run without OAuth dart-defines; opt in explicitly (R-04).
+      googleDriveAvailableProvider.overrideWithValue(driveAvailable),
       instapaperAuthProvider.overrideWith(
         () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
       ),
@@ -177,6 +179,7 @@ Widget _harnessWithSources(List<LibrarySource> sources) {
   return ProviderScope(
     overrides: [
       librarySourcesProvider.overrideWith(() => _FakeLibrarySources(sources)),
+      googleDriveAvailableProvider.overrideWithValue(true),
       instapaperAuthProvider.overrideWith(
         () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
       ),
@@ -233,6 +236,7 @@ Widget _homeShellRouterHarness({
       instapaperAuthProvider.overrideWith(
         () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
       ),
+      googleDriveAvailableProvider.overrideWithValue(true),
       googleDriveAuthProvider.overrideWith(
         () => driveAuth ?? _FakeGoogleDriveAuth(driveAuthState),
       ),
@@ -331,6 +335,25 @@ void main() {
       expect(find.text('Instapaper'), findsWidgets);
       expect(find.text('Drive'), findsOneWidget);
     });
+
+    testWidgets(
+      'hides every Drive entry point when the build has no OAuth config',
+      (tester) async {
+        await tester.pumpWidget(
+          _harness(const SourcesScreen(), driveAvailable: false),
+        );
+        await tester.pump();
+
+        expect(find.text('Google Drive'), findsNothing);
+
+        await tester.tap(find.bySemanticsLabel('Open reading sources'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Paste'), findsOneWidget);
+        expect(find.text('Drive'), findsNothing);
+        expect(find.bySemanticsLabel('Add from Google Drive'), findsNothing);
+      },
+    );
 
     testWidgets('filters folders, files, and article sources', (tester) async {
       await tester.pumpWidget(_harness(const SourcesScreen()));
