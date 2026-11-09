@@ -132,10 +132,24 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
+  /// Records the store-delivered RunThru Unlock entitlement. Only
+  /// `PurchaseController` calls this, after the store reports the purchase.
+  Future<void> setHasPremium(bool value) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(hasPremium: value);
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
   Future<void> setParallaxIntensity(ParallaxIntensity intensity) =>
       _synchronized(() async {
         final config = state.valueOrNull ?? const AppConfig();
-        final updated = config.copyWith(parallaxIntensity: intensity);
+        // The 3D room is part of RunThru Unlock; free users stay flat.
+        final updated = config.copyWith(
+          parallaxIntensity: config.hasPremium
+              ? intensity
+              : ParallaxIntensity.none,
+        );
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
       });
@@ -198,7 +212,10 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
         final config = state.valueOrNull ?? const AppConfig();
         final updated = config.copyWith(
           defaultWpm: goal.wpm,
-          parallaxIntensity: goal.parallaxIntensity,
+          // The 3D room is part of RunThru Unlock; free users stay flat.
+          parallaxIntensity: config.hasPremium
+              ? goal.parallaxIntensity
+              : ParallaxIntensity.none,
           readingGoalPreset: goal.preset,
         );
         state = AsyncData<AppConfig>(updated);

@@ -42,9 +42,10 @@ Widget _harness(AppConfig config) {
 }
 
 void main() {
+  // R-11: the selector is only shown to RunThru Unlock owners.
   group('ParallaxIntensitySelector', () {
     testWidgets('shows 4 segments in correct order', (tester) async {
-      await tester.pumpWidget(_harness(const AppConfig()));
+      await tester.pumpWidget(_harness(const AppConfig(hasPremium: true)));
       await tester.pumpAndSettle();
 
       // Scroll to the 3D Room Mode section (it's below the fold in ListView)
@@ -64,7 +65,12 @@ void main() {
 
     testWidgets('tapping a segment updates selection', (tester) async {
       await tester.pumpWidget(
-        _harness(const AppConfig(parallaxIntensity: ParallaxIntensity.subtle)),
+        _harness(
+          const AppConfig(
+            hasPremium: true,
+            parallaxIntensity: ParallaxIntensity.subtle,
+          ),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -96,7 +102,12 @@ void main() {
 
     testWidgets('each segment has semantics label and hint', (tester) async {
       await tester.pumpWidget(
-        _harness(const AppConfig(parallaxIntensity: ParallaxIntensity.subtle)),
+        _harness(
+          const AppConfig(
+            hasPremium: true,
+            parallaxIntensity: ParallaxIntensity.subtle,
+          ),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -166,5 +177,19 @@ void main() {
     );
     expect(container.read(configProvider).requireValue.anchorColorIndex, 2);
     handle.dispose();
+  });
+
+  testWidgets('free users see an unlock button instead of the 3D selector', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_harness(const AppConfig()));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('3D Room Mode'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Subtle'), findsNothing);
+    expect(find.text('Unlock the 3D room'), findsOneWidget);
   });
 }

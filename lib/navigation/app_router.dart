@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/sample_document.dart';
 import 'package:runthru/features/content/models/drive_content_identity.dart';
+import 'package:runthru/design/design.dart';
 import 'package:runthru/navigation/cube_transition.dart';
 import 'package:runthru/navigation/wall_fold_transition.dart';
 import 'package:runthru/screens/home_shell.dart';
@@ -12,6 +14,9 @@ import 'package:runthru/screens/privacy_policy_screen.dart';
 import 'package:runthru/screens/range_picker_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
 import 'package:runthru/screens/settings_sources_screen.dart';
+import 'package:runthru/services/purchase_service.dart';
+import 'package:runthru/widgets/runthru_shell_widgets.dart';
+import 'package:runthru/widgets/unlock_sheet.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
 
@@ -68,7 +73,7 @@ final appRouter = GoRouter(
         final filePath = state.uri.queryParameters['path'] ?? '';
         return cubeTransitionPage(
           key: state.pageKey,
-          child: RangePickerScreen(filePath: filePath),
+          child: _RangePickerGate(filePath: filePath),
         );
       },
     ),
@@ -228,4 +233,49 @@ bool _isValidDriveSourceId(String? sourceId) {
   final trimmed = sourceId.trim();
   if (!trimmed.startsWith('drive://')) return false;
   return trimmed.substring('drive://'.length).trim().isNotEmpty;
+}
+
+/// Page ranges are part of RunThru Unlock.
+class _RangePickerGate extends ConsumerWidget {
+  const _RangePickerGate({required this.filePath});
+
+  final String filePath;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(hasPremiumProvider)) {
+      return RangePickerScreen(filePath: filePath);
+    }
+    return Scaffold(
+      backgroundColor: RunThruTokens.shellBase,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: RunThruHeaderIconButton(
+                icon: Icons.arrow_back_ios_new_rounded,
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+            const Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  child: UnlockPrompt(
+                    title: 'Page ranges',
+                    body:
+                        'Read only the pages you need, such as one assigned '
+                        'chapter, with RunThru Unlock.',
+                    icon: Icons.auto_stories_outlined,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -205,48 +205,58 @@ void main() {
     );
   });
 
-  // R-01: RunThru 2.0 ships free. Parallax and presets are no longer
-  // clamped to ParallaxIntensity.none for non-premium users.
-  group('ConfigNotifier free release (R-01)', () {
-    test('setParallaxIntensity applies the chosen intensity', () async {
-      SharedPreferences.setMockInitialValues({});
+  // R-11: the 3D room is part of the one-time RunThru Unlock purchase.
+  group('ConfigNotifier RunThru Unlock (R-11)', () {
+    Future<ProviderContainer> containerWith(Map<String, Object> prefs) async {
+      SharedPreferences.setMockInitialValues(prefs);
       final container = ProviderContainer();
       addTearDown(container.dispose);
       await container.read(configProvider.future);
+      return container;
+    }
 
+    test('free users stay flat when choosing a 3D intensity', () async {
+      final container = await containerWith({});
       await container
           .read(configProvider.notifier)
           .setParallaxIntensity(ParallaxIntensity.subtle);
+      expect(
+        container.read(configProvider).requireValue.parallaxIntensity,
+        ParallaxIntensity.none,
+      );
+    });
 
+    test('owners get the chosen intensity and preset parallax', () async {
+      final container = await containerWith({});
+      final notifier = container.read(configProvider.notifier);
+      await notifier.setHasPremium(true);
+
+      await notifier.setParallaxIntensity(ParallaxIntensity.subtle);
       expect(
         container.read(configProvider).requireValue.parallaxIntensity,
         ParallaxIntensity.subtle,
       );
-    });
 
-    test('applyReadingGoalPreset applies the preset parallax', () async {
-      SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await container.read(configProvider.future);
       final goal = readingGoalConfigs.first;
-
-      await container
-          .read(configProvider.notifier)
-          .applyReadingGoalPreset(goal);
-
+      await notifier.applyReadingGoalPreset(goal);
       final config = container.read(configProvider).requireValue;
       expect(config.parallaxIntensity, goal.parallaxIntensity);
       expect(config.defaultWpm, goal.wpm);
     });
 
-    test('legacy hasPremium key in stored JSON is ignored', () {
-      final config = AppConfig.fromJson({
-        'hasPremium': true,
-        'defaultWpm': 250,
-      });
-      expect(config.defaultWpm, 250);
-      expect(config.toJson().containsKey('hasPremium'), isFalse);
+    test('the entitlement persists under premiumUnlocked', () async {
+      final container = await containerWith({});
+      await container.read(configProvider.notifier).setHasPremium(true);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('runthru_config')!;
+      expect(raw, contains('"premiumUnlocked":true'));
+      expect(raw, isNot(contains('"hasPremium"')));
+    });
+
+    test('legacy hasPremium from the old placeholder grants nothing', () {
+      final legacy = AppConfig.fromJson({'hasPremium': true});
+      expect(legacy.hasPremium, isFalse);
+      expect(AppConfig.fromJson({'premiumUnlocked': true}).hasPremium, isTrue);
     });
   });
 

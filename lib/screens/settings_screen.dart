@@ -13,6 +13,7 @@ import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
 import 'package:runthru/widgets/runthru_shell_widgets.dart';
+import 'package:runthru/widgets/unlock_sheet.dart';
 import 'package:runthru/widgets/wpm_slider.dart';
 
 /// Settings screen with neumorphic cards.
@@ -347,10 +348,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _ParallaxIntensitySelector(
-                    selected: config.parallaxIntensity,
-                    onChanged: notifier.setParallaxIntensity,
-                  ),
+                  // Part of RunThru Unlock.
+                  if (config.hasPremium)
+                    _ParallaxIntensitySelector(
+                      selected: config.parallaxIntensity,
+                      onChanged: notifier.setParallaxIntensity,
+                    )
+                  else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: RunThruPrimaryButton(
+                        icon: Icons.lock_open,
+                        label: 'Unlock the 3D room',
+                        onPressed: () => showUnlockSheet(context),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -500,6 +512,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       );
                     },
+                  ),
+                ],
+              ),
+            ),
+
+            // ── RunThru Unlock (purchase + restore, store requirement) ──
+            NeumorphicCard(
+              surface: RunThruSurface.shell,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('RunThru Unlock', style: RunThruTypography.title),
+                  const SizedBox(height: 4),
+                  Text(
+                    config.hasPremium
+                        ? 'Active. Thank you for supporting RunThru.'
+                        : 'One payment, no subscription. Adds Reading Wins, '
+                              'page ranges and the 3D room.',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellTextSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  RunThruPrimaryButton(
+                    icon: config.hasPremium ? Icons.check : Icons.lock_open,
+                    label: config.hasPremium
+                        ? 'View purchase'
+                        : 'Unlock or restore purchase',
+                    onPressed: () => showUnlockSheet(context),
                   ),
                 ],
               ),

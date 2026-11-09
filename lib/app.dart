@@ -10,6 +10,7 @@ import 'package:runthru/features/content/models/shared_content.dart';
 import 'package:runthru/features/content/providers/clipboard_detect_provider.dart';
 import 'package:runthru/features/content/providers/share_intent_provider.dart';
 import 'package:runthru/navigation/app_router.dart';
+import 'package:runthru/services/purchase_service.dart';
 
 /// Root [ThemeData] for RunThru. Exposed so widget tests can assert the real
 /// SnackBar and text styling instead of reconstructing it.
@@ -110,6 +111,10 @@ class _ContentLifecycleObserverState
   void initState() {
     super.initState();
     _lifecycleListener = AppLifecycleListener(onResume: _onResume);
+
+    // Start listening for store purchases at launch so a purchase that
+    // finished in the background, or in a previous session, is delivered.
+    ref.read(purchaseControllerProvider);
 
     // Set up share intent listener first — it takes priority over clipboard.
     // On cold-start via share intent, the platform channel message is queued

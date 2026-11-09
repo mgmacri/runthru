@@ -8,6 +8,8 @@ import 'package:runthru/screens/analytics_screen.dart';
 import 'package:runthru/screens/library_screen.dart';
 import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/screens/sources_screen.dart';
+import 'package:runthru/services/purchase_service.dart';
+import 'package:runthru/widgets/unlock_sheet.dart';
 
 /// Shell that wraps the four main tabs in a [PageView] with a bottom
 /// navigation bar. Swipe left/right to move between pages.
@@ -171,7 +173,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               container: true,
               explicitChildNodes: true,
               label: 'Analytics screen',
-              child: const AnalyticsScreen(),
+              child: const _AnalyticsTab(),
             ),
           ),
           _KeepAlivePage(
@@ -531,5 +533,29 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
+  }
+}
+
+/// Reading Wins is part of RunThru Unlock.
+class _AnalyticsTab extends ConsumerWidget {
+  const _AnalyticsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(hasPremiumProvider)) return const AnalyticsScreen();
+    return const Scaffold(
+      backgroundColor: RunThruTokens.shellBase,
+      body: Center(
+        child: SingleChildScrollView(
+          child: UnlockPrompt(
+            title: 'Reading Wins',
+            body:
+                'Track reading time, streaks and gentle progress notes '
+                'with RunThru Unlock.',
+            icon: Icons.emoji_events_outlined,
+          ),
+        ),
+      ),
+    );
   }
 }

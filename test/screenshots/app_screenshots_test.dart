@@ -128,6 +128,7 @@ Future<void> _capture(
   Widget screen, {
   AppConfig config = const AppConfig(
     hasSeenReadingGoalOnboarding: true,
+    hasPremium: true,
     googleDriveAccessMode: GoogleDriveAccessMode.fullDriveBrowser,
   ),
   bool settle = true,
