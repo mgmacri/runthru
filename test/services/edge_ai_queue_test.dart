@@ -260,34 +260,37 @@ void main() {
       );
     });
 
-    test('processor results persist and read back typed via the store', () async {
-      final processor = _RecordingProcessor()
-        ..result = ModelAnnotation.summarize(
-          text: 'Numbers one to five.',
-          version: 2,
-          createdAt: at,
-        ).toAnnotations();
-      final queue = EdgeAiQueue(store: store, processor: processor);
+    test(
+      'processor results persist and read back typed via the store',
+      () async {
+        final processor = _RecordingProcessor()
+          ..result = ModelAnnotation.summarize(
+            text: 'Numbers one to five.',
+            version: 2,
+            createdAt: at,
+          ).toAnnotations();
+        final queue = EdgeAiQueue(store: store, processor: processor);
 
-      await queue.enqueue(
-        const SectionProcessingRequest(
-          bookId: 'edgebook01',
-          sectionIndex: 0,
-          task: ModelTask.summarize,
-        ),
-      );
+        await queue.enqueue(
+          const SectionProcessingRequest(
+            bookId: 'edgebook01',
+            sectionIndex: 0,
+            task: ModelTask.summarize,
+          ),
+        );
 
-      final fresh = ContentStore(
-        rootResolver: () async => '${tempDir.path}/store',
-      );
-      final annotation = (await fresh.getSection(
-        'edgebook01',
-        0,
-      ))!.meta.annotationFor(ModelTask.summarize);
-      expect(annotation?.summaryText, 'Numbers one to five.');
-      expect(annotation?.version, 2);
-      expect(annotation?.createdAt, at);
-    });
+        final fresh = ContentStore(
+          rootResolver: () async => '${tempDir.path}/store',
+        );
+        final annotation = (await fresh.getSection(
+          'edgebook01',
+          0,
+        ))!.meta.annotationFor(ModelTask.summarize);
+        expect(annotation?.summaryText, 'Numbers one to five.');
+        expect(annotation?.version, 2);
+        expect(annotation?.createdAt, at);
+      },
+    );
 
     test('request JSON round-trips; unknown tasks are rejected', () {
       const request = SectionProcessingRequest(
@@ -309,28 +312,31 @@ void main() {
       );
     });
 
-    test('coalescing is per task: same section, two tasks, both kept', () async {
-      // Retryable failure keeps requests pending so we can inspect them.
-      final processor = _AlwaysRetryProcessor();
-      final queue = EdgeAiQueue(store: store, processor: processor);
-      const summarize = SectionProcessingRequest(
-        bookId: 'edgebook01',
-        sectionIndex: 0,
-        task: ModelTask.summarize,
-      );
-      const difficulty = SectionProcessingRequest(
-        bookId: 'edgebook01',
-        sectionIndex: 0,
-        task: ModelTask.difficulty,
-      );
+    test(
+      'coalescing is per task: same section, two tasks, both kept',
+      () async {
+        // Retryable failure keeps requests pending so we can inspect them.
+        final processor = _AlwaysRetryProcessor();
+        final queue = EdgeAiQueue(store: store, processor: processor);
+        const summarize = SectionProcessingRequest(
+          bookId: 'edgebook01',
+          sectionIndex: 0,
+          task: ModelTask.summarize,
+        );
+        const difficulty = SectionProcessingRequest(
+          bookId: 'edgebook01',
+          sectionIndex: 0,
+          task: ModelTask.difficulty,
+        );
 
-      await queue.enqueue(summarize);
-      await queue.enqueue(difficulty);
-      await queue.enqueue(summarize);
+        await queue.enqueue(summarize);
+        await queue.enqueue(difficulty);
+        await queue.enqueue(summarize);
 
-      final keys = (await queue.pending()).map((r) => r.key).toList();
-      expect(keys, unorderedEquals([summarize.key, difficulty.key]));
-    });
+        final keys = (await queue.pending()).map((r) => r.key).toList();
+        expect(keys, unorderedEquals([summarize.key, difficulty.key]));
+      },
+    );
 
     test('persisted unknown-task requests are skipped on load', () async {
       SharedPreferences.setMockInitialValues({
