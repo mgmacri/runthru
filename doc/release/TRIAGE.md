@@ -38,7 +38,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 
 | ID | Title | Sev | Status | Owner | Files | Verify |
 |----|-------|-----|--------|-------|-------|--------|
-| R-07 | Privacy policy: real contact, hosted URL, linked from Settings | P0 | in-progress | claude | `doc/legal/privacy_policy.md`, `lib/screens/settings_screen.dart`, gh-pages `privacy/index.html` | a5a6686 contact + URL in policy; 5a5186b in-app screen. Page committed on local gh-pages (9a22a0a); live at runthruapp.com/privacy once pushed. OWNER: paste URL into both store consoles |
+| R-07 | Privacy policy: real contact, hosted URL, linked from Settings | P0 | done | claude | `doc/legal/privacy_policy.md`, `lib/screens/settings_screen.dart`, gh-pages `privacy/index.html` | a5a6686 + gh-pages 9a22a0a; live at https://runthruapp.com/privacy. OWNER: paste URL into both store consoles |
 | R-08 | Store listing copy + screenshots + feature graphic | P0 | in-progress | claude | `doc/release/store/` (new), `screenshots/` | copy in doc/release/store/listing.md. OWNER: 6.9" screenshots, feature graphic, console entry |
 | R-09 | Version bump to `2.0.0+16`, release notes | P0 | done | claude | `pubspec.yaml`, `doc/release/CHANGELOG.md` (new) | 31bd936 — Android versionCode now auto-increments in Codemagic |
 | R-10 | Verify Codemagic env groups and signing (keystore, ASC key) | P0 | in-progress | claude | `codemagic.yaml` | static check OK (export compliance set, build numbers monotonic, groups referenced); Flutter pinned to 3.41.2. Remaining: green TestFlight + internal builds after push to `main` |
