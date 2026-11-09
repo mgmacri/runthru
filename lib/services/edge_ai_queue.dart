@@ -33,14 +33,18 @@ class SectionProcessingRequest {
     required this.bookId,
     required this.sectionIndex,
     required this.task,
-  });
+  }) : assert(
+         task == ModelTask.summarize || task == ModelTask.difficulty,
+         'task must be a ModelTask id',
+       );
 
-  /// Parses from JSON; null when malformed.
+  /// Parses from JSON; null when malformed or the task is not a [ModelTask].
   static SectionProcessingRequest? fromJson(Map<String, Object?> json) {
     final bookId = json['bookId'] as String?;
     final sectionIndex = json['sectionIndex'] as int?;
     final task = json['task'] as String?;
     if (bookId == null || sectionIndex == null || task == null) return null;
+    if (!ModelTask.isKnown(task)) return null;
     return SectionProcessingRequest(
       bookId: bookId,
       sectionIndex: sectionIndex,
@@ -54,7 +58,7 @@ class SectionProcessingRequest {
   /// Target section.
   final int sectionIndex;
 
-  /// Task identifier, e.g. `summarize`, `difficulty`.
+  /// A [ModelTask] identifier (`summarize` or `difficulty`).
   final String task;
 
   /// Coalescing key — one pending request per (book, section, task).
@@ -89,6 +93,8 @@ class RetryableModelException implements Exception {
 abstract interface class ModelProcessor {
   /// Processes [section] for [request.task]. Returns annotations to merge
   /// into the section's `modelAnnotations`, or null for "nothing to write".
+  /// Real processors return [ModelAnnotation.toAnnotations] so results are
+  /// keyed by task and readable via [SectionMetadata.annotationFor].
   Future<Map<String, Object?>?> process(
     SectionProcessingRequest request,
     Section section,
