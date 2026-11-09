@@ -15,17 +15,20 @@ fi
 FLUTTER="$FLUTTER_BIN/flutter"; DART="$FLUTTER_BIN/dart"
 QUICK=0; [ "${1:-}" = "--quick" ] && QUICK=1
 FAIL=0
+# Per-run temp files so parallel gates in swarm worktrees never overwrite each other.
+ANALYZE_LOG="$(mktemp -t runthru_analyze.XXXXXX)"; TEST_LOG="$(mktemp -t runthru_test.XXXXXX)"
+trap 'rm -f "$ANALYZE_LOG" "$TEST_LOG"' EXIT
 ok()   { printf '  ok    %s\n' "$1"; }
 bad()  { printf '  FAIL  %s\n' "$1"; FAIL=1; }
 
 echo "RunThru gate — $("$FLUTTER" --version 2>/dev/null | head -1)"
 
 echo "[1/6] dart analyze --fatal-infos"
-if "$DART" analyze --fatal-infos >/tmp/runthru_analyze.txt 2>&1; then ok "0 issues"; else bad "analyzer"; tail -20 /tmp/runthru_analyze.txt; fi
+if "$DART" analyze --fatal-infos >"$ANALYZE_LOG" 2>&1; then ok "0 issues"; else bad "analyzer"; tail -20 "$ANALYZE_LOG"; fi
 
 echo "[2/6] flutter test"
 if [ $QUICK -eq 1 ]; then echo "  skip  (--quick)"; else
-  if "$FLUTTER" test >/tmp/runthru_test.txt 2>&1; then ok "$(grep -oE '\+[0-9]+' /tmp/runthru_test.txt | tail -1 | tr -d +) tests passed"; else bad "tests"; grep -E '\[E\]|Some tests failed' /tmp/runthru_test.txt | sed 's/^[0-9:+ -]*//' | sort -u | head -20; fi
+  if "$FLUTTER" test >"$TEST_LOG" 2>&1; then ok "$(grep -oE '\+[0-9]+' "$TEST_LOG" | tail -1 | tr -d +) tests passed"; else bad "tests"; grep -E '\[E\]|Some tests failed' "$TEST_LOG" | sed 's/^[0-9:+ -]*//' | sort -u | head -20; fi
 fi
 
 echo "[3/6] no print/debugPrint outside logger"
