@@ -376,7 +376,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Instapaper'), findsOneWidget);
       expect(find.text('Not connected'), findsOneWidget);
-      expect(find.text('Substack'), findsOneWidget);
+      // Release rule: no "coming soon" placeholders in the UI.
+      expect(find.text('Substack'), findsNothing);
+      expect(find.textContaining('Coming soon'), findsNothing);
       expect(find.text('Add files'), findsNothing);
     });
 

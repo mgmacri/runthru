@@ -190,15 +190,6 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   const SliverToBoxAdapter(
                     child: InstapaperAuthTile(showDivider: true),
                   ),
-                  const SliverToBoxAdapter(
-                    child: _PlainSourceRow(
-                      icon: Icons.mail_outline_rounded,
-                      title: 'Substack',
-                      detail: 'Newsletter article source',
-                      status: 'Coming soon',
-                      statusColor: RunThruTokens.shellTextSecondary,
-                    ),
-                  ),
                 ],
                 SliverToBoxAdapter(child: _EmptyFilterHint(filter: _filter)),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 96)),
@@ -690,7 +681,7 @@ class _EmptyFilterHint extends StatelessWidget {
       _SourcesFilter.folders => 'Use the + menu to add a folder source.',
       _SourcesFilter.files => 'Use the + menu to add files or paste text.',
       _SourcesFilter.articles =>
-        'Instapaper is available now. Substack support can fit here later.',
+        'Connect Instapaper, or share a web link to RunThru.',
     };
 
     if (message == null) return const SizedBox.shrink();
