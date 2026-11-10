@@ -269,6 +269,43 @@ void main() {
       expect(find.bySemanticsLabel('Resume reading'), findsNothing);
     });
 
+    testWidgets('leaving a local book after reading does not throw', (
+      tester,
+    ) async {
+      // dispose() records Continue Reading progress, which reads the title;
+      // the title must not touch `ref` there (it is invalid during dispose).
+      final config = _FakeConfigNotifier(
+        const AppConfig(hasSeenReadingGoalOnboarding: true, defaultWpm: 600),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [configProvider.overrideWith(() => config)],
+          child: MaterialApp(
+            home: ParallaxReadingScreen(
+              filePath: '/books/local-book.epub',
+              contentSource: 'local',
+              clipboardDocument: ClipboardDocument(
+                title: '',
+                fullText: '',
+                document: ExtractedDocument(
+                  sentences: [
+                    Sentence(words: [for (var i = 0; i < 40; i++) 'w$i']),
+                  ],
+                ),
+                pastedAt: _openedAt,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+      // Let the title lookup's timeout and sync throttles finish.
+      await tester.pump(const Duration(seconds: 10));
+    });
+
     testWidgets('speed chips highlight only an exact speed match', (
       tester,
     ) async {

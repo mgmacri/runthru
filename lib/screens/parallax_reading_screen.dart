@@ -466,16 +466,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   String get _documentTitle {
     final clipTitle = widget.clipboardDocument?.title.trim();
     if (clipTitle != null && clipTitle.isNotEmpty) return clipTitle;
-    if (_isLocalFile) {
-      // The EPUB's own title when it has one ("The Lighthouse Keeper's
-      // Ledger", not "lighthouse").
-      final title = ref
-          .read(documentTitleProvider(widget.filePath))
-          .valueOrNull;
-      if (title != null) return title;
-    }
+    // The EPUB's own title when it has one ("The Lighthouse Keeper's
+    // Ledger", not "lighthouse"). Cached by build(): this getter also runs
+    // from dispose(), where `ref` must not be touched.
+    final title = _resolvedTitle;
+    if (title != null) return title;
     return prettyFileTitle(widget.filePath);
   }
+
+  /// Metadata title resolved by [documentTitleProvider], cached in build().
+  String? _resolvedTitle;
 
   String get _documentSubtitle {
     if (_isInstapaper) return 'Instapaper';
@@ -1415,7 +1415,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     );
     final readingMode = ref.watch(readingModeNotifierProvider);
     // Rebuild the header when the document's metadata title resolves.
-    if (_isLocalFile) ref.watch(documentTitleProvider(widget.filePath));
+    if (_isLocalFile) {
+      _resolvedTitle =
+          ref.watch(documentTitleProvider(widget.filePath)).valueOrNull ??
+          _resolvedTitle;
+    }
     ref.listen<ReadingMode>(readingModeNotifierProvider, (prev, next) {
       if (prev == next) return;
       unawaited(
