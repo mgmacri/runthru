@@ -664,10 +664,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      // A title card must not start reading behind the reader's back.
+      // Nobody is reading: stop the words. They used to keep flashing while
+      // the app was in the background (a call, another app, the notification
+      // shade), so the reader came back to a lost place. A title card must
+      // not start reading behind the reader's back either.
       _bookEndTimer?.cancel();
       if (_interlude is _TitleInterlude || _interlude is _HeadingInterlude) {
         _cancelInterlude();
+      }
+      if (ref.read(wordTimerProvider).isPlaying) {
+        ref.read(wordTimerProvider.notifier).pause();
       }
       _endAnalyticsSession();
       // Persist local bookmark for normal docs and Instapaper articles.

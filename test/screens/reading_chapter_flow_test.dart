@@ -462,6 +462,43 @@ void main() {
     });
   });
 
+  group('leaving the app', () {
+    testWidgets('pauses reading; coming back stays paused', (tester) async {
+      final c = await _open(tester);
+      await tester.tapAt(const Offset(210, 450));
+      await _run(tester, 0.8);
+      expect(_timer(c).isPlaying, isTrue);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      final leftAt = _timer(c).currentIndex;
+      expect(_timer(c).isPlaying, isFalse);
+
+      // However long the reader is away, not a word goes by.
+      await _run(tester, 5);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _run(tester, 2);
+      expect(_timer(c).isPlaying, isFalse);
+      expect(_timer(c).currentIndex, leftAt);
+      expect(find.bySemanticsLabel('Resume reading'), findsOneWidget);
+    });
+
+    testWidgets('a title card does not start reading in the background', (
+      tester,
+    ) async {
+      final c = await _open(tester);
+      expect(find.byType(ChapterTitleCard), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await _run(tester, 8);
+      expect(find.byType(ChapterTitleCard), findsNothing);
+      expect(_timer(c).isPlaying, isFalse);
+      expect(_timer(c).currentIndex, 13);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _run(tester, 1);
+    });
+  });
+
   group('with chapter moments off', () {
     testWidgets('headings read as words and nothing interrupts', (
       tester,
