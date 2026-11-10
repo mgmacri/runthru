@@ -128,6 +128,9 @@ final appRouter = GoRouter(
           key: state.pageKey,
           child: ReadingEntryOnboardingGate(
             child: ParallaxReadingScreen(
+              // A new share or paste while the reader is open must load the
+              // new text: same route, so key the reader by the document.
+              key: ValueKey(clipboardDoc?.pastedAt),
               filePath: 'clipboard://${clipboardDoc?.title ?? 'clipboard'}',
               contentSource: 'clipboard',
               clipboardDocument: clipboardDoc,

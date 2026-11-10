@@ -255,4 +255,28 @@ void main() {
     );
     expect(_pageText(tester), contains('b39'));
   });
+
+  testWidgets('an empty document renders nothing and does not throw', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookModeView(
+            words: const [],
+            startIndex: 0,
+            onTurn: (_) {},
+            fontFamily: 'Roboto',
+            fontSize: 20,
+            letterSpacing: 0,
+            wordSpacing: 0,
+            wpm: 250,
+            onFontSizeChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(BookModeView.pageKey), findsNothing);
+  });
 }

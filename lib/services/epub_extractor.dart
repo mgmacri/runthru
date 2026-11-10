@@ -426,7 +426,7 @@ String _stripHtml(String html) {
   text = text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
   text = text.replaceAll(
     RegExp(
-      r'</(p|div|h[1-6]|li|tr|blockquote|section|article)>',
+      r'</(p|div|h[1-6]|li|ul|ol|tr|td|th|table|caption|dd|dt|dl|blockquote|section|article|aside|header|footer|nav|main|figure|figcaption|pre|hr)>',
       caseSensitive: false,
     ),
     '\n\n',
@@ -436,14 +436,15 @@ String _stripHtml(String html) {
   // generic strip below could no longer see it as a tag.
   text = text.replaceAll(
     RegExp(
-      r'<(p|div|h[1-6]|li|tr|blockquote|section|article)(\s[^>]*)?>',
+      r'<(p|div|h[1-6]|li|ul|ol|tr|td|th|table|caption|dd|dt|dl|blockquote|section|article|aside|header|footer|nav|main|figure|figcaption|pre|hr)(\s[^>]*)?>',
       caseSensitive: false,
     ),
     '\n\n',
   );
 
-  // Strip all remaining HTML tags.
-  text = text.replaceAll(RegExp(r'<[^>]+>'), ' ');
+  // Remaining tags are inline (<em>, <a>, <span>): they vanish without
+  // adding a space, so "<em>Titanic</em>," stays "Titanic,".
+  text = text.replaceAll(RegExp(r'<[^>]+>'), '');
 
   // Decode common HTML entities.
   text = text
@@ -480,6 +481,8 @@ String _stripHtml(String html) {
 
   // Strip any remaining unrecognised entities.
   text = text.replaceAll(RegExp(r'&\w+;'), '');
+
+  text = tidyInlineSpacing(text);
 
   // Collapse whitespace, keeping paragraph breaks as single blank lines.
   text = text.replaceAll(RegExp(r'[ \t]+'), ' ');

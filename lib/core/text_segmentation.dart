@@ -54,3 +54,10 @@ Set<int> paragraphStartWordIndices(ExtractedDocument document) {
   }
   return starts;
 }
+
+/// Removes stray spaces that markup leaves before punctuation and inside
+/// brackets: "shoals , reefs" → "shoals, reefs", "( note )" → "(note)".
+/// Quotes are left alone: ’ is also an apostrophe ("the ’90s").
+String tidyInlineSpacing(String text) => text
+    .replaceAllMapped(RegExp(r'[ \t]+([,.;:!?)\]}])'), (m) => m.group(1)!)
+    .replaceAllMapped(RegExp(r'([(\[{])[ \t]+'), (m) => m.group(1)!);

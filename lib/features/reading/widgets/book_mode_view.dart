@@ -126,6 +126,11 @@ class BookModeViewState extends State<BookModeView> {
 
   @override
   Widget build(BuildContext context) {
+    // Nothing to lay out while a document is still loading or being swapped.
+    if (widget.words.isEmpty) {
+      _page = null;
+      return const SizedBox.shrink();
+    }
     final textScale = MediaQuery.textScalerOf(
       context,
     ).scale(1.0).clamp(1.0, 2.0).toDouble();

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:runthru/core/document_title.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/models/shared_content.dart';
@@ -187,7 +188,10 @@ class _ContentLifecycleObserverState
   /// Constructs a [ClipboardDocument] and navigates to the reading screen.
   void _navigateToReading(ShareIntentDone state) {
     final doc = ClipboardDocument(
-      title: state.content.title ?? 'Shared Content',
+      title:
+          state.content.title ??
+          titleFromText(state.content.data) ??
+          'Shared text',
       fullText: state.content.data,
       document: state.document,
       pastedAt: DateTime.now(),
@@ -227,7 +231,8 @@ class _ContentLifecycleObserverState
         libraryDir.createSync(recursive: true);
       }
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final title = content.title ?? 'Shared Content';
+      final title =
+          content.title ?? titleFromText(content.data) ?? 'Shared text';
       // Sanitise filename — remove path-unsafe characters.
       final safeName = title.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
       final file = File('${libraryDir.path}/${safeName}_$timestamp.txt');

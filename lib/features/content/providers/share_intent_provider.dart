@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:runthru/core/document_title.dart';
 import 'package:runthru/features/content/models/shared_content.dart';
 import 'package:runthru/features/content/services/content_normaliser.dart';
 import 'package:runthru/services/epub_extractor.dart';
@@ -125,8 +126,20 @@ class ShareIntent extends _$ShareIntent {
   Future<void> ingest(SharedContent content) async {
     state = ShareIntentState.processing(content: content);
     try {
+      _fetchedTitle = null;
       final document = await _extractContent(content);
-      state = ShareIntentState.done(content: content, document: document);
+      // A shared link takes the page's own title ("Lighthouse - Wikipedia").
+      final titled = content.title == null && _fetchedTitle != null
+          ? SharedContent(
+              type: content.type,
+              data: content.data,
+              title: _fetchedTitle,
+              mimeType: content.mimeType,
+              receivedAt: content.receivedAt,
+              action: content.action,
+            )
+          : content;
+      state = ShareIntentState.done(content: titled, document: document);
     } on Exception catch (e) {
       state = ShareIntentState.error(message: e.toString(), content: content);
     }
@@ -174,7 +187,10 @@ class ShareIntent extends _$ShareIntent {
         );
         return;
       }
-      final content = SharedContent.text(text, title: 'Clipboard');
+      final content = SharedContent.text(
+        text,
+        title: titleFromText(text) ?? 'Clipboard',
+      );
       await ingest(content);
     } on Exception catch (e) {
       state = ShareIntentState.error(message: e.toString());
@@ -221,6 +237,9 @@ class ShareIntent extends _$ShareIntent {
     'you.com',
     'pi.ai',
   ];
+
+  /// Title of the last fetched page, picked up by [ingest].
+  String? _fetchedTitle;
 
   /// Fetches a URL and extracts readable content from the HTML response.
   ///
@@ -295,6 +314,7 @@ class ShareIntent extends _$ShareIntent {
         );
       }
 
+      _fetchedTitle = ContentNormaliser.htmlTitle(body);
       return ContentNormaliser.normalise(body, ContentType.html);
     } on SocketException {
       throw Exception(

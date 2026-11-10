@@ -297,6 +297,24 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('inline markup and table cells keep correct spacing', () async {
+      final bytes = _createTestEpub(
+        chapterContents: [
+          '<html><body><p>She read <em>Titanic</em>, then <i>Dracula</i>.</p>'
+              '<table><tr><td>Wind</td><td>NNE</td></tr></table></body></html>',
+        ],
+      );
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/test.epub';
+      await File(epubPath).writeAsBytes(bytes);
+      final doc = await epubExtract(epubPath);
+      expect(
+        doc.allWords.join(' '),
+        'She read Titanic, then Dracula. Wind NNE',
+      );
+      await tempDir.delete(recursive: true);
+    });
+
     test('epubTitle reads the package title', () async {
       final tempDir = await Directory.systemTemp.createTemp('epub_test_');
       final epubPath = '${tempDir.path}/file_name.epub';

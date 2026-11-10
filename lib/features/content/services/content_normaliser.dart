@@ -70,45 +70,155 @@ class ContentNormaliser {
     );
   }
 
-  /// Strip HTML tags, decode entities, preserve paragraph breaks.
+  /// The page's title: `og:title` when present, otherwise `<title>`.
+  /// Null when the page has neither.
+  static String? htmlTitle(String html) {
+    final og = RegExp(
+      r"""<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']+)["']""",
+      caseSensitive: false,
+    ).firstMatch(html);
+    final raw =
+        og?.group(1) ??
+        RegExp(
+          r'<title[^>]*>([\s\S]*?)</title>',
+          caseSensitive: false,
+        ).firstMatch(html)?.group(1);
+    if (raw == null) return null;
+    final title = _decodeEntities(raw).replaceAll(RegExp(r'\s+'), ' ').trim();
+    return title.isEmpty ? null : title;
+  }
+
+  /// Readable text from an HTML page, like an e-reader's reading view.
+  ///
+  /// Drops page chrome (navigation, headers, footers, sidebars, forms,
+  /// tables, figures), keeps only `<article>` or `<main>` when the page has
+  /// one, removes citation markers ("[1]", "[edit]"), and turns block
+  /// elements into paragraph breaks.
   static String _stripHtml(String html) {
     var text = html;
 
-    // Remove <style> and <script> blocks.
-    text = text.replaceAll(
-      RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false),
-      '',
-    );
-    text = text.replaceAll(
-      RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false),
-      '',
-    );
+    // Never content: head, scripts, styles, embedded media, comments.
+    for (final tag in const [
+      'head',
+      'script',
+      'style',
+      'noscript',
+      'svg',
+      'template',
+      'iframe',
+    ]) {
+      text = _dropElement(text, tag);
+    }
+    text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
 
-    // Remove inline style attributes.
-    text = text.replaceAll(RegExp(r'\s+style\s*=\s*"[^"]*"'), '');
-    text = text.replaceAll(RegExp(r"\s+style\s*=\s*'[^']*'"), '');
+    // Prefer the main content region when the page marks one.
+    final region = _innerOf(text, 'article') ?? _innerOf(text, 'main') ?? text;
+    text = region;
 
-    // Block elements → paragraph breaks.
-    text = text.replaceAll(RegExp(r'<br\s*/?>'), '\n');
+    // Page chrome and non-prose blocks.
+    for (final tag in const [
+      'nav',
+      'header',
+      'footer',
+      'aside',
+      'form',
+      'button',
+      'menu',
+      'table',
+      'figure',
+      'sup',
+    ]) {
+      text = _dropElement(text, tag);
+    }
+
+    // Link lists (tabs, tables of contents, menus) are navigation.
+    text = _dropLinkLists(text);
+
+    // The source's line wrapping is not structure.
+    text = text.replaceAll(RegExp(r'\s+'), ' ');
+
+    // Block elements (opening or closing, with attributes) → paragraph
+    // breaks. <br> is a soft line break.
+    text = text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), ' ');
     text = text.replaceAll(
       RegExp(
-        r'</(p|div|h[1-6]|li|tr|blockquote|section|article)>',
+        r'</?(p|div|h[1-6]|li|ul|ol|tr|td|th|caption|blockquote|section|article|main|dd|dt|dl|figcaption|pre|hr)(\s[^>]*)?>',
         caseSensitive: false,
       ),
       '\n\n',
     );
 
-    // Strip all remaining tags.
-    text = text.replaceAll(RegExp(r'<[^>]+>'), ' ');
+    // Remaining tags are inline (<a>, <em>, <span>): they vanish without
+    // adding a space, so "</a>," stays "word," not "word ,".
+    text = text.replaceAll(RegExp(r'<[^>]+>'), '');
 
     // Decode HTML entities.
     text = _decodeEntities(text);
+    text = tidyInlineSpacing(text);
+
+    // Citation and edit markers left by wikis and news sites.
+    text = text.replaceAll(RegExp(r'\[(\d+|edit|citation needed)\]'), '');
 
     // Collapse whitespace, preserve paragraph breaks.
     text = text.replaceAll(RegExp(r'[ \t]+'), ' ');
+    text = text.replaceAll(RegExp(r' *\n *'), '\n');
     text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
 
     return text.trim();
+  }
+
+  /// Removes lists that are mostly links with short items: tabs, tables of
+  /// contents, menus. Innermost lists go first so nested menus come out
+  /// whole.
+  static String _dropLinkLists(String html) {
+    final innermost = RegExp(
+      r'<(ul|ol)(\s[^>]*)?>((?:(?!<(?:ul|ol)[\s>])[\s\S])*?)</\1>',
+      caseSensitive: false,
+    );
+    var previous = '';
+    var text = html;
+    while (previous != text) {
+      previous = text;
+      text = text.replaceAllMapped(innermost, (m) {
+        final inner = m.group(3)!;
+        final items = RegExp(
+          r'<li[\s>]',
+          caseSensitive: false,
+        ).allMatches(inner).length;
+        final plain = inner.replaceAll(RegExp(r'<[^>]+>'), ' ').trim();
+        final linked = RegExp(r'<a[\s>][\s\S]*?</a>', caseSensitive: false)
+            .allMatches(inner)
+            .map((a) => a.group(0)!.replaceAll(RegExp(r'<[^>]+>'), ''))
+            .join(' ');
+        final words = plain.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+        final shortItems = items > 0 && words.length / items <= 6;
+        final mostlyLinks =
+            plain.isNotEmpty && linked.trim().length >= plain.length * 0.6;
+        // Keep the list's text in place of nested-list markers so an outer
+        // list can still be judged; drop navigation lists entirely.
+        return shortItems && mostlyLinks ? ' ' : '<p>$inner</p>';
+      });
+    }
+    return text;
+  }
+
+  /// Removes every `<tag …>…</tag>` (case-insensitive, non-greedy).
+  static String _dropElement(String html, String tag) => html.replaceAll(
+    RegExp('<$tag(\\s[^>]*)?>[\\s\\S]*?</$tag>', caseSensitive: false),
+    ' ',
+  );
+
+  /// Inner HTML of the largest `<tag>` element, or null if there is none.
+  static String? _innerOf(String html, String tag) {
+    String? best;
+    for (final m in RegExp(
+      '<$tag(\\s[^>]*)?>([\\s\\S]*?)</$tag>',
+      caseSensitive: false,
+    ).allMatches(html)) {
+      final inner = m.group(2)!;
+      if (best == null || inner.length > best.length) best = inner;
+    }
+    return best;
   }
 
   /// Strip Markdown formatting — preserve readable text.

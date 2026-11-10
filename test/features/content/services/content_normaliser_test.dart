@@ -241,6 +241,87 @@ void main() {
     });
   });
 
+  group('ContentNormaliser — web page reading view', () {
+    const page = '''
+<html><head><title>Lighthouse - Wikipedia</title>
+<meta property="og:title" content="Lighthouse">
+<script>var x = 1;</script></head>
+<body>
+<header><a href="/">Home</a> <a>Random</a> <a>Log in</a></header>
+<nav><ul><li>Create account</li><li>Settings</li></ul></nav>
+<main id="content">
+  <h1 class="title">Lighthouse</h1>
+  <table class="infobox"><tr><td>Type</td><td>Tower</td></tr></table>
+  <p class="lead">A lighthouse is a tower<sup class="reference">[1]</sup> designed
+  to emit light.[2] It guides ships.</p>
+  <h2>History <span>[edit]</span></h2>
+  <p>The Pharos of Alexandria was among the first.</p>
+  <figure><img src="a.png"><figcaption>A tower</figcaption></figure>
+</main>
+<aside>Donate now</aside>
+<footer>Privacy policy · Disclaimers</footer>
+</body></html>''';
+
+    test('keeps the article and drops page chrome', () async {
+      final doc = await ContentNormaliser.normalise(page, ContentType.html);
+      final text = doc.allWords.join(' ');
+      expect(
+        text,
+        'Lighthouse A lighthouse is a tower designed to emit light. '
+        'It guides ships. History The Pharos of Alexandria was among the '
+        'first.',
+      );
+    });
+
+    test('headings and paragraphs start paragraphs', () async {
+      final doc = await ContentNormaliser.normalise(page, ContentType.html);
+      final starts = [
+        for (final s in doc.sentences)
+          if (s.startsParagraph) s.words.join(' '),
+      ];
+      expect(starts, [
+        'Lighthouse',
+        'A lighthouse is a tower designed to emit light.',
+        'History',
+        'The Pharos of Alexandria was among the first.',
+      ]);
+    });
+
+    test('drops nested link-list navigation, keeps prose lists', () async {
+      const html = '''
+<main><p>Intro text here.</p>
+<div id="toc"><h2>Contents</h2><ul>
+  <li><a href="#a">1 History</a><ul><li><a href="#b">1.1 Ancient</a></li></ul></li>
+  <li><a href="#c">2 Design</a></li>
+</ul></div>
+<ul><li>Pack a warm coat for the crossing.</li><li>Bring a lamp.</li></ul>
+</main>''';
+      final doc = await ContentNormaliser.normalise(html, ContentType.html);
+      final text = doc.allWords.join(' ');
+      expect(text, isNot(contains('1.1')));
+      expect(text, isNot(contains('2 Design')));
+      expect(text, contains('Pack a warm coat for the crossing.'));
+      expect(text, contains('Bring a lamp.'));
+    });
+
+    test('inline markup leaves no space before punctuation', () async {
+      const html =
+          '<p>Hazardous <a href="/s">shoals</a>, <a href="/r">reefs</a>; '
+          'see <a href="/d">Lighthouse (disambiguation)</a>.</p>';
+      final doc = await ContentNormaliser.normalise(html, ContentType.html);
+      expect(
+        doc.allWords.join(' '),
+        'Hazardous shoals, reefs; see Lighthouse (disambiguation).',
+      );
+    });
+
+    test('prefers og:title, falls back to <title>', () {
+      expect(ContentNormaliser.htmlTitle(page), 'Lighthouse');
+      expect(ContentNormaliser.htmlTitle('<title>A &amp; B</title>'), 'A & B');
+      expect(ContentNormaliser.htmlTitle('<p>none</p>'), isNull);
+    });
+  });
+
   group('ContentNormaliser — output contract', () {
     test('output is ExtractedDocument with sentences', () async {
       final doc = await ContentNormaliser.normalise(
