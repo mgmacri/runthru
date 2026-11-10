@@ -16,6 +16,10 @@ PdfLayoutResult analyze(
   outline: outline,
 );
 
+/// A character by its code, so control and invisible characters are never
+/// typed into a test string.
+String ch(int code) => String.fromCharCode(code);
+
 String textOf(PdfLayoutResult result) =>
     result.sentences.expand((s) => s.words).join(' ');
 
@@ -46,7 +50,7 @@ void main() {
       final page = PageBuilder(0)
         ..line('The ﬁrst ofﬁce on the ﬂoor was oﬀ limits.', y: 500)
         ..line(
-          'A stray\u0018 mark, a zero​width gap and a bad� glyph.',
+          'A stray${ch(0x18)} mark, a zero${ch(0x200B)}width gap and a bad${ch(0xFFFD)} glyph.',
           y: 488,
         );
       expect(
@@ -58,7 +62,7 @@ void main() {
 
     test('carriage returns and repeated spaces never reach a word', () {
       final page = PageBuilder(0)
-        ..line('Two  spaces   and a hard space.', y: 500);
+        ..line('Two  spaces   and a${ch(0xA0)}hard space.', y: 500);
       final words = wordsOf(analyze([page.build()]));
       expect(words, ['Two', 'spaces', 'and', 'a', 'hard', 'space.']);
       expect(words.any((w) => w.contains('\r') || w.contains('\n')), isFalse);
@@ -66,7 +70,7 @@ void main() {
 
     test('a soft hyphen at a line end means the word continues', () {
       final page = PageBuilder(0)
-        ..line('It was an extra­', y: 500)
+        ..line('It was an extra${ch(0xAD)}', y: 500)
         ..line('ordinary thing to say.', y: 488);
       expect(
         textOf(analyze([page.build()])),
@@ -934,6 +938,18 @@ void main() {
       block(page, kFiller, y: 428);
       final result = analyze([page.build()]);
       expect(paragraphTexts(result), [kFillerText, '* * *', kFillerText]);
+
+      // A printer's flower (U+2766) does the same job.
+      final flower = ch(0x2766);
+      final ornate = PageBuilder(0);
+      block(ornate, kFiller);
+      ornate.line(flower, x: 195, y: 452);
+      block(ornate, kFiller, y: 428);
+      expect(paragraphTexts(analyze([ornate.build()])), [
+        kFillerText,
+        flower,
+        kFillerText,
+      ]);
     });
 
     test('rows of a list each begin a paragraph', () {
@@ -1308,6 +1324,22 @@ void main() {
       );
       expect(headingsOf(marked), ['h4 The Boy Who Waited']);
       expect(marked.outline.single.startSentenceIndex, 1);
+    });
+
+    test('a line that merely begins with a bookmark title is found, but is '
+        'not made a heading', () {
+      final page = PageBuilder(0);
+      block(page, [
+        'Introduction to the harbour and its people came late in',
+        r'the book, long after the reader had met them all.$',
+      ]);
+      final result = analyze(
+        [page.build()],
+        outline: const [PdfOutlineTarget(title: 'Introduction', pageIndex: 0)],
+      );
+      expect(headingsOf(result), isEmpty);
+      expect(result.sentences.length, 1);
+      expect(result.outline.single.startWordIndex, 0);
     });
 
     test('a bookmark that points into running text marks the place '

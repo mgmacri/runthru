@@ -480,7 +480,12 @@ class _LayoutAnalysis {
         start = i + 1;
         continue;
       }
-      if (!boxed || _isSpace(c) || _isIgnorable(c) || c == 0xAD) continue;
+      if (!boxed) continue;
+      // Printable ASCII is never a space or a mark to skip.
+      if ((c <= 0x20 || c >= 0x7F) &&
+          (_isSpace(c) || _isIgnorable(c) || c == 0xAD)) {
+        continue;
+      }
       final o = i * kPdfCharBoxStride;
       final l = boxes[o];
       final r = boxes[o + 2];
@@ -571,23 +576,28 @@ class _LayoutAnalysis {
 
     for (var i = start; i < end; i++) {
       final c = text.codeUnitAt(i);
-      if (_isSpace(c)) {
-        pendingSpace = wrote;
-        if (visible > 0) firstWordOpen = false;
-        continue;
+      // Printable ASCII, which is nearly everything, skips these checks.
+      if (c <= 0x20 || c >= 0x7F) {
+        if (_isSpace(c)) {
+          pendingSpace = wrote;
+          if (visible > 0) firstWordOpen = false;
+          continue;
+        }
+        if (c == 0xAD) {
+          softHyphenLast = true;
+          continue;
+        }
+        if (_isIgnorable(c)) continue;
+        // Joiners matter in scripts that shape their letters; after a
+        // Latin letter they are stray marks.
+        if ((c == 0x200C || c == 0x200D) && lastUnit < 0x0590) continue;
       }
-      if (c == 0xAD) {
-        softHyphenLast = true;
-        continue;
-      }
-      if (_isIgnorable(c)) continue;
-      if ((c == 0x200C || c == 0x200D) && lastUnit < 0x0590) continue;
       softHyphenLast = false;
       if (pendingSpace) {
         out.writeCharCode(0x20);
         pendingSpace = false;
       }
-      final ligature = _ligatures[c];
+      final ligature = c >= 0xFB00 && c <= 0xFB06 ? _ligatures[c] : null;
       if (ligature != null) {
         out.write(ligature);
       } else {
@@ -759,7 +769,7 @@ class _LayoutAnalysis {
     for (final page in _pages) {
       for (final line in page.lines) {
         final tokens = line.text.split(' ');
-        final broken = line.softBreak || _endsHyphen.hasMatch(line.text);
+        final broken = line.softBreak || _endsInHyphen(line.text);
         final from = afterBreak ? 1 : 0;
         final to = broken ? tokens.length - 1 : tokens.length;
         for (var i = from; i < to; i++) {
@@ -922,7 +932,7 @@ class _LayoutAnalysis {
       final head = row == null ? '' : text.substring(0, row.start);
       final isRow =
           row != null &&
-          _hasWordChar.hasMatch(head) &&
+          _hasWord(head) &&
           _dotCount(row.group(0)!) >= 4 &&
           (number != null
               ? _isPageNumber(number)
@@ -943,11 +953,10 @@ class _LayoutAnalysis {
     line
       ..text = text
       ..words = text.isEmpty ? 0 : ' '.allMatches(text).length + 1
-      ..isOrnament =
-          !_hasWordChar.hasMatch(text) && !_closesPrevious.hasMatch(text)
+      ..isOrnament = !_hasWord(text) && !_closesPrevious.hasMatch(text)
       ..startsLower = _startsLower.hasMatch(text)
       ..endsSentence = _endsSentence.hasMatch(text)
-      ..endsHyphen = _endsHyphen.hasMatch(text)
+      ..endsHyphen = _endsInHyphen(text)
       ..listMarker =
           _listMarker.hasMatch(text) || _chapterPrefix.hasMatch(text);
     line.endsClause = line.endsSentence || _endsColon.hasMatch(text);
@@ -1174,8 +1183,7 @@ class _LayoutAnalysis {
     }
     final parts = <String>[];
     final numbers = <int>[];
-    for (final raw in text.split(_notWordChars)) {
-      if (raw.isEmpty) continue;
+    for (final raw in _wordRuns(text)) {
       // Tested in its own case: "Liv" is a name, "liv" a numeral.
       final value = _numberValue(raw);
       if (value != null) {
@@ -1464,7 +1472,7 @@ class _LayoutAnalysis {
   }
 
   bool _isAllCapsTitle(String text) {
-    if (!_startsAlnum.hasMatch(text) || _endsStop.hasMatch(text)) return false;
+    if (!_startsWithWord(text) || _endsStop.hasMatch(text)) return false;
     if (_lowerLetter.hasMatch(text)) return false;
     final letters = _upperLetter.allMatches(text).length;
     return letters >= 3 && letters * 2 >= text.replaceAll(' ', '').length;
@@ -1778,7 +1786,7 @@ class _LayoutAnalysis {
   /// "Saxon"). An indented line, or one that opens with a quotation mark,
   /// is a new start: the hyphen before it was standing in for a dash.
   bool _finishesWord(_Line line) =>
-      _startsAlnum.hasMatch(line.text) && !_indented(line);
+      _startsWithWord(line.text) && !_indented(line);
 
   double get _minIndent => math.max(2.5, 0.55 * _bodyCap);
 
@@ -1898,8 +1906,7 @@ class _LayoutAnalysis {
         _startsClosing.hasMatch(first) ||
         _endsOpening.hasMatch(last) ||
         // A closing quote that wrapped onto a line by itself.
-        (!_hasWordChar.hasMatch(line.text) &&
-            _closesPrevious.hasMatch(first))) {
+        (!_hasWord(line.text) && _closesPrevious.hasMatch(first))) {
       glued = '$last$first';
     }
     if (glued == null || glued.contains(' ')) {
@@ -2039,9 +2046,7 @@ class _LayoutAnalysis {
     final sentence = _sentences.last;
     if (sentence.isHeading || sentence.words.isEmpty) return false;
     final word = sentence.words.last;
-    final stem = last.softBreak
-        ? word
-        : word.replaceFirst(_trailingHyphens, '');
+    final stem = last.softBreak ? word : _withoutTrailingHyphens(word);
     if (stem.isEmpty || (!last.softBreak && stem == word)) return false;
     _sentences[_sentences.length - 1] = Sentence(
       words: <String>[
@@ -2199,11 +2204,70 @@ bool _isIgnorable(int c) =>
     c == 0xFFFD;
 
 /// Letters and digits, as opposed to punctuation and symbols.
+///
+/// A plain test on the code unit: these checks run for every character and
+/// every word, where a `\p{L}` pattern is many times slower. Beyond Latin-1
+/// everything counts as a letter except the punctuation and symbol blocks
+/// (U+2000–U+2BFF: dashes, quotes, arrows, shapes, dingbats) and CJK
+/// punctuation.
 bool _isWordChar(int c) =>
     (c >= 0x30 && c <= 0x39) ||
     (c >= 0x41 && c <= 0x5A) ||
     (c >= 0x61 && c <= 0x7A) ||
-    (c >= 0xC0 && !(c >= 0x2000 && c <= 0x206F) && c != 0xD7 && c != 0xF7);
+    (c >= 0xC0 &&
+        c != 0xD7 &&
+        c != 0xF7 &&
+        !(c >= 0x2000 && c <= 0x2BFF) &&
+        !(c >= 0x3000 && c <= 0x303F));
+
+/// Whether [text] holds a letter or a digit.
+bool _hasWord(String text) {
+  for (var i = 0; i < text.length; i++) {
+    if (_isWordChar(text.codeUnitAt(i))) return true;
+  }
+  return false;
+}
+
+/// Whether [text] begins with a letter or a digit.
+bool _startsWithWord(String text) =>
+    text.isNotEmpty && _isWordChar(text.codeUnitAt(0));
+
+/// A hyphen that can end a line inside a word: the hyphen-minus, the
+/// hyphen (U+2010) and the non-breaking hyphen (U+2011).
+bool _isHyphen(int c) => c == 0x2D || c == 0x2010 || c == 0x2011;
+
+/// Whether [text] ends in a hyphen attached to a word.
+bool _endsInHyphen(String text) {
+  final n = text.length;
+  return n >= 2 &&
+      _isHyphen(text.codeUnitAt(n - 1)) &&
+      _isWordChar(text.codeUnitAt(n - 2));
+}
+
+/// [word] without the hyphens at its end.
+String _withoutTrailingHyphens(String word) {
+  var end = word.length;
+  while (end > 0 && _isHyphen(word.codeUnitAt(end - 1))) {
+    end--;
+  }
+  return word.substring(0, end);
+}
+
+/// The runs of letters and digits in [text].
+List<String> _wordRuns(String text) {
+  final runs = <String>[];
+  var start = -1;
+  for (var i = 0; i <= text.length; i++) {
+    final inWord = i < text.length && _isWordChar(text.codeUnitAt(i));
+    if (inWord) {
+      if (start < 0) start = i;
+    } else if (start >= 0) {
+      runs.add(text.substring(start, i));
+      start = -1;
+    }
+  }
+  return runs;
+}
 
 /// Lower-case letters exactly one x-height tall: no ascender, descender,
 /// dot or accent.
@@ -2281,11 +2345,26 @@ double _quartile(List<double> values) {
   return sorted[sorted.length ~/ 4];
 }
 
-/// [token] lower-cased without the punctuation around it.
-String _core(String token) => token.replaceAll(_edges, '').toLowerCase();
+/// [token] lower-cased without the punctuation around it. Called for every
+/// word of the window, so it scans code units instead of matching a
+/// pattern.
+String _core(String token) {
+  var start = 0;
+  var end = token.length;
+  while (start < end && !_isWordChar(token.codeUnitAt(start))) {
+    start++;
+  }
+  while (end > start && !_isWordChar(token.codeUnitAt(end - 1))) {
+    end--;
+  }
+  final word = start == 0 && end == token.length
+      ? token
+      : token.substring(start, end);
+  return word.toLowerCase();
+}
 
 /// [text] reduced to its letters and digits, for comparing titles.
-String _squash(String text) => text.toLowerCase().replaceAll(_notWordChars, '');
+String _squash(String text) => _wordRuns(text).join().toLowerCase();
 
 int _dotCount(String leader) {
   var dots = 0;
@@ -2303,10 +2382,17 @@ int _offsetKey(int value, bool roman, int pageIndex) =>
 /// The value of [token] as a page or chapter number: digits or a Roman
 /// numeral in one case. Null for anything else.
 int? _numberValue(String token) {
-  if (_digits.hasMatch(token)) {
-    return token.length > 6 ? null : int.parse(token);
+  if (token.isEmpty) return null;
+  // Most tokens are ordinary words: rule them out before any pattern runs.
+  var digits = true;
+  var numerals = true;
+  for (var i = 0; i < token.length && (digits || numerals); i++) {
+    final c = token.codeUnitAt(i);
+    if (c < 0x30 || c > 0x39) digits = false;
+    if (!_isRomanLetter(c)) numerals = false;
   }
-  if (token.isEmpty || token.length > 8) return null;
+  if (digits) return token.length > 6 ? null : int.parse(token);
+  if (!numerals || token.length > 8) return null;
   final lower = token.toLowerCase();
   if (token != lower && token != token.toUpperCase()) return null;
   if (!_roman.hasMatch(lower)) return null;
@@ -2319,6 +2405,18 @@ int? _numberValue(String token) {
   }
   // Page and chapter numerals are small; "mix" and "dc" are words.
   return value > 0 && value <= 400 ? value : null;
+}
+
+/// i, v, x, l, c, d, m in either case.
+bool _isRomanLetter(int c) {
+  final lower = c | 0x20;
+  return lower == 0x69 ||
+      lower == 0x76 ||
+      lower == 0x78 ||
+      lower == 0x6C ||
+      lower == 0x63 ||
+      lower == 0x64 ||
+      lower == 0x6D;
 }
 
 bool _isPageNumber(String token) => _numberValue(token) != null;
@@ -2347,9 +2445,6 @@ final RegExp _digitRun = RegExp(r'\d+');
 final RegExp _roman = RegExp(
   r'^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$',
 );
-final RegExp _edges = RegExp(r'^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$', unicode: true);
-final RegExp _notWordChars = RegExp(r'[^\p{L}\p{N}]+', unicode: true);
-final RegExp _hasWordChar = RegExp(r'[\p{L}\p{N}]', unicode: true);
 final RegExp _lowerLetter = RegExp(r'\p{Ll}', unicode: true);
 final RegExp _upperLetter = RegExp(r'\p{Lu}', unicode: true);
 
@@ -2359,7 +2454,6 @@ final RegExp _startsUpper = RegExp(
   r'^[^\p{L}\p{N}]*[\p{Lu}\p{Lt}\p{N}]',
   unicode: true,
 );
-final RegExp _startsAlnum = RegExp(r'^[\p{L}\p{N}]', unicode: true);
 
 /// Mirrors the sentence break of `textToSentences`: a stop, then any
 /// closing quotes or brackets.
@@ -2367,10 +2461,6 @@ final RegExp _endsSentence = RegExp('[.!?…][”’"\')\\]]*\$');
 final RegExp _endsColon = RegExp('[:][—–-]?[”’"\')\\]]*\$');
 final RegExp _endsStop = RegExp(r'[.!?,;:—–-]$');
 final RegExp _endsSoft = RegExp(r'[,;]$');
-
-/// A hyphen attached to the end of a word.
-final RegExp _endsHyphen = RegExp(r'[\p{L}\p{N}][-‐‑]$', unicode: true);
-final RegExp _trailingHyphens = RegExp(r'[-‐‑]+$');
 
 /// An em or en dash set tight against a word: "temperament’—".
 final RegExp _endsClosedDash = RegExp(r'[^\s—–][—–]$');
