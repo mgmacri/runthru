@@ -131,8 +131,10 @@ class ContentNormaliser {
       text = _dropElement(text, tag);
     }
 
-    // Link lists (tabs, tables of contents, menus) are navigation.
+    // Link lists (tabs, tables of contents, menus) and small link-only
+    // elements ("edit", "Talk") are navigation.
     text = _dropLinkLists(text);
+    text = _dropLinkOnlyElements(text);
 
     // The source's line wrapping is not structure.
     text = text.replaceAll(RegExp(r'\s+'), ' ');
@@ -200,6 +202,30 @@ class ContentNormaliser {
       });
     }
     return text;
+  }
+
+  /// Removes small elements whose whole text is one short link, such as
+  /// "edit" beside a heading or "Article" / "Talk" tabs. Headings and
+  /// prose are untouched: their text is not a link.
+  static String _dropLinkOnlyElements(String html) {
+    final element = RegExp(
+      r'<(span|div|li|p)(\s[^>]*)?>((?:(?!<(?:span|div|li|p)[\s>])[\s\S])*?)</\1>',
+      caseSensitive: false,
+    );
+    String strip(String s) => s
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return html.replaceAllMapped(element, (m) {
+      final inner = m.group(3)!;
+      final plain = strip(inner);
+      if (plain.isEmpty || plain.split(' ').length > 3) return m.group(0)!;
+      final links = RegExp(
+        r'<a(?:\s[^>]*)?>([\s\S]*?)</a>',
+        caseSensitive: false,
+      ).allMatches(inner).map((a) => strip(a.group(1)!)).join(' ').trim();
+      return links == plain ? ' ' : m.group(0)!;
+    });
   }
 
   /// Removes every `<tag …>…</tag>` (case-insensitive, non-greedy).

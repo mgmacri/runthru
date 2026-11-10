@@ -304,6 +304,15 @@ void main() {
       expect(text, contains('Bring a lamp.'));
     });
 
+    test('drops short link-only elements, keeps link-free headings', () async {
+      const html = '''
+<main><div class="tabs"><a href="/a">Article</a></div><div><a href="/t">Talk</a></div>
+<h2>History<span class="editsection"><a href="/e">edit</a></span></h2>
+<p>See <a href="/p">Pharos</a> for more.</p></main>''';
+      final doc = await ContentNormaliser.normalise(html, ContentType.html);
+      expect(doc.allWords.join(' '), 'History See Pharos for more.');
+    });
+
     test('inline markup leaves no space before punctuation', () async {
       const html =
           '<p>Hazardous <a href="/s">shoals</a>, <a href="/r">reefs</a>; '
