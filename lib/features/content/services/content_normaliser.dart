@@ -135,6 +135,7 @@ class ContentNormaliser {
     // elements ("edit", "Talk") are navigation.
     text = _dropLinkLists(text);
     text = _dropLinkOnlyElements(text);
+    text = _dropWikiChrome(text);
 
     // The source's line wrapping is not structure.
     text = text.replaceAll(RegExp(r'\s+'), ' ');
@@ -227,6 +228,33 @@ class ContentNormaliser {
       return links == plain ? ' ' : m.group(0)!;
     });
   }
+
+  /// MediaWiki conventions shared by Wikipedia and most wikis: "edit"
+  /// links beside headings, the "Contents" heading of the (already
+  /// removed) table of contents, and cross-reference notes ("Main
+  /// article: …", "See also: …", "Further information: …").
+  static String _dropWikiChrome(String html) => html
+      .replaceAll(
+        RegExp(
+          r'<a(?:\s[^>]*)?>(?:\s|<[^>]+>)*\[?edit\]?(?:\s|<[^>]+>)*</a>',
+          caseSensitive: false,
+        ),
+        ' ',
+      )
+      .replaceAll(
+        RegExp(
+          r'<(h[1-6])(\s[^>]*)?>(?:\s|<[^>]+>)*(table of )?contents(?:\s|<[^>]+>)*</\1>',
+          caseSensitive: false,
+        ),
+        ' ',
+      )
+      .replaceAll(
+        RegExp(
+          r'<(div|p)(\s[^>]*)?>(?:\s|<[^>]+>)*(main article|see also|further information):(?:(?!</?\1[\s>])[\s\S])*?</\1>',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
 
   /// Removes every `<tag …>…</tag>` (case-insensitive, non-greedy).
   static String _dropElement(String html, String tag) => html.replaceAll(

@@ -313,6 +313,19 @@ void main() {
       expect(doc.allWords.join(' '), 'History See Pharos for more.');
     });
 
+    test('drops wiki edit links, Contents heading and hatnotes', () async {
+      const html = '''
+<main><h2 id="toc">Contents</h2>
+<h2>History<span class="editsection"><a href="/e"><span>edit</span></a></span></h2>
+<div class="hatnote">Main article: <a href="/h">History of lighthouses</a></div>
+<p>Before ports existed, fires guided ships.</p></main>''';
+      final doc = await ContentNormaliser.normalise(html, ContentType.html);
+      expect(
+        doc.allWords.join(' '),
+        'History Before ports existed, fires guided ships.',
+      );
+    });
+
     test('inline markup leaves no space before punctuation', () async {
       const html =
           '<p>Hazardous <a href="/s">shoals</a>, <a href="/r">reefs</a>; '
