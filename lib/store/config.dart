@@ -39,6 +39,25 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
+  /// Sets the Book-mode text size, clamped to the supported range.
+  Future<void> setBookFontSize(double size) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(
+      bookFontSize: size.clamp(kMinBookFontSize, kMaxBookFontSize).toDouble(),
+    );
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
+  /// Remembers the reading mode so the next book opens in it.
+  Future<void> setLastReadingMode(String mode) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    if (config.lastReadingMode == mode) return;
+    final updated = config.copyWith(lastReadingMode: mode);
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
   /// Sets the Google Drive access mode without requesting new OAuth scopes.
   Future<void> setGoogleDriveAccessMode(GoogleDriveAccessMode mode) =>
       _synchronized(() async {

@@ -15,6 +15,10 @@ enum ReadingMode {
 
   /// Full document/page-style reading view.
   fullPage,
+
+  /// Paged book view the reader turns themselves, like an e-reader. No
+  /// timer runs; turning a page moves the reading position.
+  book,
 }
 
 /// Modes offered in the mode menu and by swipe cycling, in cycle order.
@@ -27,6 +31,7 @@ const List<ReadingMode> availableReadingModes = [
   ReadingMode.sentence,
   ReadingMode.paragraph,
   ReadingMode.fullPage,
+  ReadingMode.book,
 ];
 
 /// Backwards-compatible display and parsing helpers for [ReadingMode].
@@ -37,6 +42,7 @@ extension ReadingModeX on ReadingMode {
     ReadingMode.sentence => 'Flowing Sentence',
     ReadingMode.paragraph => 'Paragraph',
     ReadingMode.fullPage => 'Full Page',
+    ReadingMode.book => 'Book',
   };
 
   /// Parses persisted mode names without throwing on old values.
@@ -45,6 +51,7 @@ extension ReadingModeX on ReadingMode {
     'sentence' => ReadingMode.sentence,
     'paragraph' => ReadingMode.paragraph,
     'fullPage' => ReadingMode.fullPage,
+    'book' => ReadingMode.book,
     _ => ReadingMode.singleWord,
   };
 }

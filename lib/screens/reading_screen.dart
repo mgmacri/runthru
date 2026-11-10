@@ -505,7 +505,8 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen>
                 fontSize: fontSize,
                 wpm: timerState.wpm,
               ),
-              ReadingMode.fullPage => FullPageModeView(
+              // The legacy deep-link reader has no paged view.
+              ReadingMode.fullPage || ReadingMode.book => FullPageModeView(
                 key: const ValueKey('fullPage'),
                 words: _words,
                 currentIndex: timerState.currentIndex,

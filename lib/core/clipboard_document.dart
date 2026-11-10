@@ -1,3 +1,4 @@
+import 'package:runthru/core/text_segmentation.dart';
 import 'package:runthru/services/models.dart';
 
 /// Model for clipboard-sourced documents (Rule 28 — ephemeral, session-only).
@@ -168,32 +169,7 @@ class ClipboardDocument {
     return '${truncated.substring(0, boundary).trim()}\u2026';
   }
 
-  /// Splits raw text into [Sentence] objects — same logic as PDF pipeline.
-  ///
-  /// Paragraph breaks (`\n\n`) are normalized to sentence boundaries before
-  /// splitting on `.!?` followed by whitespace.
-  static List<Sentence> _textToSentences(String text) {
-    // Normalize paragraph breaks to sentence terminators.
-    // P28 — treat \n\n as sentence boundaries
-    final normalized = text.replaceAll(RegExp(r'\n{2,}'), '. ');
-
-    final sentencePattern = RegExp(r'(?<=[.!?])\s+');
-    final rawSentences = normalized.split(sentencePattern);
-    final sentences = <Sentence>[];
-
-    for (final raw in rawSentences) {
-      final trimmed = raw.trim();
-      if (trimmed.isEmpty) continue;
-
-      final words = trimmed
-          .split(RegExp(r'\s+'))
-          .where((w) => w.isNotEmpty)
-          .toList();
-      if (words.isNotEmpty) {
-        sentences.add(Sentence(words: words));
-      }
-    }
-
-    return sentences;
-  }
+  /// Paragraph breaks (blank lines) start a new paragraph; they no longer
+  /// insert a full stop into the text. See [textToSentences].
+  static List<Sentence> _textToSentences(String text) => textToSentences(text);
 }

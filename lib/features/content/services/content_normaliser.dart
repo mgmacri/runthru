@@ -1,5 +1,6 @@
 import 'dart:isolate';
 
+import 'package:runthru/core/text_segmentation.dart';
 import 'package:runthru/services/models.dart';
 
 /// Content types supported by the normaliser.
@@ -278,34 +279,9 @@ class ContentNormaliser {
     return result;
   }
 
-  /// Split text into [Sentence] objects — same logic as PDF/clipboard pipeline.
-  ///
-  /// Paragraph breaks (\n\n) are normalised to sentence boundaries first.
-  static List<Sentence> _textToSentences(String text) {
-    // Treat paragraph breaks as sentence boundaries.
-    final normalized = text.replaceAll(RegExp(r'\n{2,}'), '. ');
-
-    final sentencePattern = RegExp(r'(?<=[.!?])\s+');
-    final rawSentences = normalized.split(sentencePattern);
-    final sentences = <Sentence>[];
-
-    for (final raw in rawSentences) {
-      final trimmed = raw.trim();
-      if (trimmed.isEmpty) continue;
-
-      final words = trimmed
-          .split(RegExp(r'\s+'))
-          .where((w) => w.isNotEmpty)
-          .toList();
-      // Skip sentences that are just punctuation artefacts.
-      if (words.isNotEmpty &&
-          !words.every((w) => RegExp(r'^[.!?,;:\-]+$').hasMatch(w))) {
-        sentences.add(Sentence(words: words));
-      }
-    }
-
-    return sentences;
-  }
+  /// Paragraph breaks (blank lines) start a new paragraph; they no longer
+  /// insert a full stop into the text. See [textToSentences].
+  static List<Sentence> _textToSentences(String text) => textToSentences(text);
 
   /// Generate page boundaries based on ~300-word "pages".
   static List<PageBoundary> _generatePageBoundaries(List<Sentence> sentences) {

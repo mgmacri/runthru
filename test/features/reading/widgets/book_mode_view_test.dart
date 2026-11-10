@@ -1,0 +1,168 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:runthru/features/reading/widgets/book_mode_view.dart';
+
+/// A small book: a heading, then numbered prose paragraphs so every word is
+/// unique and checkable. The second chapter starts at [chapterTwo].
+final List<String> _words = [
+  'Chapter',
+  'One',
+  for (var p = 0; p < 12; p++)
+    for (var w = 0; w < 30; w++) w == 29 ? 'p${p}w$w.' : 'p${p}w$w',
+  'Chapter',
+  'Two',
+  for (var w = 0; w < 40; w++) w == 39 ? 'c2w$w.' : 'c2w$w',
+];
+const int _chapterTwo = 2 + 12 * 30;
+final Set<int> _paragraphs = {
+  0,
+  2,
+  for (var p = 1; p < 12; p++) 2 + p * 30,
+  _chapterTwo,
+  _chapterTwo + 2,
+};
+
+class _Harness extends StatefulWidget {
+  const _Harness({this.onTurnLog});
+
+  final List<int>? onTurnLog;
+
+  @override
+  State<_Harness> createState() => _HarnessState();
+}
+
+class _HarnessState extends State<_Harness> {
+  int start = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(
+          size: Size(400, 800),
+          disableAnimations: true,
+        ),
+        child: Scaffold(
+          body: BookModeView(
+            words: _words,
+            startIndex: start,
+            onTurn: (i) {
+              widget.onTurnLog?.add(i);
+              setState(() => start = i);
+            },
+            fontFamily: 'Roboto',
+            fontSize: 20,
+            letterSpacing: 0,
+            wordSpacing: 0,
+            wpm: 250,
+            onFontSizeChanged: (_) {},
+            paragraphStarts: _paragraphs,
+            chapterStarts: const {_chapterTwo},
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _pageText(WidgetTester tester) => tester
+    .widgetList<Text>(
+      find.descendant(
+        of: find.byKey(BookModeView.pageKey),
+        matching: find.byType(Text),
+      ),
+    )
+    .map((t) => t.data ?? '')
+    .join(' ');
+
+void main() {
+  testWidgets('paging forward shows every word exactly once, in order', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const _Harness());
+    final seen = <String>[];
+    for (var guard = 0; guard < 200; guard++) {
+      seen.addAll(_pageText(tester).split(' '));
+      final next = tester.widget<Semantics>(
+        find
+            .descendant(
+              of: find.byKey(BookModeView.nextKey),
+              matching: find.byType(Semantics),
+            )
+            .first,
+      );
+      if (next.properties.enabled == false) break;
+      await tester.tap(find.byKey(BookModeView.nextKey));
+      await tester.pump();
+    }
+    expect(seen, _words);
+  });
+
+  testWidgets('previous returns to the page it came from', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final turns = <int>[];
+    await tester.pumpWidget(_Harness(onTurnLog: turns));
+    final first = _pageText(tester);
+    await tester.tap(find.byKey(BookModeView.nextKey));
+    await tester.pump();
+    final second = _pageText(tester);
+    expect(second, isNot(first));
+
+    await tester.tap(find.byKey(BookModeView.previousKey));
+    await tester.pump();
+    expect(_pageText(tester), first);
+    expect(turns.last, 0);
+  });
+
+  testWidgets('a chapter starts on a fresh page', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const _Harness());
+    for (var guard = 0; guard < 200; guard++) {
+      final text = _pageText(tester);
+      if (text.contains('Chapter Two')) {
+        expect(text.startsWith('Chapter Two'), isTrue, reason: text);
+        return;
+      }
+      await tester.tap(find.byKey(BookModeView.nextKey));
+      await tester.pump();
+    }
+    fail('never reached chapter two');
+  });
+
+  testWidgets('short unpunctuated paragraphs are marked as headings', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final handle = tester.ensureSemantics();
+
+    await tester.pumpWidget(const _Harness());
+    final heading = tester.getSemantics(find.text('Chapter One'));
+    expect(heading.getSemanticsData().flagsCollection.isHeader, isTrue);
+    handle.dispose();
+  });
+
+  testWidgets('footer buttons meet the 48dp tap target', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const _Harness());
+    for (final key in [BookModeView.nextKey, BookModeView.previousKey]) {
+      final size = tester.getSize(find.byKey(key));
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    }
+  });
+}

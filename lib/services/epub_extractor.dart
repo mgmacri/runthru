@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive.dart';
+import 'package:runthru/core/text_segmentation.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/pdf_extractor.dart' show PageRangeResult;
 import 'package:xml/xml.dart';
@@ -416,14 +417,19 @@ String _stripHtml(String html) {
   text = text.replaceAll(RegExp(r'\s+style\s*=\s*"[^"]*"'), '');
   text = text.replaceAll(RegExp(r"\s+style\s*=\s*'[^']*'"), '');
 
-  // Replace <br>, <p>, <div>, <h*>, <li>, <tr> closings with newlines.
-  text = text.replaceAll(RegExp(r'<br\s*/?>'), '\n');
+  // The source file's own line wrapping is not structure: collapse it so
+  // only block elements below create paragraph breaks.
+  text = text.replaceAll(RegExp(r'\s+'), ' ');
+
+  // <br> is a line break inside a paragraph (plain whitespace for reading);
+  // block closings end a paragraph (a blank line).
+  text = text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
   text = text.replaceAll(
     RegExp(
       r'</(p|div|h[1-6]|li|tr|blockquote|section|article)>',
       caseSensitive: false,
     ),
-    '\n',
+    '\n\n',
   );
   // Opening block tags become a newline. Consume the whole tag, attributes
   // included: matching only `<p ` used to leave `class="x">` behind, and the
@@ -433,7 +439,7 @@ String _stripHtml(String html) {
       r'<(p|div|h[1-6]|li|tr|blockquote|section|article)(\s[^>]*)?>',
       caseSensitive: false,
     ),
-    '\n',
+    '\n\n',
   );
 
   // Strip all remaining HTML tags.
@@ -475,31 +481,13 @@ String _stripHtml(String html) {
   // Strip any remaining unrecognised entities.
   text = text.replaceAll(RegExp(r'&\w+;'), '');
 
-  // Collapse whitespace.
+  // Collapse whitespace, keeping paragraph breaks as single blank lines.
   text = text.replaceAll(RegExp(r'[ \t]+'), ' ');
+  text = text.replaceAll(RegExp(r' *\n *'), '\n');
   text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
 
   return text.trim();
 }
 
-/// Splits raw text into a list of [Sentence] objects.
-List<Sentence> _textToSentences(String text) {
-  final sentencePattern = RegExp(r'(?<=[.!?])\s+');
-  final rawSentences = text.split(sentencePattern);
-  final sentences = <Sentence>[];
-
-  for (final raw in rawSentences) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) continue;
-
-    final words = trimmed
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .toList();
-    if (words.isNotEmpty) {
-      sentences.add(Sentence(words: words));
-    }
-  }
-
-  return sentences;
-}
+/// Splits stripped chapter text into sentences with paragraph starts.
+List<Sentence> _textToSentences(String text) => textToSentences(text);

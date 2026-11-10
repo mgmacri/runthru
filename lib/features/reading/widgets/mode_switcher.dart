@@ -138,4 +138,5 @@ _ModeMeta _modeMeta(ReadingMode mode) => switch (mode) {
   ReadingMode.sentence => (icon: Icons.short_text_rounded, label: 'Sentence'),
   ReadingMode.paragraph => (icon: Icons.subject_rounded, label: 'Paragraph'),
   ReadingMode.fullPage => (icon: Icons.article_outlined, label: 'Full Page'),
+  ReadingMode.book => (icon: Icons.menu_book_rounded, label: 'Book'),
 };

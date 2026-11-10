@@ -87,6 +87,14 @@ class BookmarkData {
 /// Hot Coral (index 0) fails the Settings contrast check.
 const int kDefaultAnchorColorIndex = 11;
 
+/// Default Book-mode text size: a comfortable paperback size on phones.
+const double kDefaultBookFontSize = 20;
+
+/// Book-mode text size range and step for the A−/A+ controls.
+const double kMinBookFontSize = 14;
+const double kMaxBookFontSize = 34;
+const double kBookFontSizeStep = 2;
+
 /// Storage key for the anchor colour. Before 2.0 the setting was saved as
 /// `anchorColorIndex` but only the legacy reader honoured it, so nearly every
 /// saved value is the old Hot Coral default rather than a real choice. A new
@@ -112,6 +120,8 @@ class AppConfig {
     this.wordSpacing = 0.0,
     this.readingRulerEnabled = false,
     this.focusModeEnabled = false,
+    this.bookFontSize = kDefaultBookFontSize,
+    this.lastReadingMode,
     this.googleDriveAccessMode = GoogleDriveAccessMode.selectedFilesOnly,
     this.readingFontFamily = 'AtkinsonHyperlegible',
   });
@@ -167,6 +177,9 @@ class AppConfig {
       wordSpacing: (json['wordSpacing'] as num?)?.toDouble() ?? 0.0,
       readingRulerEnabled: json['readingRulerEnabled'] as bool? ?? false,
       focusModeEnabled: json['focusModeEnabled'] as bool? ?? false,
+      bookFontSize:
+          (json['bookFontSize'] as num?)?.toDouble() ?? kDefaultBookFontSize,
+      lastReadingMode: json['lastReadingMode'] as String?,
       googleDriveAccessMode: googleDriveAccessMode,
       readingFontFamily:
           json['readingFontFamily'] as String? ?? 'AtkinsonHyperlegible',
@@ -205,6 +218,13 @@ class AppConfig {
   /// Whether reading controls should recede for gesture-first focus.
   final bool focusModeEnabled;
 
+  /// Text size (logical pixels, before system text scale) in Book mode.
+  final double bookFontSize;
+
+  /// Name of the reading mode last used, restored when a book opens.
+  /// Null until the reader first changes mode.
+  final String? lastReadingMode;
+
   /// Google Drive access mode selected by the user.
   final GoogleDriveAccessMode googleDriveAccessMode;
 
@@ -230,6 +250,8 @@ class AppConfig {
     double? wordSpacing,
     bool? readingRulerEnabled,
     bool? focusModeEnabled,
+    double? bookFontSize,
+    String? lastReadingMode,
     GoogleDriveAccessMode? googleDriveAccessMode,
     String? readingFontFamily,
   }) {
@@ -255,6 +277,8 @@ class AppConfig {
       wordSpacing: wordSpacing ?? this.wordSpacing,
       readingRulerEnabled: readingRulerEnabled ?? this.readingRulerEnabled,
       focusModeEnabled: focusModeEnabled ?? this.focusModeEnabled,
+      bookFontSize: bookFontSize ?? this.bookFontSize,
+      lastReadingMode: lastReadingMode ?? this.lastReadingMode,
       googleDriveAccessMode:
           googleDriveAccessMode ?? this.googleDriveAccessMode,
       readingFontFamily: readingFontFamily ?? this.readingFontFamily,
@@ -278,6 +302,8 @@ class AppConfig {
     'wordSpacing': wordSpacing,
     'readingRulerEnabled': readingRulerEnabled,
     'focusModeEnabled': focusModeEnabled,
+    'bookFontSize': bookFontSize,
+    if (lastReadingMode != null) 'lastReadingMode': lastReadingMode,
     'googleDriveAccessMode': googleDriveAccessMode.name,
     'readingFontFamily': readingFontFamily,
   };

@@ -101,10 +101,19 @@ class MaskedReadingView extends StatelessWidget {
     required this.semanticModeLabel,
     this.rulerKey,
     this.anchorColor = RunThruTokens.stageFocalRed,
+    this.paragraphStarts = const {},
+    this.wordOffset = 0,
   });
 
   /// Colour of the ORP letter on inked words (the reader's anchor setting).
   final Color anchorColor;
+
+  /// Document-wide word indices that start a paragraph. Empty for documents
+  /// extracted before paragraph data existed (falls back to heuristics).
+  final Set<int> paragraphStarts;
+
+  /// Document index of `words[0]` (non-zero when reading a page range).
+  final int wordOffset;
 
   /// Tri-zone mask overlay key (for tests).
   static const Key maskKey = ValueKey('masked-reading-tri-zone-mask');
@@ -195,7 +204,13 @@ class MaskedReadingView extends StatelessWidget {
             double.infinity,
           );
 
-          final paragraphs = _windowParagraphs(words, safeIndex);
+          final paragraphs = paragraphStarts.isEmpty
+              ? _windowParagraphs(words, safeIndex)
+              : _windowParagraphsFromStarts(
+                  words,
+                  safeIndex,
+                  (i) => i == 0 || paragraphStarts.contains(i + wordOffset),
+                );
           final lines = _measureLines(
             paragraphs: paragraphs,
             maxWidth: maxLineWidth,
@@ -517,6 +532,48 @@ List<List<_WindowWord>> _windowParagraphs(List<String> words, int wordIndex) {
       continue;
     }
     current.add(_WindowWord(words[j].trim(), j));
+  }
+  if (current.isNotEmpty) paragraphs.add(current);
+  return paragraphs;
+}
+
+/// Real paragraphs around [wordIndex]: whole paragraphs until there are at
+/// least [before] words above and [after] words below the current word, so
+/// a short heading never leaves the page nearly empty.
+List<List<_WindowWord>> _windowParagraphsFromStarts(
+  List<String> words,
+  int wordIndex,
+  bool Function(int index) isStart, {
+  int before = 120,
+  int after = 220,
+}) {
+  var start = wordIndex;
+  while (start > 0 && !isStart(start)) {
+    start--;
+  }
+  // Extend back by whole paragraphs.
+  while (start > 0 && wordIndex - start < before) {
+    start--;
+    while (start > 0 && !isStart(start)) {
+      start--;
+    }
+  }
+  var end = wordIndex;
+  // Extend forward to the end of a paragraph past the target.
+  while (end < words.length - 1 &&
+      (end - wordIndex < after || !isStart(end + 1))) {
+    end++;
+  }
+
+  final paragraphs = <List<_WindowWord>>[];
+  var current = <_WindowWord>[];
+  for (var j = start; j <= end; j++) {
+    if (j != start && isStart(j) && current.isNotEmpty) {
+      paragraphs.add(current);
+      current = <_WindowWord>[];
+    }
+    final word = words[j].trim();
+    if (word.isNotEmpty) current.add(_WindowWord(word, j));
   }
   if (current.isNotEmpty) paragraphs.add(current);
   return paragraphs;

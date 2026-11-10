@@ -6,7 +6,7 @@ part of 'google_drive_auth_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$googleDriveAuthHash() => r'07ab5a84b97ea5b1f405b43cba2b141498edd5e3';
+String _$googleDriveAuthHash() => r'b65b08678a086c813d4b90085e1ec7a780539d79';
 
 /// Manages the Google Drive authentication lifecycle.
 ///

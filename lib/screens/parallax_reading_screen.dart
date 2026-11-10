@@ -19,12 +19,14 @@ import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/orp.dart';
 import 'package:runthru/core/reading_range_resolver.dart';
 import 'package:runthru/core/sentence_resolver.dart';
+import 'package:runthru/core/text_segmentation.dart';
 import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/reading_progress_sync.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
+import 'package:runthru/features/reading/widgets/book_mode_view.dart';
 import 'package:runthru/features/reading/widgets/full_page_mode_view.dart';
 import 'package:runthru/features/reading/widgets/mode_switcher.dart';
 import 'package:runthru/features/reading/widgets/paragraph_mode_view.dart';
@@ -128,6 +130,59 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// The full extracted document (kept for "Continue Reading" past range end).
   ExtractedDocument? _fullDoc;
+
+  /// EPUB chapter starts (document word indices) for Book-mode page breaks.
+  /// Other sources' page boundaries are synthetic ~300-word chunks, not
+  /// chapters, so they never force a break.
+  Set<int> get _chapterStarts {
+    final doc = _fullDoc;
+    if (doc == null || !widget.filePath.toLowerCase().endsWith('.epub')) {
+      return const {};
+    }
+    return {for (final b in doc.pageBoundaries) b.startWordIndex};
+  }
+
+  /// Book mode's page view, for swipe and keyboard page turns.
+  final GlobalKey<BookModeViewState> _bookKey = GlobalKey<BookModeViewState>();
+
+  bool get _inBookMode =>
+      ref.read(readingModeNotifierProvider) == ReadingMode.book;
+
+  /// Book pages start on a sentence: entering Book mode snaps the reading
+  /// position back to the start of the current sentence.
+  void _snapToSentenceStartForBook() {
+    if (_words.isEmpty) return;
+    final start = _sentenceStartAt(_currentGlobalIndex);
+    final local = (start - _sliceOffset).clamp(0, _words.length - 1);
+    ref.read(wordTimerProvider.notifier).seekTo(local);
+    _cacheTimerPosition(local);
+  }
+
+  /// A Book page turn moves the shared reading position.
+  void _onBookTurn(int localIndex) {
+    final local = localIndex.clamp(0, _words.length - 1);
+    ref.read(wordTimerProvider.notifier).seekTo(local);
+    _cacheTimerPosition(local);
+    _wordNotifier.value = _words[local];
+  }
+
+  // Paragraph starts (document-wide word indices), cached per document and
+  // sentence count: progressive extraction appends sentences in place.
+  Set<int> _paragraphStartsCache = const {};
+  ExtractedDocument? _paragraphStartsDoc;
+  int _paragraphStartsSentenceCount = -1;
+
+  Set<int> get _paragraphStarts {
+    final doc = _fullDoc;
+    if (doc == null) return const {};
+    if (!identical(doc, _paragraphStartsDoc) ||
+        doc.sentences.length != _paragraphStartsSentenceCount) {
+      _paragraphStartsDoc = doc;
+      _paragraphStartsSentenceCount = doc.sentences.length;
+      _paragraphStartsCache = paragraphStartWordIndices(doc);
+    }
+    return _paragraphStartsCache;
+  }
 
   bool _isFullScreen = false;
   Timer? _onboardingCompleteTimer;
@@ -665,6 +720,19 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
     final timer = ref.read(wordTimerProvider.notifier);
 
+    // Open in the mode the reader last used.
+    if (config.lastReadingMode != null) {
+      ref
+          .read(readingModeNotifierProvider.notifier)
+          .setMode(ReadingModeX.parse(config.lastReadingMode));
+    }
+    // Book mode is read at the reader's own pace: no timer.
+    if (_inBookMode) {
+      timer.pause();
+      _snapToSentenceStartForBook();
+      return;
+    }
+
     // P8 Grade B — show reading goal onboarding once before first session.
     if (!config.hasSeenReadingGoalOnboarding) {
       timer.pause();
@@ -678,6 +746,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   void _togglePause() {
     appLog('gestures', 'detected: tap');
+    // Book mode has no timer; Space turns the page instead.
+    if (_inBookMode) {
+      _bookKey.currentState?.nextPage();
+      return;
+    }
     // P20 — tap during ContextReveal toggles sweep pause, not RSVP
     final crState = ref.read(contextRevealProvider);
     if (crState.isActive) {
@@ -782,6 +855,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// (hints don't interrupt word display).
   void _tryShowHint(String hintId) {
     if (_activeHint != null) return;
+    // Coach hints describe the timed reader ("Tap to pause").
+    if (_inBookMode) return;
     final hint = _hintController.check(hintId);
     if (hint != null) {
       setState(() => _activeHint = hint);
@@ -846,6 +921,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     timer.loadDocument(_words.length, startIndex: 0);
     _cacheTimerPosition(0);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+    if (_inBookMode) return;
     _sessionStart = DateTime.now();
     _sessionWordCount = 0;
     timer.play();
@@ -998,6 +1074,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   }
 
   void _onSwipeLeft() {
+    if (_inBookMode) {
+      _bookKey.currentState?.nextPage();
+      return;
+    }
     final crState = ref.read(contextRevealProvider);
     if (crState.isActive) {
       // v4 — sentence mode: navigate to next sentence
@@ -1029,6 +1109,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   }
 
   void _onSwipeRight() {
+    if (_inBookMode) {
+      _bookKey.currentState?.previousPage();
+      return;
+    }
     final crState = ref.read(contextRevealProvider);
     if (crState.isActive) {
       // v4 — sentence mode: navigate to previous sentence
@@ -1283,12 +1367,23 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           readingFontFamily: v.readingFontFamily,
           readingRulerEnabled: v.readingRulerEnabled,
           focusModeEnabled: v.focusModeEnabled,
+          bookFontSize: v.bookFontSize,
           letterSpacing: v.letterSpacing,
           wordSpacing: v.wordSpacing,
         );
       }),
     );
     final readingMode = ref.watch(readingModeNotifierProvider);
+    ref.listen<ReadingMode>(readingModeNotifierProvider, (prev, next) {
+      if (prev == next) return;
+      unawaited(
+        ref.read(configProvider.notifier).setLastReadingMode(next.name),
+      );
+      if (next == ReadingMode.book) {
+        ref.read(wordTimerProvider.notifier).pause();
+        _snapToSentenceStartForBook();
+      }
+    });
 
     ref.listen<WordTimerState>(wordTimerProvider, (prev, next) {
       // Reading is the host; background extraction is a guest. No new
@@ -1425,8 +1520,14 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                           Positioned.fill(
                             child: GestureDetector(
                               behavior: HitTestBehavior.translucent,
-                              onTap: _togglePause,
-                              onDoubleTap: _handleDoubleTap,
+                              // Book pages handle their own taps; an outer
+                              // double-tap would delay every page turn.
+                              onTap: readingMode == ReadingMode.book
+                                  ? null
+                                  : _togglePause,
+                              onDoubleTap: readingMode == ReadingMode.book
+                                  ? null
+                                  : _handleDoubleTap,
                               child: ValueListenableBuilder<String>(
                                 valueListenable: _wordNotifier,
                                 builder: (context, currentWord, _) {
@@ -1536,6 +1637,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                         'paragraph',
                                                       ),
                                                       anchorColor: anchorColor,
+                                                      paragraphStarts:
+                                                          _paragraphStarts,
+                                                      wordOffset: _sliceOffset,
                                                       words: _words,
                                                       currentIndex:
                                                           currentIndex,
@@ -1548,12 +1652,57 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                       fontSize: fontSize,
                                                       wpm: wpm,
                                                     ),
+                                                  ReadingMode.book => BookModeView(
+                                                    key: _bookKey,
+                                                    words: _words,
+                                                    startIndex: currentIndex,
+                                                    onTurn: _onBookTurn,
+                                                    fontFamily: config
+                                                        .readingFontFamily,
+                                                    fontSize:
+                                                        config.bookFontSize,
+                                                    letterSpacing:
+                                                        config.letterSpacing,
+                                                    wordSpacing:
+                                                        config.wordSpacing,
+                                                    wpm: wpm,
+                                                    onFontSizeChanged: (size) =>
+                                                        ref
+                                                            .read(
+                                                              configProvider
+                                                                  .notifier,
+                                                            )
+                                                            .setBookFontSize(
+                                                              size,
+                                                            ),
+                                                    paragraphStarts:
+                                                        _paragraphStarts,
+                                                    chapterStarts:
+                                                        _chapterStarts,
+                                                    wordOffset: _sliceOffset,
+                                                    totalWords:
+                                                        _allDocWords.length,
+                                                    topInset:
+                                                        MediaQuery.paddingOf(
+                                                          context,
+                                                        ).top +
+                                                        (config.focusModeEnabled
+                                                            ? 56
+                                                            : _kReaderHeaderRowExtent),
+                                                    bottomInset:
+                                                        MediaQuery.paddingOf(
+                                                          context,
+                                                        ).bottom,
+                                                  ),
                                                   ReadingMode.fullPage =>
                                                     FullPageModeView(
                                                       key: const ValueKey(
                                                         'fullPage',
                                                       ),
                                                       anchorColor: anchorColor,
+                                                      paragraphStarts:
+                                                          _paragraphStarts,
+                                                      wordOffset: _sliceOffset,
                                                       words: _words,
                                                       currentIndex:
                                                           currentIndex,
@@ -1576,7 +1725,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                       // scroll straight under the buttons.
                                       // Fade it into the stage behind them.
                                       if (!crState.isActive &&
-                                          readingMode != ReadingMode.singleWord)
+                                          readingMode !=
+                                              ReadingMode.singleWord &&
+                                          readingMode != ReadingMode.book)
                                         Positioned.fill(
                                           child: _ChromeFade(
                                             top:
@@ -1598,7 +1749,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                       // Mounted in focus mode too — the pause
                                       // overlay is the only way back out of
                                       // focus mode (its toggle must appear).
-                                      if (!crState.isActive)
+                                      if (!crState.isActive &&
+                                          readingMode != ReadingMode.book)
                                         Positioned.fill(
                                           child: PauseFog3D(
                                             isPaused:
@@ -1956,15 +2108,18 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           isFullScreen: _isFullScreen,
                                         ),
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          20,
-                                          6,
-                                          20,
-                                          8,
+                                      // Book mode shows one progress figure,
+                                      // in its page footer.
+                                      if (readingMode != ReadingMode.book)
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            20,
+                                            6,
+                                            20,
+                                            8,
+                                          ),
+                                          child: _ProgressRail(wpm: wpm),
                                         ),
-                                        child: _ProgressRail(wpm: wpm),
-                                      ),
                                     ],
                                   ),
                                 ),
@@ -2014,30 +2169,32 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                   ),
                                 ),
                               ),
-                            // Persistent action tray (always visible)
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {},
-                                child: SafeArea(
-                                  top: false,
-                                  child: _PersistentActionTray(
-                                    isPlaying: isPlaying,
-                                    wpm: wpm,
-                                    onPlayPause: _togglePause,
-                                    onPrevSentence: _seekToPreviousSentence,
-                                    onNextSentence: _seekToNextSentence,
-                                    onWpmSelected: _selectPausedWpm,
-                                    playButtonKey: _playButtonKey,
-                                    prevButtonKey: _prevButtonKey,
-                                    speedSelectorKey: _speedSelectorKey,
+                            // Persistent action tray (hidden in Book mode,
+                            // which has its own page footer).
+                            if (readingMode != ReadingMode.book)
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {},
+                                  child: SafeArea(
+                                    top: false,
+                                    child: _PersistentActionTray(
+                                      isPlaying: isPlaying,
+                                      wpm: wpm,
+                                      onPlayPause: _togglePause,
+                                      onPrevSentence: _seekToPreviousSentence,
+                                      onNextSentence: _seekToNextSentence,
+                                      onWpmSelected: _selectPausedWpm,
+                                      playButtonKey: _playButtonKey,
+                                      prevButtonKey: _prevButtonKey,
+                                      speedSelectorKey: _speedSelectorKey,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
                           ],
                         ],
                       ),
@@ -2057,6 +2214,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
 /// Height of the header row + progress rail below the top safe area.
 const double _kReaderHeaderExtent = 104;
+
+/// Height of the header row alone (Book mode hides the progress rail).
+const double _kReaderHeaderRowExtent = 72;
 
 /// Height of the persistent action tray above the bottom safe area.
 const double _kReaderTrayExtent = 172;

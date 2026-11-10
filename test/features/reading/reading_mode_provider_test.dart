@@ -35,6 +35,9 @@ void main() {
       expect(container.read(readingModeNotifierProvider), ReadingMode.fullPage);
 
       notifier.cycleMode();
+      expect(container.read(readingModeNotifierProvider), ReadingMode.book);
+
+      notifier.cycleMode();
       expect(
         container.read(readingModeNotifierProvider),
         ReadingMode.singleWord,
@@ -50,6 +53,9 @@ void main() {
         container.read(readingModeNotifierProvider),
         ReadingMode.singleWord,
       );
+
+      notifier.cycleModeReverse();
+      expect(container.read(readingModeNotifierProvider), ReadingMode.book);
 
       notifier.cycleModeReverse();
       expect(container.read(readingModeNotifierProvider), ReadingMode.fullPage);

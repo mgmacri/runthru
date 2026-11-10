@@ -90,7 +90,7 @@ final googleDriveTempDirectoryProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef GoogleDriveTempDirectoryRef = AutoDisposeFutureProviderRef<Directory>;
-String _$googleDriveFilesHash() => r'bd606cdde05d0587ace4d734f7d34fc17b0aed37';
+String _$googleDriveFilesHash() => r'7e74dfe48cd6f761ddaeb44b46dc6ec113befaea';
 
 /// Fetches and refreshes supported Google Drive files.
 ///
@@ -108,7 +108,7 @@ final googleDriveFilesProvider =
     );
 
 typedef _$GoogleDriveFiles = Notifier<GoogleDriveFileListState>;
-String _$googleDriveImportHash() => r'ab541eea16e463bbbcd804868317e708bc5b2e1a';
+String _$googleDriveImportHash() => r'ee87f186989fab6ba79859327efa56e754af0f6f';
 
 /// Imports supported Google Drive files into RunThru documents.
 ///

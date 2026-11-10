@@ -19,7 +19,15 @@ class ParagraphModeView extends StatelessWidget {
     required this.fontSize,
     required this.wpm,
     this.anchorColor = RunThruTokens.stageFocalRed,
+    this.paragraphStarts = const {},
+    this.wordOffset = 0,
   });
+
+  /// Document-wide paragraph start indices (see [MaskedReadingView]).
+  final Set<int> paragraphStarts;
+
+  /// Document index of `words[0]`.
+  final int wordOffset;
 
   /// Colour of the ORP letter on inked words (the reader's anchor setting).
   final Color anchorColor;
@@ -61,6 +69,8 @@ class ParagraphModeView extends StatelessWidget {
       semanticModeLabel: 'Paragraph mode',
       rulerKey: readingLineKey,
       anchorColor: anchorColor,
+      paragraphStarts: paragraphStarts,
+      wordOffset: wordOffset,
     );
   }
 }

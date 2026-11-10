@@ -2,17 +2,26 @@
 library;
 
 class Sentence {
-  const Sentence({required this.words});
+  const Sentence({required this.words, this.startsParagraph = false});
 
   factory Sentence.fromJson(Map<String, Object?> json) {
     final words =
         (json['words'] as List<Object?>?)?.cast<String>() ?? <String>[];
-    return Sentence(words: words);
+    return Sentence(words: words, startsParagraph: json['p'] == true);
   }
 
   final List<String> words;
 
-  Map<String, Object?> toJson() => {'words': words};
+  /// Whether this sentence opens a paragraph (or a heading). Documents
+  /// extracted before paragraph data existed load with every value false.
+  final bool startsParagraph;
+
+  /// `p` is written only when true, so stored documents stay compact and
+  /// older readers ignore it.
+  Map<String, Object?> toJson() => {
+    'words': words,
+    if (startsParagraph) 'p': true,
+  };
 }
 
 class ExtractedDocument {

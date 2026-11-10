@@ -7,7 +7,7 @@ part of 'reading_mode_provider.dart';
 // **************************************************************************
 
 String _$readingModeNotifierHash() =>
-    r'bc64db9b4e484baa8224563fd1d85cd9e0a1bcfe';
+    r'3f96d173e2054242f6aaf03e53d487aa9d6c7745';
 
 /// Provides the current reading mode. Auto-disposed when the reading
 /// screen is unmounted (session-only, not persisted in AppConfig).
