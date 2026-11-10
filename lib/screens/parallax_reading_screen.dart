@@ -174,6 +174,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   ExtractedDocument? _fallbackStartsDoc;
   int _fallbackStartsSentenceCount = -1;
 
+  /// Landscape with the header and tray visible (Focus Mode off): the
+  /// focal word centres between them.
+  bool _landscapeChrome(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final focus =
+        ref.read(configProvider).valueOrNull?.focusModeEnabled ?? false;
+    return size.width > size.height && !focus;
+  }
+
   /// Book mode's page view, for swipe and keyboard page turns.
   final GlobalKey<BookModeViewState> _bookKey = GlobalKey<BookModeViewState>();
 
@@ -1804,8 +1813,14 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                             wpm: wpm,
                                             focusModeEnabled:
                                                 config.focusModeEnabled,
+                                            // Landscape is too short for the
+                                            // toggle, the paused sentence and
+                                            // the tray together; Focus Mode
+                                            // stays in Settings there.
                                             onFocusModeChanged:
-                                                _setFocusModeEnabled,
+                                                _landscapeChrome(context)
+                                                ? null
+                                                : _setFocusModeEnabled,
                                             externalPosition:
                                                 _motionCtrl.positionNotifier,
                                             onRecalibrate:
@@ -2026,11 +2041,30 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           ),
                                         ),
                                         // ORP focal word (hidden during ContextReveal)
+                                        // In landscape the header and tray
+                                        // take most of the height, so the
+                                        // word centres in the space between
+                                        // them instead of touching the play
+                                        // button.
                                         if (currentWord.isNotEmpty &&
                                             !crState.isActive &&
                                             readingMode ==
                                                 ReadingMode.singleWord)
-                                          Positioned.fill(
+                                          Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            top: _landscapeChrome(context)
+                                                ? MediaQuery.paddingOf(
+                                                        context,
+                                                      ).top +
+                                                      _kReaderHeaderExtent
+                                                : 0,
+                                            bottom: _landscapeChrome(context)
+                                                ? MediaQuery.paddingOf(
+                                                        context,
+                                                      ).bottom +
+                                                      _kReaderTrayExtent
+                                                : 0,
                                             child: _OrpFocalWord(
                                               focalTargetKey: _stageKey,
                                               word: currentWord,
@@ -2183,7 +2217,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                 left: 0,
                                 right: 0,
                                 bottom:
-                                    MediaQuery.paddingOf(context).bottom + 196,
+                                    MediaQuery.paddingOf(context).bottom +
+                                    (_landscapeChrome(context)
+                                        ? _kReaderTrayExtent + 4
+                                        : 196),
                                 child: IgnorePointer(
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
