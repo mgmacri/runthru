@@ -332,23 +332,29 @@ List<String> _getChapters(List<int> bytes) {
       ? '${opfPath.substring(0, opfPath.lastIndexOf('/'))}/'
       : '';
 
-  // Build manifest: id → href.
+  // Build manifest: id → href. The EPUB 3 navigation document (the table
+  // of contents, `properties="nav"`) is not body text: reading it flashes
+  // "Chapter One … Table of Contents" before the book starts.
   final manifestItems = <String, String>{};
+  final navIds = <String>{};
   for (final item in opfDoc.findAllElements('item')) {
     final id = item.getAttribute('id');
     final href = item.getAttribute('href');
     if (id != null && href != null) {
       manifestItems[id] = href;
+      final properties = (item.getAttribute('properties') ?? '').split(' ');
+      if (properties.contains('nav')) navIds.add(id);
     }
   }
 
-  // Read spine to get reading order.
+  // Read spine to get reading order. Skip the nav document and items the
+  // publisher marked `linear="no"` (auxiliary content outside reading order).
   final spineRefs = <String>[];
   for (final itemref in opfDoc.findAllElements('itemref')) {
     final idref = itemref.getAttribute('idref');
-    if (idref != null) {
-      spineRefs.add(idref);
-    }
+    if (idref == null || navIds.contains(idref)) continue;
+    if (itemref.getAttribute('linear')?.toLowerCase() == 'no') continue;
+    spineRefs.add(idref);
   }
 
   // 3. Extract XHTML content in spine order.

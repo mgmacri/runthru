@@ -34,6 +34,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | B-11 | Reader speed tray highlighted 300 (and told TalkBack it was selected) whenever the speed was between chips, e.g. the 250 WPM Comfortable default, contradicting the header | P1 | done | claude | `lib/screens/parallax_reading_screen.dart`, `test/screens/parallax_reading_screen_test.dart` | exact match only; regression test |
 | B-12 | Pause overlay's Focus Mode toggle was centred (`Alignment(0, 0.15)`) and covered the paused focal word, hiding where the reader stopped | P1 | done | claude | `lib/widgets/pause_fog_3d.dart` | moved below the header; verified on emulator |
 | B-13 | Paused Word-mode sentence panel is capped at 4 lines; in a long sentence the bold current word fell past line 4 and was faded out | P2 | done | claude | `lib/core/sentence_resolver.dart`, `lib/screens/parallax_reading_screen.dart`, `test/core/sentence_resolver_test.dart` | 30-word window around the current word with ellipses; unit tests |
+| B-14 | EPUB table of contents (`properties="nav"`) and `linear="no"` spine items were read as body text: every pandoc/Calibre book opened with "Chapter One: Arrival Chapter Two … Table of Contents" | P1 | done | claude | `lib/services/epub_extractor.dart`, `test/services/epub_extractor_test.dart` | skipped in `_getChapters` (shared by count + extract, so page counts stay consistent); regression test |
 
 ## Reading screen (lane `reading`)
 
@@ -66,6 +67,5 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 |----|-------|--------|
 | P-8 | Range picker picks first occurrence of duplicate word | needs pdfrx positional data; edge case |
 | LEG | Remove `/read-legacy` + `ReadingScreen` | keep as deep-link fallback for one release |
-| EPUB-NAV | EPUB `nav.xhtml` (table of contents) is in the spine and read as text | dropping it changes chapter counts that `epubChapterCountInIsolate` computes separately; fix both together in 2.0.1 |
 | EPUB-CACHE | Text extracted before B-08 and migrated from legacy caches keeps the leaked markup (identity is content hash, so re-import does not re-extract) | ContentStore is new in 2.0 so no shipped ContentStore cache exists; bump `kContentStoreSchemaVersion` with a read-path re-extract in 2.0.1 |
 | AIQ | `SectionProcessingRequest.fromJson` uses `as` casts; a wrongly typed persisted entry throws `TypeError` that `_decode` does not catch | nothing enqueues in 2.0 (A-02 deferred); fix before A-02 lands |

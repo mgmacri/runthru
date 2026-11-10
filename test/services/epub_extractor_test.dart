@@ -17,6 +17,8 @@ List<int> _createTestEpub({
     '<html><body><p>Chapter one. This is the first chapter of the test book.</p></body></html>',
     '<html><body><p>Chapter two. This is the second chapter with more text.</p></body></html>',
   ],
+  Map<int, String> itemAttributes = const {},
+  Map<int, String> itemrefAttributes = const {},
 }) {
   final archive = Archive();
 
@@ -44,9 +46,12 @@ List<int> _createTestEpub({
     final id = 'chapter${i + 1}';
     final href = 'chapter${i + 1}.xhtml';
     manifestItems.writeln(
-      '    <item id="$id" href="$href" media-type="application/xhtml+xml"/>',
+      '    <item id="$id" href="$href" media-type="application/xhtml+xml"'
+      '${itemAttributes[i] ?? ''}/>',
     );
-    spineItems.writeln('    <itemref idref="$id"/>');
+    spineItems.writeln(
+      '    <itemref idref="$id"${itemrefAttributes[i] ?? ''}/>',
+    );
   }
 
   // content.opf
@@ -265,6 +270,27 @@ void main() {
       expect(allText, contains('—'));
       expect(allText, contains('\u201C'));
       expect(allText, contains('\u201D'));
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('skips the nav document and non-linear spine items', () async {
+      final bytes = _createTestEpub(
+        chapterContents: [
+          '<html><body><nav><ol><li>Chapter One</li></ol></nav></body></html>',
+          '<html><body><p>Cover blurb.</p></body></html>',
+          '<html><body><p>The real first sentence.</p></body></html>',
+        ],
+        itemAttributes: {0: ' properties="nav"'},
+        itemrefAttributes: {1: ' linear="no"'},
+      );
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/test.epub';
+      await File(epubPath).writeAsBytes(bytes);
+
+      final doc = await epubExtract(epubPath);
+      expect(doc.allWords.join(' '), 'The real first sentence.');
+      expect(await epubChapterCountInIsolate(epubPath), 1);
 
       await tempDir.delete(recursive: true);
     });
