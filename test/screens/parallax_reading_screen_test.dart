@@ -269,6 +269,39 @@ void main() {
       expect(find.bySemanticsLabel('Resume reading'), findsNothing);
     });
 
+    testWidgets('speed chips highlight only an exact speed match', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      bool selected(String label) =>
+          tester
+              .getSemantics(find.bySemanticsLabel(RegExp('^$label')))
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected
+              .toBoolOrNull() ??
+          false;
+
+      await tester.pumpWidget(
+        _readingHarness(
+          _FakeConfigNotifier(
+            const AppConfig(
+              hasSeenReadingGoalOnboarding: true,
+              defaultWpm: 250,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // 250 sits between chips: none may claim to be the current speed.
+      for (final label in ['200 WPM', '300 WPM', '400 WPM', '500 WPM']) {
+        expect(selected(label), isFalse, reason: label);
+      }
+      handle.dispose();
+    });
+
     testWidgets(
       'speed selector tour target covers visible label and speed buttons',
       (tester) async {

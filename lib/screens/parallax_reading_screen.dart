@@ -2594,9 +2594,10 @@ class _SpeedSelector extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: _values.map((value) {
-                  final active =
-                      value == selected ||
-                      (value == 300 && !_values.contains(selected));
+                  // Only an exact match is highlighted. Speeds between the
+                  // chips (e.g. the 250 WPM "Comfortable" goal) used to light
+                  // up 300, contradicting the header and TalkBack.
+                  final active = value == selected;
                   return Semantics(
                     button: true,
                     selected: active,
