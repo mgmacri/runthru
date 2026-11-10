@@ -39,6 +39,14 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
+  /// Turns chapter title cards and chapter-complete moments on or off.
+  Future<void> setChapterMoments(bool enabled) => _synchronized(() async {
+    final config = state.valueOrNull ?? const AppConfig();
+    final updated = config.copyWith(chapterMoments: enabled);
+    state = AsyncData<AppConfig>(updated);
+    await _persist(updated);
+  });
+
   /// Sets the Book-mode text size, clamped to the supported range.
   Future<void> setBookFontSize(double size) => _synchronized(() async {
     final config = state.valueOrNull ?? const AppConfig();

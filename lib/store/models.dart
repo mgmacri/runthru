@@ -120,6 +120,7 @@ class AppConfig {
     this.wordSpacing = 0.0,
     this.readingRulerEnabled = false,
     this.focusModeEnabled = false,
+    this.chapterMoments = true,
     this.bookFontSize = kDefaultBookFontSize,
     this.lastReadingMode,
     this.googleDriveAccessMode = GoogleDriveAccessMode.selectedFilesOnly,
@@ -177,6 +178,7 @@ class AppConfig {
       wordSpacing: (json['wordSpacing'] as num?)?.toDouble() ?? 0.0,
       readingRulerEnabled: json['readingRulerEnabled'] as bool? ?? false,
       focusModeEnabled: json['focusModeEnabled'] as bool? ?? false,
+      chapterMoments: json['chapterMoments'] as bool? ?? true,
       bookFontSize:
           (json['bookFontSize'] as num?)?.toDouble() ?? kDefaultBookFontSize,
       lastReadingMode: json['lastReadingMode'] as String?,
@@ -218,6 +220,10 @@ class AppConfig {
   /// Whether reading controls should recede for gesture-first focus.
   final bool focusModeEnabled;
 
+  /// Whether chapters are announced with a title card and their ends
+  /// marked with a short celebration. Off: headings read as plain words.
+  final bool chapterMoments;
+
   /// Text size (logical pixels, before system text scale) in Book mode.
   final double bookFontSize;
 
@@ -250,6 +256,7 @@ class AppConfig {
     double? wordSpacing,
     bool? readingRulerEnabled,
     bool? focusModeEnabled,
+    bool? chapterMoments,
     double? bookFontSize,
     String? lastReadingMode,
     GoogleDriveAccessMode? googleDriveAccessMode,
@@ -277,6 +284,7 @@ class AppConfig {
       wordSpacing: wordSpacing ?? this.wordSpacing,
       readingRulerEnabled: readingRulerEnabled ?? this.readingRulerEnabled,
       focusModeEnabled: focusModeEnabled ?? this.focusModeEnabled,
+      chapterMoments: chapterMoments ?? this.chapterMoments,
       bookFontSize: bookFontSize ?? this.bookFontSize,
       lastReadingMode: lastReadingMode ?? this.lastReadingMode,
       googleDriveAccessMode:
@@ -302,6 +310,7 @@ class AppConfig {
     'wordSpacing': wordSpacing,
     'readingRulerEnabled': readingRulerEnabled,
     'focusModeEnabled': focusModeEnabled,
+    'chapterMoments': chapterMoments,
     'bookFontSize': bookFontSize,
     if (lastReadingMode != null) 'lastReadingMode': lastReadingMode,
     'googleDriveAccessMode': googleDriveAccessMode.name,

@@ -275,6 +275,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
 
+            // ── Chapter moments ──
+            NeumorphicCard(
+              surface: RunThruSurface.shell,
+              child: MergeSemantics(
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.auto_stories_rounded,
+                      size: 22,
+                      color: RunThruTokens.shellAccent,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Chapter moments',
+                            style: RunThruTypography.title,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Announce each chapter with a title card and mark '
+                            'the end of a chapter before moving on.',
+                            style: RunThruTypography.caption.copyWith(
+                              color: RunThruTokens.shellTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Switch.adaptive(
+                      value: config.chapterMoments,
+                      activeThumbColor: RunThruTokens.shellAccent,
+                      activeTrackColor: RunThruTokens.shellAccent.withValues(
+                        alpha: 0.34,
+                      ),
+                      onChanged: notifier.setChapterMoments,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             // ── Reading Font ──
             NeumorphicCard(
               surface: RunThruSurface.shell,

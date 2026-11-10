@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:runthru/core/book_structure.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/context_reveal_notifier.dart';
 import 'package:runthru/core/motion_parallax_controller.dart';
@@ -27,8 +28,11 @@ import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/reading_progress_sync.dart';
+import 'package:runthru/features/reading/chapter_flow.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
+import 'package:runthru/features/reading/widgets/chapter_title_card.dart';
+import 'package:runthru/features/reading/widgets/section_complete_overlay.dart';
 import 'package:runthru/features/reading/widgets/book_mode_view.dart';
 import 'package:runthru/features/reading/widgets/full_page_mode_view.dart';
 import 'package:runthru/features/reading/widgets/mode_switcher.dart';
@@ -134,6 +138,45 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// The full extracted document (kept for "Continue Reading" past range end).
   ExtractedDocument? _fullDoc;
 
+  /// Front matter, chapters and back matter of [_fullDoc] (document-wide
+  /// word indices).
+  BookStructure _structure = BookStructure.flat(0);
+
+  /// A chapter moment in progress (title card, chapter complete, book
+  /// complete). The timer is paused while one is up, but the reader is not
+  /// "paused": no fog, no paused panel.
+  _Interlude? _interlude;
+
+  /// Shown on the first title card of a book opened past its front matter.
+  String? _pendingSkippedNote;
+
+  /// Document word index before the latest timer step (to tell a step from
+  /// a jump).
+  int _previousGlobalIndex = 0;
+
+  /// The continuous run of reading inside the current section: where it
+  /// began and how long it has been playing. Feeds the chapter-complete
+  /// figures, and decides whether a chapter was read or merely passed.
+  int _runSection = -1;
+  int _runFrom = 0;
+  final Stopwatch _runClock = Stopwatch();
+
+  /// Time spent playing since this screen opened (book-complete figures).
+  final Stopwatch _readingClock = Stopwatch();
+
+  /// Lets the last word of a book stand before the finish screen.
+  Timer? _bookEndTimer;
+
+  /// Index of the section being read, for the header and contents sheet.
+  final ValueNotifier<int> _sectionIndex = ValueNotifier(0);
+
+  bool get _chapterMomentsOn =>
+      ref.read(configProvider).valueOrNull?.chapterMoments ?? true;
+
+  /// Slice-local index of document word [global].
+  int _localIndex(int global) =>
+      (global - _sliceOffset).clamp(0, _words.isEmpty ? 0 : _words.length - 1);
+
   /// EPUB chapter starts (document word indices) for Book-mode page breaks.
   /// Other sources' page boundaries are synthetic ~300-word chunks, not
   /// chapters, so they never force a break.
@@ -202,13 +245,51 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// A Book page turn moves the shared reading position.
   void _onBookTurn(int localIndex) {
     final local = localIndex.clamp(0, _words.length - 1);
+    final from = _lastGlobalIndex;
+    final to = _sliceOffset + local;
     ref.read(wordTimerProvider.notifier).seekTo(local);
     _cacheTimerPosition(local);
+    _previousGlobalIndex = to;
     _wordNotifier.value = _words[local];
+    _bookTurnedAcross(from, to);
     // Book mode never pauses, so record progress (Continue Reading,
     // Instapaper) on each page turn.
     _recordShelfProgress();
     _recordInstapaperProgress(_lastTimerState, _lastGlobalIndex);
+  }
+
+  /// Book mode: turning the page from one chapter into the next marks the
+  /// chapter as finished, just as running off its last word does when
+  /// timed; turning into the back matter finishes the book.
+  void _bookTurnedAcross(int from, int to) {
+    final previous = _structure.sectionAt(from);
+    final section = _structure.sectionAt(to);
+    _sectionIndex.value = section.index;
+    if (!_chapterMomentsOn || to <= from) return;
+    if (section.index != previous.index + 1 || to != section.start) return;
+    if (previous.kind != SectionKind.body) return;
+    if (section.kind == SectionKind.back) {
+      _showBookComplete(backMatter: section);
+      return;
+    }
+    if (!section.isTitled ||
+        previous.wordCount < RunThruTiming.celebrationMinWords) {
+      return;
+    }
+    setState(() {
+      _interlude = _CompleteInterlude(
+        completionFor(
+          _structure,
+          completed: previous,
+          next: section,
+          readFrom: previous.textStart,
+          // Book mode is read at the reader's own pace: no timing.
+          readingTime: Duration.zero,
+          wpm: ref.read(wordTimerProvider).wpm,
+        ),
+        next: section,
+      );
+    });
   }
 
   // Paragraph starts (document-wide word indices), cached per document and
@@ -387,6 +468,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _restartFlashTimer?.cancel();
     _onboardingCompleteTimer?.cancel();
     _sentenceGapTimer?.cancel();
+    _bookEndTimer?.cancel();
+    _sectionIndex.dispose();
     _wordNotifier.dispose();
     _focusNode.dispose();
     _sweepEngine.dispose();
@@ -460,6 +543,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         ? _allDocWords.length
         : _lastTimerState.totalWords;
     if (total <= 0 || _lastGlobalIndex <= 0) return null;
+    // Finished and not read any further: keep it finished.
+    if (_finishedAt >= 0 && _lastGlobalIndex == _finishedAt) return null;
     final shelf = _shelfProgress;
     final contentId = widget.filePath;
     final source = _progressSource;
@@ -481,8 +566,14 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Removes this item from the Continue Reading shelf once fully read.
   void _markShelfFinished() {
     if (_isClipboard && !_isInstapaper) return;
+    _finishedAt = _lastGlobalIndex;
     unawaited(_shelfProgress.markFinished(widget.filePath));
   }
+
+  /// Where the reader was when the book was marked finished, or -1. While
+  /// the position stays there, leaving the book must not write it back to
+  /// Continue Reading as "100%, in progress".
+  int _finishedAt = -1;
 
   String get _progressSource {
     if (_isInstapaper) return 'instapaper';
@@ -540,6 +631,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
+      // A title card must not start reading behind the reader's back.
+      _bookEndTimer?.cancel();
+      if (_interlude is _TitleInterlude || _interlude is _HeadingInterlude) {
+        _cancelInterlude();
+      }
       _endAnalyticsSession();
       // Persist local bookmark for normal docs and Instapaper articles.
       // Pure clipboard sessions remain ephemeral (Rule 28).
@@ -640,6 +736,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _words = _allDocWords;
     _sliceOffset = 0;
     _readingRange = null;
+    _structure = analyzeBookStructure(doc);
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
 
@@ -658,12 +755,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           _words.length - 1,
         );
       }
+      startIndex = _firstOpenStart(startIndex);
     }
 
     _wordNotifier.value = _words[startIndex];
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
     _cacheTimerPosition(startIndex);
+    _previousGlobalIndex = startIndex;
+    _sectionIndex.value = _structure.sectionAt(startIndex).index;
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _startTimerAfterFirstRunGate();
@@ -699,10 +799,17 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       return;
     }
 
+    _structure = analyzeBookStructure(doc);
+    appLog(
+      'ParallaxReadingScreen',
+      'structure: sections=${_structure.sections.length} '
+          'body=${_structure.bodyStart}..${_structure.bodyEnd}',
+    );
+
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
-    final bookmark = ref
-        .read(bookmarkStoreProvider.notifier)
-        .resolve(widget.filePath);
+    final bookmark = _bookmarkForCurrentText(
+      ref.read(bookmarkStoreProvider.notifier).resolve(widget.filePath),
+    );
     final range = bookmark?.readingRange;
 
     if (range != null && doc.hasPageBoundaries) {
@@ -746,6 +853,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         final timer = ref.read(wordTimerProvider.notifier);
         timer.loadDocument(_words.length, startIndex: startIndex);
         _cacheTimerPosition(startIndex);
+        _previousGlobalIndex = _sliceOffset + startIndex;
+        _sectionIndex.value = _structure
+            .sectionAt(_sliceOffset + startIndex)
+            .index;
         timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
         timer.setWpm(config.defaultWpm);
 
@@ -767,7 +878,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _sliceOffset = 0;
     _readingRange = null;
 
-    final startIndex = bookmark != null ? resumeIndex(bookmark, doc) : 0;
+    final startIndex = _firstOpenStart(
+      bookmark != null ? resumeIndex(bookmark, doc) : 0,
+    );
     appLog('ParallaxReadingScreen', 'startIndex=$startIndex');
 
     _wordNotifier.value = _words[startIndex.clamp(0, _words.length - 1)];
@@ -780,10 +893,49 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: startIndex);
     _cacheTimerPosition(startIndex);
+    _previousGlobalIndex = startIndex;
+    _sectionIndex.value = _structure.sectionAt(startIndex).index;
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
     _startTimerAfterFirstRunGate();
     appLog('ParallaxReadingScreen', 'timer loaded wpm=${config.defaultWpm}');
+  }
+
+  /// Where a document opens. A book with no saved position starts at its
+  /// first real chapter, not at its cover and copyright page; the skipped
+  /// part stays one tap away on the first title card.
+  int _firstOpenStart(int resumeAt) {
+    if (resumeAt > 0) return resumeAt;
+    final bodyStart = _structure.bodyStart;
+    if (bodyStart <= 0 || bodyStart >= _allDocWords.length) return resumeAt;
+    final wpm =
+        (ref.read(configProvider).valueOrNull ?? const AppConfig()).defaultWpm;
+    _pendingSkippedNote =
+        'Skipped the front matter · ${formatMinutes(minutesFor(bodyStart, wpm))}';
+    appLog('ParallaxReadingScreen', 'first open: starting at body $bodyStart');
+    return bodyStart;
+  }
+
+  /// A saved position was a word index into the text as it was extracted
+  /// then. When this build extracts the same book differently (page
+  /// furniture removed, split words rejoined), the old index would land a
+  /// little further on: scale it by the change in length and store it.
+  BookmarkData? _bookmarkForCurrentText(BookmarkData? bookmark) {
+    if (bookmark == null || bookmark.wordIndex <= 0) return bookmark;
+    final record = _shelfProgress.getRecord(widget.filePath);
+    final oldTotal = record?.totalWords ?? 0;
+    final newTotal = _allDocWords.length;
+    if (oldTotal <= 0 || oldTotal == newTotal || newTotal <= 0) return bookmark;
+    final scaled = (bookmark.wordIndex * newTotal / oldTotal).round().clamp(
+      0,
+      newTotal - 1,
+    );
+    appLog(
+      'ParallaxReadingScreen',
+      'text length changed $oldTotal→$newTotal; position rescaled',
+    );
+    _bookmarkNotifier.updateIndex(scaled);
+    return bookmark.copyWith(wordIndex: scaled);
   }
 
   void _startTimerAfterFirstRunGate() {
@@ -809,18 +961,324 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       return;
     }
 
-    _sessionStart = DateTime.now();
-    _sessionWordCount = 0;
+    _play();
+  }
+
+  /// Starts or resumes timed reading from the current position.
+  ///
+  /// At a chapter's first word its title card comes first, and reading then
+  /// starts after the heading: the title is announced, not flashed word by
+  /// word. Anywhere else this is the timer's own play (with its rewind).
+  void _play() {
+    if (_words.isEmpty) return;
+    final timer = ref.read(wordTimerProvider.notifier);
+    final global = _currentGlobalIndex;
+    if (_chapterMomentsOn) {
+      final start = playStartFor(_structure, global);
+      final section = start.announce;
+      final skipped = _pendingSkippedNote;
+      if (section != null) {
+        _pendingSkippedNote = null;
+        _announce(section, resumeAt: start.from, skippedNote: skipped);
+        return;
+      }
+      if (skipped != null) {
+        // No chapter heading where the book starts: announce the book.
+        _pendingSkippedNote = null;
+        setState(() {
+          _interlude = _TitleInterlude(
+            ChapterAnnouncement(headline: _documentTitle, skippedNote: skipped),
+            resumeAt: start.from,
+          );
+        });
+        return;
+      }
+      if (start.from != global) {
+        _beginSession();
+        timer.resumeFromContextReveal(_localIndex(start.from));
+        return;
+      }
+    }
+    _pendingSkippedNote = null;
+    _beginSession();
     timer.play();
   }
+
+  void _beginSession() {
+    _sessionStart = DateTime.now();
+    _sessionWordCount = 0;
+  }
+
+  /// Shows [section]'s heading, then reads on from [resumeAt].
+  void _announce(
+    BookSection section, {
+    required int resumeAt,
+    String? skippedNote,
+  }) {
+    final timer = ref.read(wordTimerProvider.notifier);
+    final wpm = ref.read(wordTimerProvider).wpm;
+    if (ref.read(wordTimerProvider).isPlaying) timer.pause();
+    _sectionIndex.value = section.index;
+    setState(() {
+      // The book's chapters get the full card; front and back matter only
+      // have their heading shown whole.
+      _interlude = section.kind == SectionKind.body
+          ? _TitleInterlude(
+              announcementFor(
+                _structure,
+                section,
+                wpm: wpm,
+                skippedNote: skippedNote,
+              ),
+              resumeAt: resumeAt,
+            )
+          : _HeadingInterlude(section.displayName(), resumeAt: resumeAt);
+    });
+  }
+
+  /// A chapter moment is over: read on from document word [resumeAt].
+  void _endInterludeAndRead(int resumeAt) {
+    if (!mounted || _interlude == null) return;
+    setState(() => _interlude = null);
+    if (_inBookMode || _words.isEmpty) return;
+    _beginSession();
+    final local = _localIndex(resumeAt);
+    _previousGlobalIndex = _sliceOffset + local;
+    ref.read(wordTimerProvider.notifier).resumeFromContextReveal(local);
+  }
+
+  /// The main action of the moment that is showing: start reading under a
+  /// title card, go on from a finished chapter.
+  void _advanceInterlude() {
+    switch (_interlude) {
+      case _TitleInterlude(:final resumeAt):
+      case _HeadingInterlude(:final resumeAt):
+        _endInterludeAndRead(resumeAt);
+      case _CompleteInterlude(:final next):
+        _continueToSection(next);
+      case _BookInterlude():
+      case null:
+        break;
+    }
+  }
+
+  /// After a finished chapter: on to [next], announced by its title card.
+  void _continueToSection(BookSection next) {
+    if (!mounted) return;
+    if (_inBookMode) {
+      setState(() => _interlude = null);
+      return;
+    }
+    _runSection = -1;
+    _announce(next, resumeAt: next.textStart);
+  }
+
+  /// "Take a break": stay paused on the first word of the next chapter.
+  void _breakAtSection(BookSection next) {
+    if (!mounted) return;
+    setState(() => _interlude = null);
+    if (_inBookMode || _words.isEmpty) return;
+    final local = _localIndex(next.start);
+    ref.read(wordTimerProvider.notifier).seekTo(local);
+    _cacheTimerPosition(local);
+    _previousGlobalIndex = _sliceOffset + local;
+    _wordNotifier.value = _words[local];
+    _recordShelfProgress();
+  }
+
+  /// From the finish screen: read on into the notes and extras.
+  void _keepReadingBackMatter(BookSection backMatter) {
+    if (!mounted) return;
+    setState(() => _interlude = null);
+    if (_inBookMode || _words.isEmpty) return;
+    final local = _localIndex(backMatter.start);
+    ref.read(wordTimerProvider.notifier).seekTo(local);
+    _cacheTimerPosition(local);
+    _previousGlobalIndex = _sliceOffset + local;
+    _wordNotifier.value = _words[local];
+    _play();
+  }
+
+  /// From the finish screen: start the book's text again.
+  void _readAgain() {
+    final first = _structure.chapters.isEmpty
+        ? _structure.sections.first
+        : _structure.chapters.first;
+    _jumpToSection(first);
+  }
+
+  /// Leaves a chapter moment without reading on: the reader stays paused.
+  void _cancelInterlude() {
+    if (_interlude == null || !mounted) return;
+    setState(() => _interlude = null);
+  }
+
+  /// The reader asked for the front matter after all.
+  void _restartFromBeginning() {
+    if (_words.isEmpty) return;
+    setState(() => _interlude = null);
+    final local = _localIndex(0);
+    ref.read(wordTimerProvider.notifier).seekTo(local);
+    _cacheTimerPosition(local);
+    _previousGlobalIndex = _sliceOffset + local;
+    _wordNotifier.value = _words[local];
+    _play();
+  }
+
+  /// Moves to [section] (from the contents sheet, or "Read it again") and
+  /// starts reading it.
+  void _jumpToSection(BookSection section) {
+    if (_words.isEmpty) return;
+    _bookEndTimer?.cancel();
+    final timer = ref.read(wordTimerProvider.notifier);
+    if (ref.read(wordTimerProvider).isPlaying) timer.pause();
+    setState(() => _interlude = null);
+    final local = _localIndex(section.start);
+    timer.seekTo(local);
+    _cacheTimerPosition(local);
+    _previousGlobalIndex = _sliceOffset + local;
+    _sectionIndex.value = section.index;
+    _wordNotifier.value = _words[local];
+    _recordShelfProgress();
+    if (_inBookMode) return;
+    _play();
+  }
+
+  /// Keeps the run of continuous reading in the current section up to date.
+  void _trackRun(int global) {
+    final section = _structure.sectionAt(global);
+    if (section.index != _runSection) {
+      _runSection = section.index;
+      _runFrom = global;
+      _runClock.reset();
+      if (ref.read(wordTimerProvider).isPlaying) _runClock.start();
+      _sectionIndex.value = section.index;
+    }
+  }
+
+  /// Acts on a chapter boundary reached while reading. Returns true when
+  /// the step was taken over (a moment is showing, or the position moved
+  /// on) and the word at [global] must not be flashed.
+  bool _handleChapterStep(int previous, int global) {
+    final event = chapterEventFor(
+      structure: _structure,
+      previous: previous,
+      current: global,
+    );
+    if (event == null) {
+      _trackRun(global);
+      return false;
+    }
+    final timer = ref.read(wordTimerProvider.notifier);
+    final wpm = ref.read(wordTimerProvider).wpm;
+    switch (event) {
+      case SkipHeading(:final to):
+        // A rewind or seek landed among heading words: carry on from the
+        // text. (The seek re-enters the listener with the new position.)
+        timer.seekTo(_localIndex(to));
+        return true;
+      case SubHeadingReached(:final heading):
+        timer.pause();
+        setState(() {
+          _interlude = _HeadingInterlude(
+            heading.text,
+            resumeAt: heading.start + heading.wordCount,
+          );
+        });
+        return true;
+      case SectionBoundary(:final completed, :final next):
+        final readFrom = _runSection == completed.index
+            ? _runFrom
+            : completed.end;
+        final wordsRead =
+            completed.end -
+            (readFrom < completed.textStart ? completed.textStart : readFrom);
+        final readingTime = _runClock.elapsed;
+        timer.pause();
+        // The position is now the new chapter: reopening starts there.
+        _lastGlobalIndex = global;
+        if (!_isClipboard || _isInstapaper) {
+          _bookmarkNotifier.updateIndex(global);
+        }
+        _recordShelfProgress();
+        if (event.endsBook) {
+          _showBookComplete(backMatter: next);
+          return true;
+        }
+        final celebrate =
+            completed.kind == SectionKind.body &&
+            next.kind == SectionKind.body &&
+            wordsRead >= RunThruTiming.celebrationMinWords;
+        if (!celebrate) {
+          _announce(next, resumeAt: next.textStart);
+          return true;
+        }
+        _sectionIndex.value = next.index;
+        setState(() {
+          _interlude = _CompleteInterlude(
+            completionFor(
+              _structure,
+              completed: completed,
+              next: next,
+              readFrom: readFrom,
+              readingTime: readingTime,
+              wpm: wpm,
+            ),
+            next: next,
+          );
+        });
+        return true;
+    }
+  }
+
+  /// The book's text is finished: mark it read and say so.
+  void _showBookComplete({BookSection? backMatter}) {
+    if (!mounted) return;
+    _bookEndTimer?.cancel();
+    final timer = ref.read(wordTimerProvider.notifier);
+    if (ref.read(wordTimerProvider).isPlaying) timer.pause();
+    if (!_isInstapaper) _markShelfFinished();
+    final wpm = ref.read(wordTimerProvider).wpm;
+    final structure = _structure;
+    final titledChapters = structure.chapters.where((s) => s.isTitled).length;
+    setState(() {
+      _interlude = _BookInterlude(
+        BookCompletion(
+          title: _documentTitle,
+          wordsInBook: structure.bodyEnd - structure.bodyStart,
+          chapterCount: structure.hasChapters ? titledChapters : 0,
+          sessionTime: _readingClock.elapsed,
+          backMatterMinutes: backMatter == null
+              ? null
+              : minutesFor(structure.totalWords - backMatter.start, wpm),
+        ),
+        backMatter: backMatter,
+      );
+    });
+  }
+
+  /// Whether reaching the last word should bring up the finish screen.
+  bool get _finishScreenApplies =>
+      _readingRange == null &&
+      _allDocWords.length >= RunThruTiming.bookCompleteMinWords;
 
   void _togglePause() {
     appLog('gestures', 'detected: tap');
     // Book mode has no timer; Space turns the page instead.
     if (_inBookMode) {
+      if (_interlude != null) return;
       _bookKey.currentState?.nextPage();
       return;
     }
+    // "Pause" while a title card is up: stay here, paused. The finished
+    // screens have their own buttons.
+    final interlude = _interlude;
+    if (interlude is _TitleInterlude || interlude is _HeadingInterlude) {
+      _cancelInterlude();
+      return;
+    }
+    if (interlude != null) return;
+    _bookEndTimer?.cancel();
     // P20 — tap during ContextReveal toggles sweep pause, not RSVP
     final crState = ref.read(contextRevealProvider);
     if (crState.isActive) {
@@ -853,15 +1311,14 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         _tryShowHint(HintId.swipeLr);
       }
     } else {
-      _sessionStart = DateTime.now();
-      _sessionWordCount = 0;
-      timer.play();
+      _play();
     }
   }
 
   // P4 Grade C — double-tap restarts current sentence
   void _handleDoubleTap() {
     appLog('gestures', 'detected: doubleTap');
+    if (_interlude != null) return;
 
     final crState = ref.read(contextRevealProvider);
     if (crState.isActive) {
@@ -991,10 +1448,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     timer.loadDocument(_words.length, startIndex: 0);
     _cacheTimerPosition(0);
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+    _previousGlobalIndex = _sliceOffset;
     if (_inBookMode) return;
-    _sessionStart = DateTime.now();
-    _sessionWordCount = 0;
-    timer.play();
+    _play();
   }
 
   void _toggleFullScreen() {
@@ -1014,6 +1470,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   void _goBack() {
     if (!mounted) return;
+    _bookEndTimer?.cancel();
     // Dismiss ContextReveal if active before navigating away.
     final crState = ref.read(contextRevealProvider);
     if (crState.isActive) {
@@ -1215,6 +1672,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Navigate to the first word of the next sentence (RSVP mode).
   void _seekToNextSentence() {
     if (_fullDoc == null) return;
+    if (_interlude is _CompleteInterlude || _interlude is _BookInterlude) {
+      return;
+    }
+    _cancelInterlude();
     final globalIdx = _currentGlobalIndex;
     var cumulative = 0;
     for (final sentence in _fullDoc!.sentences) {
@@ -1243,6 +1704,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Navigate to the first word of the previous sentence (RSVP mode).
   void _seekToPreviousSentence() {
     if (_fullDoc == null) return;
+    if (_interlude is _CompleteInterlude || _interlude is _BookInterlude) {
+      return;
+    }
+    _cancelInterlude();
     final globalIdx = _currentGlobalIndex;
     var cumulative = 0;
     int previousSentenceStart = 0;
@@ -1328,6 +1793,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _panStartTime = null;
 
     if (start == null || last == null || startTime == null) return;
+    // A chapter moment owns the screen: its taps are its own.
+    if (_interlude != null) return;
 
     final dx = last.dx - start.dx;
     final dy = last.dy - start.dy;
@@ -1392,6 +1859,13 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       _goBack();
     } else if (event.logicalKey == LogicalKeyboardKey.keyF) {
       _toggleFullScreen();
+    } else if (_interlude != null) {
+      // Space or Enter takes the moment's main action; nothing else moves
+      // the reading position under it.
+      if (event.logicalKey == LogicalKeyboardKey.space ||
+          event.logicalKey == LogicalKeyboardKey.enter) {
+        _advanceInterlude();
+      }
       // TASK-044 — ContextReveal keyboard shortcuts
     } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       _onSwipeUp();
@@ -1437,6 +1911,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           readingFontFamily: v.readingFontFamily,
           readingRulerEnabled: v.readingRulerEnabled,
           focusModeEnabled: v.focusModeEnabled,
+          chapterMoments: v.chapterMoments,
           bookFontSize: v.bookFontSize,
           letterSpacing: v.letterSpacing,
           wordSpacing: v.wordSpacing,
@@ -1456,6 +1931,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         ref.read(configProvider.notifier).setLastReadingMode(next.name),
       );
       if (next == ReadingMode.book) {
+        _bookEndTimer?.cancel();
+        _cancelInterlude();
         ref.read(wordTimerProvider.notifier).pause();
         _snapToSentenceStartForBook();
       }
@@ -1468,12 +1945,39 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       if (prev?.isPlaying != next.isPlaying) {
         if (next.isPlaying) {
           _queue.pauseBackground();
+          _readingClock.start();
+          _runClock.start();
+          // Resuming rewinds a few words; never back into a heading.
+          if (config.chapterMoments && _words.isNotEmpty) {
+            final global = _sliceOffset + next.currentIndex;
+            final start = playStartFor(_structure, global);
+            if (start.from != global) {
+              ref
+                  .read(wordTimerProvider.notifier)
+                  .seekTo(_localIndex(start.from));
+              return;
+            }
+          }
         } else {
           _queue.resumeBackground();
+          _readingClock.stop();
+          _runClock.stop();
         }
       }
       if (prev?.currentIndex != next.currentIndex) {
         final idx = next.currentIndex;
+        final global = _sliceOffset + idx;
+        final previousGlobal = _previousGlobalIndex;
+        _previousGlobalIndex = global;
+
+        // Chapter boundaries: a chapter ending, a heading to announce.
+        if (_words.isNotEmpty) {
+          if (next.isPlaying && config.chapterMoments) {
+            if (_handleChapterStep(previousGlobal, global)) return;
+          } else {
+            _trackRun(global);
+          }
+        }
 
         // Update word display.
         if (_words.isNotEmpty && idx < _words.length) {
@@ -1532,8 +2036,29 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           // Local book read to the end — drop it from Continue Reading.
           _markShelfFinished();
         }
+
+        // Read to the last word: let it stand a moment, then say so.
+        if (next.isFinished &&
+            (prev?.isPlaying ?? false) &&
+            _interlude == null &&
+            _finishScreenApplies) {
+          _bookEndTimer?.cancel();
+          _bookEndTimer = Timer(RunThruTiming.bookEndDwell, () {
+            if (!mounted || _interlude != null) return;
+            if (!ref.read(wordTimerProvider).isFinished) return;
+            _showBookComplete();
+          });
+        }
       }
     });
+
+    // A chapter moment is not a pause: no fog, no paused panel, and the
+    // play button keeps showing "pause" while a title card is up.
+    final interlude = _interlude;
+    final inMoment = interlude != null;
+    final cardUp =
+        interlude is _TitleInterlude || interlude is _HeadingInterlude;
+    final showPaused = !isPlaying && !inMoment && _words.isNotEmpty;
 
     final anchorColor =
         RunThruTokens.anchorColors[config.anchorColorIndex.clamp(
@@ -1598,10 +2123,14 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                               behavior: HitTestBehavior.translucent,
                               // Book pages handle their own taps; an outer
                               // double-tap would delay every page turn.
-                              onTap: readingMode == ReadingMode.book
+                              // A chapter moment handles its own taps;
+                              // a double-tap recogniser here would delay
+                              // them.
+                              onTap: readingMode == ReadingMode.book || inMoment
                                   ? null
                                   : _togglePause,
-                              onDoubleTap: readingMode == ReadingMode.book
+                              onDoubleTap:
+                                  readingMode == ReadingMode.book || inMoment
                                   ? null
                                   : _handleDoubleTap,
                               child: ValueListenableBuilder<String>(
@@ -1829,8 +2358,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           readingMode != ReadingMode.book)
                                         Positioned.fill(
                                           child: PauseFog3D(
-                                            isPaused:
-                                                !isPlaying && _words.isNotEmpty,
+                                            isPaused: showPaused,
                                             wpm: wpm,
                                             focusModeEnabled:
                                                 config.focusModeEnabled,
@@ -1997,6 +2525,57 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                             ),
                                           ),
                                         ),
+                                      // ── Chapter title card ──
+                                      if (interlude is _TitleInterlude)
+                                        Positioned.fill(
+                                          child: ChapterTitleCard(
+                                            key: ValueKey(
+                                              'title-card-${interlude.resumeAt}',
+                                            ),
+                                            announcement:
+                                                interlude.announcement,
+                                            insets: EdgeInsets.only(
+                                              top:
+                                                  MediaQuery.paddingOf(
+                                                    context,
+                                                  ).top +
+                                                  (config.focusModeEnabled
+                                                      ? 56
+                                                      : _kReaderHeaderExtent),
+                                              bottom:
+                                                  MediaQuery.paddingOf(
+                                                    context,
+                                                  ).bottom +
+                                                  (config.focusModeEnabled
+                                                      ? 0
+                                                      : _kReaderTrayExtent),
+                                            ),
+                                            onDone: () => _endInterludeAndRead(
+                                              interlude.resumeAt,
+                                            ),
+                                            onReadFromStart:
+                                                interlude
+                                                        .announcement
+                                                        .skippedNote ==
+                                                    null
+                                                ? null
+                                                : _restartFromBeginning,
+                                          ),
+                                        ),
+                                      if (interlude is _HeadingInterlude)
+                                        Positioned.fill(
+                                          child: SubHeadingCard(
+                                            key: ValueKey(
+                                              'heading-card-${interlude.resumeAt}',
+                                            ),
+                                            text: interlude.text,
+                                            fontFamily:
+                                                config.readingFontFamily,
+                                            onDone: () => _endInterludeAndRead(
+                                              interlude.resumeAt,
+                                            ),
+                                          ),
+                                        ),
                                       // ── ContextReveal Onboarding (shown once) ──
                                       if (_showCROnboarding)
                                         Positioned.fill(
@@ -2092,7 +2671,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                               fontSize: fontSize,
                                               fontFamily:
                                                   config.readingFontFamily,
-                                              isPaused: !isPlaying,
+                                              isPaused: showPaused,
                                               dimWhenPaused: true,
                                               anchorColor: anchorColor,
                                             ),
@@ -2230,8 +2809,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                             // mode) — design reader.jsx: the current sentence
                             // sits at the bottom of the word stage with the
                             // live word inked.
-                            if (!isPlaying &&
-                                _words.isNotEmpty &&
+                            if (showPaused &&
                                 !crState.isActive &&
                                 readingMode == ReadingMode.singleWord)
                               Positioned(
@@ -2286,7 +2864,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                   child: SafeArea(
                                     top: false,
                                     child: _PersistentActionTray(
-                                      isPlaying: isPlaying,
+                                      isPlaying: isPlaying || cardUp,
                                       wpm: wpm,
                                       onPlayPause: _togglePause,
                                       onPrevSentence: _seekToPreviousSentence,
@@ -2300,6 +2878,58 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                 ),
                               ),
                           ],
+                          // ── Chapter complete / book complete ──
+                          // Over the stage and the tray; the header row
+                          // (Back, modes) stays reachable above it.
+                          if (interlude is _CompleteInterlude)
+                            Positioned(
+                              top:
+                                  MediaQuery.paddingOf(context).top +
+                                  (config.focusModeEnabled
+                                      ? 56
+                                      : readingMode == ReadingMode.book
+                                      ? _kReaderHeaderRowExtent
+                                      : _kReaderHeaderExtent),
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: SectionCompleteOverlay(
+                                key: ValueKey(
+                                  'chapter-complete-${interlude.next.start}',
+                                ),
+                                completion: interlude.completion,
+                                autoContinue: readingMode != ReadingMode.book,
+                                onContinue: () =>
+                                    _continueToSection(interlude.next),
+                                onBreak: readingMode == ReadingMode.book
+                                    ? null
+                                    : () => _breakAtSection(interlude.next),
+                              ),
+                            ),
+                          if (interlude is _BookInterlude)
+                            Positioned(
+                              top:
+                                  MediaQuery.paddingOf(context).top +
+                                  (config.focusModeEnabled
+                                      ? 56
+                                      : readingMode == ReadingMode.book
+                                      ? _kReaderHeaderRowExtent
+                                      : _kReaderHeaderExtent),
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: BookCompleteOverlay(
+                                key: const ValueKey('book-complete'),
+                                completion: interlude.completion,
+                                onLibrary: _goBack,
+                                onReadAgain: _readAgain,
+                                onKeepReading: interlude.backMatter == null
+                                    ? null
+                                    : () => _keepReadingBackMatter(
+                                        interlude.backMatter!,
+                                      ),
+                              ),
+                            ),
                         ],
                       ),
                     );
@@ -2312,6 +2942,45 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       ),
     );
   }
+}
+
+// ── Chapter moments ───────────────────────────────────────────────────────────
+
+/// A chapter moment the reader is in. The timer is paused for its length.
+sealed class _Interlude {
+  const _Interlude();
+}
+
+/// A chapter title card; reading resumes at [resumeAt] (document index).
+class _TitleInterlude extends _Interlude {
+  const _TitleInterlude(this.announcement, {required this.resumeAt});
+
+  final ChapterAnnouncement announcement;
+  final int resumeAt;
+}
+
+/// A heading shown whole (a sub-heading, or a front/back matter title).
+class _HeadingInterlude extends _Interlude {
+  const _HeadingInterlude(this.text, {required this.resumeAt});
+
+  final String text;
+  final int resumeAt;
+}
+
+/// A chapter was finished; [next] is announced when the reader goes on.
+class _CompleteInterlude extends _Interlude {
+  const _CompleteInterlude(this.completion, {required this.next});
+
+  final SectionCompletion completion;
+  final BookSection next;
+}
+
+/// The book's text was finished. [backMatter] is what follows, if anything.
+class _BookInterlude extends _Interlude {
+  const _BookInterlude(this.completion, {this.backMatter});
+
+  final BookCompletion completion;
+  final BookSection? backMatter;
 }
 
 // ── Reader chrome ─────────────────────────────────────────────────────────────
