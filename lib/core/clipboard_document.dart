@@ -22,8 +22,8 @@ class ClipboardDocument {
   /// (`\n\n`) are treated as sentence boundaries.
   factory ClipboardDocument.fromClipboardText(String text) {
     final trimmed = text.trim();
-    final stripped = _stripMarkdown(trimmed);
-    final title = _extractTitle(stripped);
+    final stripped = _stripMarkdown(trimmed.replaceAll(kReservedMarkChars, ''));
+    final title = _extractTitle(stripHeadingMarks(stripped));
     final sentences = _textToSentences(stripped);
     final document = ExtractedDocument(sentences: sentences);
 
@@ -78,10 +78,11 @@ class ClipboardDocument {
       (m) => m.group(1)!,
     );
 
-    // Remove heading markers: ### heading → heading
+    // Headings: "### Title" becomes a heading paragraph of that level, so
+    // it stays whole and the reader can announce it.
     result = result.replaceAllMapped(
-      RegExp(r'^#{1,6}\s+(.+)$', multiLine: true),
-      (m) => m.group(1)!,
+      RegExp(r'^(#{1,6})\s+(.+?)\s*#*\s*$', multiLine: true),
+      (m) => '\n\n${headingMark(m.group(1)!.length)}${m.group(2)!}\n\n',
     );
 
     // Remove horizontal rules (---, ***, ___)

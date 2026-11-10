@@ -85,6 +85,19 @@ void main() {
       expect(allText, isNot(contains('#')));
     });
 
+    test('headings become heading lines with their level', () async {
+      const input = '# Heading One\n\n## 2. Heading Two\n\nBody text here.';
+      final doc = await ContentNormaliser.normalise(
+        input,
+        ContentType.markdown,
+      );
+      expect(doc.sentences[0].heading, 1);
+      expect(doc.sentences[0].words, ['Heading', 'One']);
+      expect(doc.sentences[1].heading, 2);
+      expect(doc.sentences[1].words.join(' '), '2. Heading Two');
+      expect(doc.sentences[2].isHeading, isFalse);
+    });
+
     test('strips bold markers', () async {
       const input = 'This is **bold** and __also bold__ text.';
       final doc = await ContentNormaliser.normalise(
@@ -285,6 +298,15 @@ void main() {
         'History',
         'The Pharos of Alexandria was among the first.',
       ]);
+    });
+
+    test('article headings keep their level', () async {
+      final doc = await ContentNormaliser.normalise(page, ContentType.html);
+      final headings = [
+        for (final s in doc.sentences)
+          if (s.isHeading) '${s.heading}:${s.words.join(' ')}',
+      ];
+      expect(headings, ['1:Lighthouse', '2:History']);
     });
 
     test('drops nested link-list navigation, keeps prose lists', () async {

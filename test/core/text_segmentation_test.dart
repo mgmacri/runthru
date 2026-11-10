@@ -71,6 +71,43 @@ void main() {
     });
   });
 
+  group('heading marks', () {
+    test('a marked paragraph is one heading sentence with its level', () {
+      final sentences = textToSentences(
+        '${headingMark(2)}1. The Arrival. A Beginning\n\nIt rained. It poured.',
+      );
+      expect(sentences.length, 3);
+      expect(sentences[0].heading, 2);
+      expect(sentences[0].startsParagraph, isTrue);
+      expect(sentences[0].words.join(' '), '1. The Arrival. A Beginning');
+      expect(sentences[1].isHeading, isFalse);
+      expect(sentences[1].startsParagraph, isTrue);
+      expect(sentences[2].startsParagraph, isFalse);
+    });
+
+    test('levels are clamped to 1..6 and the mark never reaches the words', () {
+      expect(headingMark(0), headingMark(1));
+      expect(headingMark(9), headingMark(6));
+      final sentences = textToSentences('${headingMark(4)}Deep Title');
+      expect(sentences.single.heading, 4);
+      expect(sentences.single.words, ['Deep', 'Title']);
+      expect(sentences.single.words.join().contains(kHeadingMarkChar), isFalse);
+    });
+
+    test('an empty heading is dropped', () {
+      expect(textToSentences('${headingMark(2)}\n\nBody.').single.words, [
+        'Body.',
+      ]);
+    });
+
+    test('stripHeadingMarks leaves plain text for titles', () {
+      expect(
+        stripHeadingMarks('${headingMark(1)}My Title\n\nBody text.'),
+        'My Title\n\nBody text.',
+      );
+    });
+  });
+
   group('paragraphStartWordIndices', () {
     test('maps paragraph starts to global word indices', () {
       final doc = ExtractedDocument(

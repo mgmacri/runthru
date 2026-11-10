@@ -1,5 +1,25 @@
 import 'package:runthru/services/models.dart';
 
+/// Marks a heading paragraph in text handed to [textToSentences].
+///
+/// Extractors that know a block is a heading (`<h2>`, a Markdown `##`)
+/// start that paragraph with [headingMark]; the paragraph then becomes one
+/// [Sentence] carrying its level. A private-use character, so it can never
+/// collide with real text (extractors strip the range from their input).
+const String kHeadingMarkChar = '';
+
+/// The mark that opens a heading paragraph of [level] (1 = largest).
+String headingMark(int level) => '$kHeadingMarkChar${level.clamp(1, 6)}';
+
+/// [text] without heading marks: for titles and previews taken from text
+/// that was prepared for [textToSentences].
+String stripHeadingMarks(String text) =>
+    text.replaceAll(RegExp('$kHeadingMarkChar\\d?'), '');
+
+/// Private-use characters reserved for extraction markers. Extractors remove
+/// them from source text before adding their own.
+final RegExp kReservedMarkChars = RegExp('[-]');
+
 /// Shared text → [Sentence] segmentation for EPUB, article and clipboard
 /// text.
 ///
@@ -12,18 +32,35 @@ import 'package:runthru/services/models.dart';
 /// paragraph is marked [Sentence.startsParagraph], so paged and flowing
 /// views can lay out real paragraphs and headings stay on their own line.
 ///
+/// A paragraph that starts with [headingMark] is a heading: it stays one
+/// sentence whatever punctuation it contains ("1. The Arrival") and carries
+/// its level in [Sentence.heading].
+///
 /// Paragraph breaks never insert punctuation: a heading such as
 /// "Chapter One" stays "Chapter One", it does not become "Chapter One.".
 List<Sentence> textToSentences(String text) {
   final sentences = <Sentence>[];
   for (final paragraph in text.split(_paragraphBreak)) {
+    final trimmed = paragraph.trimLeft();
+    if (trimmed.startsWith(kHeadingMarkChar)) {
+      final level = trimmed.length > 1 ? (int.tryParse(trimmed[1]) ?? 0) : 0;
+      final body = trimmed
+          .substring(level > 0 ? 2 : 1)
+          .replaceAll(kHeadingMarkChar, '');
+      final words = _wordsOf(body);
+      if (words.isEmpty || words.every(_punctuationOnly.hasMatch)) continue;
+      sentences.add(
+        Sentence(
+          words: words,
+          startsParagraph: true,
+          heading: level.clamp(1, 6),
+        ),
+      );
+      continue;
+    }
     var first = true;
     for (final raw in paragraph.split(_sentenceBreak)) {
-      final words = raw
-          .trim()
-          .split(_whitespace)
-          .where((w) => w.isNotEmpty)
-          .toList();
+      final words = _wordsOf(raw);
       if (words.isEmpty) continue;
       // A lone punctuation run ("." left by a stray full stop) is noise.
       if (words.every(_punctuationOnly.hasMatch)) continue;
@@ -33,6 +70,9 @@ List<Sentence> textToSentences(String text) {
   }
   return sentences;
 }
+
+List<String> _wordsOf(String raw) =>
+    raw.trim().split(_whitespace).where((w) => w.isNotEmpty).toList();
 
 final RegExp _paragraphBreak = RegExp(r'\n[ \t]*\n\s*');
 final RegExp _sentenceBreak = RegExp('(?<=[.!?…][”’"\')\\]]*)\\s+');

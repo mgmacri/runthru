@@ -99,6 +99,21 @@ void main() {
       expect(doc.words, contains('Heading'));
     });
 
+    test('markdown headings become heading lines with their level', () {
+      final doc = ClipboardDocument.fromClipboardText(
+        '# My Notes\n\nIntro text. More intro.\n\n'
+        '## 1. First Part ##\nBody one.\n\n### Detail\nBody two.',
+      );
+      final headings = [
+        for (final s in doc.document.sentences)
+          if (s.isHeading) '${s.heading}:${s.words.join(' ')}',
+      ];
+      expect(headings, ['1:My Notes', '2:1. First Part', '3:Detail']);
+      // The title is the first line, without any marker characters.
+      expect(doc.title, 'My Notes');
+      expect(doc.words.join(' '), isNot(contains('#')));
+    });
+
     test('markdown links converted to text', () {
       final doc = ClipboardDocument.fromClipboardText(
         'Click [this link](https://example.com) for more info.',

@@ -53,7 +53,8 @@ class ContentNormaliser {
   }
 
   /// Synchronous normalisation — called directly or from an isolate.
-  static ExtractedDocument _normaliseSync(String input, ContentType type) {
+  static ExtractedDocument _normaliseSync(String raw, ContentType type) {
+    final input = raw.replaceAll(kReservedMarkChars, '');
     final cleaned = switch (type) {
       ContentType.html => _stripHtml(input),
       ContentType.markdown => _stripMarkdown(input),
@@ -139,6 +140,13 @@ class ContentNormaliser {
 
     // The source's line wrapping is not structure.
     text = text.replaceAll(RegExp(r'\s+'), ' ');
+
+    // Headings keep their level: they stay whole ("2. Results" is not split
+    // at the full stop) and the reader can announce them.
+    text = text.replaceAllMapped(
+      RegExp(r'<h([1-6])(\s[^>]*)?>', caseSensitive: false),
+      (m) => '\n\n${headingMark(int.parse(m.group(1)!))}',
+    );
 
     // Block elements (opening or closing, with attributes) → paragraph
     // breaks. <br> is a soft line break.
@@ -329,10 +337,10 @@ class ContentNormaliser {
       (m) => m.group(1)!,
     );
 
-    // Remove heading markers: ### heading → heading
+    // Headings: "### Title" becomes a heading paragraph of that level.
     result = result.replaceAllMapped(
-      RegExp(r'^#{1,6}\s+(.+)$', multiLine: true),
-      (m) => m.group(1)!,
+      RegExp(r'^(#{1,6})\s+(.+?)\s*#*\s*$', multiLine: true),
+      (m) => '\n\n${headingMark(m.group(1)!.length)}${m.group(2)!}\n\n',
     );
 
     // Remove horizontal rules.
