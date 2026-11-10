@@ -124,6 +124,12 @@ class PacingPanel extends ConsumerWidget {
             child: Semantics(
               label: 'Reset all pacing scales to default',
               button: true,
+              // Dimmed (and announced as disabled) while already at defaults.
+              enabled: pacingConfig != defaultPacingConfig,
+              excludeSemantics: true,
+              onTap: pacingConfig == defaultPacingConfig
+                  ? null
+                  : () => notifier.updatePacingConfig(defaultPacingConfig),
               child: TextButton.icon(
                 onPressed: pacingConfig == defaultPacingConfig
                     ? null
@@ -275,19 +281,25 @@ class _PacingSlider extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(child: Text(label, style: RunThruTypography.body)),
             // Numeric label (no color-only signal — Rule 11)
-            Semantics(
-              label: '$label scale: $value percent',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: RunThruTokens.shellAccent.withAlpha(25),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '$value%',
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellAccent,
-                    fontWeight: FontWeight.w600,
+            // Visual readout; the slider announces the same value.
+            ExcludeSemantics(
+              child: Semantics(
+                label: '$label scale: $value percent',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: RunThruTokens.shellAccent.withAlpha(25),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$value%',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellAccent,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -295,25 +307,26 @@ class _PacingSlider extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        Semantics(
-          label: '$label pacing scale',
-          slider: true,
-          value: '$value percent',
-          child: SliderTheme(
-            data: SliderThemeData(
-              activeTrackColor: RunThruTokens.shellAccent,
-              inactiveTrackColor: RunThruTokens.shellDarkShadow,
-              thumbColor: RunThruTokens.shellAccent,
-              overlayColor: RunThruTokens.shellAccent.withAlpha(40),
-              trackHeight: 4,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-            ),
-            child: Slider(
-              min: 25,
-              max: 200,
-              divisions: 7,
-              value: value.toDouble(),
-              onChanged: (v) => onChanged(v.round()),
+        MergeSemantics(
+          child: Semantics(
+            label: '$label pacing scale',
+            child: SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: RunThruTokens.shellAccent,
+                inactiveTrackColor: RunThruTokens.shellDarkShadow,
+                thumbColor: RunThruTokens.shellAccent,
+                overlayColor: RunThruTokens.shellAccent.withAlpha(40),
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+              ),
+              child: Slider(
+                min: 25,
+                max: 200,
+                divisions: 7,
+                value: value.toDouble(),
+                semanticFormatterCallback: (v) => '${v.round()} percent',
+                onChanged: (v) => onChanged(v.round()),
+              ),
             ),
           ),
         ),

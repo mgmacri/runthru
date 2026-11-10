@@ -34,7 +34,13 @@ class _WpmSliderState extends State<WpmSlider> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${_displayValue.round()} WPM', style: RunThruTypography.badge),
+        // The slider below announces the value; this readout is visual only.
+        ExcludeSemantics(
+          child: Text(
+            '${_displayValue.round()} WPM',
+            style: RunThruTypography.badge,
+          ),
+        ),
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderThemeData(
@@ -45,15 +51,22 @@ class _WpmSliderState extends State<WpmSlider> {
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
             trackHeight: 6,
           ),
-          child: Slider(
-            value: _displayValue,
-            min: 30,
-            max: 1000,
-            onChanged: (v) => setState(() => _dragging = v),
-            onChangeEnd: (v) {
-              setState(() => _dragging = null);
-              widget.onChanged(v.round());
-            },
+          child: MergeSemantics(
+            child: Semantics(
+              label: 'Reading speed',
+              child: Slider(
+                value: _displayValue,
+                min: 30,
+                max: 1000,
+                semanticFormatterCallback: (v) =>
+                    '${v.round()} words per minute',
+                onChanged: (v) => setState(() => _dragging = v),
+                onChangeEnd: (v) {
+                  setState(() => _dragging = null);
+                  widget.onChanged(v.round());
+                },
+              ),
+            ),
           ),
         ),
       ],

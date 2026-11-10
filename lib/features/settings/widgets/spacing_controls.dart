@@ -40,22 +40,28 @@ class SpacingControls extends ConsumerWidget {
               ),
               child: Column(
                 children: [
-                  Semantics(
-                    label:
-                        'Letter spacing, currently ${config.letterSpacing} pixels',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Slider(
-                          value: config.letterSpacing,
-                          min: 0.0,
-                          max: 5.0,
-                          divisions: 10,
-                          label:
-                              'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
-                          onChanged: notifier.setLetterSpacing,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // One node: name + value in pixels.
+                      MergeSemantics(
+                        child: Semantics(
+                          label: 'Letter spacing',
+                          child: Slider(
+                            semanticFormatterCallback: (v) =>
+                                '${v.toStringAsFixed(1)} pixels',
+                            value: config.letterSpacing,
+                            min: 0.0,
+                            max: 5.0,
+                            divisions: 10,
+                            label:
+                                'Letter spacing: ${config.letterSpacing.toStringAsFixed(1)}',
+                            onChanged: notifier.setLetterSpacing,
+                          ),
                         ),
-                        Padding(
+                      ),
+                      ExcludeSemantics(
+                        child: Padding(
                           padding: const EdgeInsets.only(
                             left: 8.0,
                             bottom: 8.0,
@@ -65,26 +71,32 @@ class SpacingControls extends ConsumerWidget {
                             style: RunThruTypography.body,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  Semantics(
-                    label:
-                        'Word spacing, currently ${config.wordSpacing} pixels',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Slider(
-                          value: config.wordSpacing,
-                          min: 0.0,
-                          max: 20.0,
-                          divisions: 20,
-                          label:
-                              'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
-                          onChanged: notifier.setWordSpacing,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // One node: name + value in pixels.
+                      MergeSemantics(
+                        child: Semantics(
+                          label: 'Word spacing',
+                          child: Slider(
+                            semanticFormatterCallback: (v) =>
+                                '${v.toStringAsFixed(1)} pixels',
+                            value: config.wordSpacing,
+                            min: 0.0,
+                            max: 20.0,
+                            divisions: 20,
+                            label:
+                                'Word spacing: ${config.wordSpacing.toStringAsFixed(1)}',
+                            onChanged: notifier.setWordSpacing,
+                          ),
                         ),
-                        Padding(
+                      ),
+                      ExcludeSemantics(
+                        child: Padding(
                           padding: const EdgeInsets.only(
                             left: 8.0,
                             bottom: 8.0,
@@ -94,8 +106,8 @@ class SpacingControls extends ConsumerWidget {
                             style: RunThruTypography.body,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
