@@ -159,4 +159,12 @@ abstract final class RunThruTiming {
 
   /// Smallest document that gets a finish screen.
   static const int bookCompleteMinWords = 150;
+
+  // ── Library shelves ──
+
+  /// A shelf page sliding to the next one.
+  static const Duration shelfPageTurn = Duration(milliseconds: 260);
+
+  /// A shelf page falling back into place, and the well resizing to it.
+  static const Duration shelfPageSettle = Duration(milliseconds: 220);
 }

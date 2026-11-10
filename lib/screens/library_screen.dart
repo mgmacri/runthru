@@ -19,6 +19,7 @@ import 'package:runthru/services/preprocessing_queue.dart';
 import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
+import 'package:runthru/widgets/paged_tile_well.dart';
 import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
 import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
@@ -26,7 +27,6 @@ import 'package:runthru/widgets/runthru_shell_widgets.dart';
 enum _LibraryFilter { all, books, articles, docs }
 
 const int _kTilesPerPage = 4;
-const double _kPagedWellHeight = 340;
 
 /// Unified library screen: Continue Reading → Books → Articles.
 ///
@@ -822,7 +822,14 @@ class _LibrarySection extends StatelessWidget {
       size: RunThruShadowSize.standard,
       borderRadius: 16,
       margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      padding: const EdgeInsets.fromLTRB(15, 15, 15, 14),
+      // A paged section ends in its page indicator, a full tap target that
+      // stands in for the bottom padding.
+      padding: EdgeInsets.fromLTRB(
+        15,
+        15,
+        15,
+        itemBuilder != null && itemCount > _kTilesPerPage ? 0 : 14,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -858,7 +865,13 @@ class _LibrarySection extends StatelessWidget {
           if (itemCount == 0 || itemBuilder == null)
             _SectionWell(child: empty ?? const SizedBox.shrink())
           else
-            _PagedWell(itemCount: itemCount, itemBuilder: itemBuilder!),
+            PagedTileWell(
+              label: title,
+              itemCount: itemCount,
+              tilesPerPage: _kTilesPerPage,
+              itemBuilder: (context, index) =>
+                  _FloatingTile(child: itemBuilder!(context, index)),
+            ),
         ],
       ),
     );
@@ -884,114 +897,6 @@ class _SectionWell extends StatelessWidget {
   }
 }
 
-class _PagedWell extends StatefulWidget {
-  const _PagedWell({required this.itemCount, required this.itemBuilder});
-
-  final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
-
-  @override
-  State<_PagedWell> createState() => _PagedWellState();
-}
-
-class _PagedWellState extends State<_PagedWell> {
-  late final PageController _controller;
-  int _page = 0;
-
-  int get _pageCount => (widget.itemCount / _kTilesPerPage).ceil();
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
-  }
-
-  @override
-  void didUpdateWidget(covariant _PagedWell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final maxPage = (_pageCount - 1).clamp(0, _pageCount);
-    if (_page > maxPage) {
-      _page = maxPage;
-      _controller.jumpToPage(_page);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _goToPage(int page) {
-    final target = page.clamp(0, _pageCount - 1);
-    setState(() => _page = target);
-    if (isReducedMotion(context)) {
-      _controller.jumpToPage(target);
-    } else {
-      _controller.animateToPage(
-        target,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _SectionWell(
-          child: SizedBox(
-            height: _kPagedWellHeight,
-            child: PageView.builder(
-              controller: _controller,
-              itemCount: _pageCount,
-              onPageChanged: (page) => setState(() => _page = page),
-              itemBuilder: (context, pageIndex) {
-                final firstIndex = pageIndex * _kTilesPerPage;
-                final pageItemCount = (widget.itemCount - firstIndex).clamp(
-                  0,
-                  _kTilesPerPage,
-                );
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < pageItemCount; i++) ...[
-                        _FloatingTile(
-                          child: widget.itemBuilder(context, firstIndex + i),
-                        ),
-                        if (i < pageItemCount - 1) const SizedBox(height: 9),
-                      ],
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        if (_pageCount > 1) ...[
-          const SizedBox(height: 11),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var index = 0; index < _pageCount; index++) ...[
-                _PageDot(
-                  index: index,
-                  selected: index == _page,
-                  total: _pageCount,
-                  onTap: () => _goToPage(index),
-                ),
-                if (index < _pageCount - 1) const SizedBox(width: 6),
-              ],
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 class _FloatingTile extends StatelessWidget {
   const _FloatingTile({required this.child});
 
@@ -1006,46 +911,6 @@ class _FloatingTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       padding: const EdgeInsets.symmetric(horizontal: 13),
       child: child,
-    );
-  }
-}
-
-class _PageDot extends StatelessWidget {
-  const _PageDot({
-    required this.index,
-    required this.selected,
-    required this.total,
-    required this.onTap,
-  });
-
-  final int index;
-  final bool selected;
-  final int total;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: 'Page ${index + 1} of $total',
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: isReducedMotion(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          width: selected ? 17 : 7,
-          height: 7,
-          decoration: BoxDecoration(
-            color: selected
-                ? RunThruTokens.shellTeal
-                : RunThruTokens.shellInkSoft.withValues(alpha: 0.34),
-            borderRadius: BorderRadius.circular(999),
-          ),
-        ),
-      ),
     );
   }
 }
