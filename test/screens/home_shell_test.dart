@@ -28,8 +28,10 @@ void main() {
 
       expect(find.text('WELCOME TO RUNTHRU'), findsOneWidget);
       expect(find.text('Reading, brought to you.'), findsOneWidget);
-      expect(find.text('8:19'), findsOneWidget);
-      expect(find.text('5G'), findsOneWidget);
+      // The design mockup's fake phone status bar must not render over the
+      // real system status bar (screen readers announced "8:19", "5G").
+      expect(find.text('8:19'), findsNothing);
+      expect(find.text('5G'), findsNothing);
       expect(find.text('shell'), findsNothing);
     });
 
