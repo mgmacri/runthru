@@ -20,6 +20,7 @@ import 'package:runthru/core/orp.dart';
 import 'package:runthru/core/reading_range_resolver.dart';
 import 'package:runthru/core/sentence_resolver.dart';
 import 'package:runthru/core/text_segmentation.dart';
+import 'package:runthru/core/time_left.dart';
 import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
@@ -2463,8 +2464,7 @@ class _ProgressRail extends ConsumerWidget {
 
   String _timeLeft(int remainingWords) {
     if (wpm <= 0 || remainingWords <= 0) return '';
-    final mins = (remainingWords / wpm).ceil();
-    return mins <= 1 ? '< 1 min left' : '$mins min left';
+    return formatTimeLeft((remainingWords / wpm).ceil());
   }
 
   @override

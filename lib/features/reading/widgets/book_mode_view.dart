@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:runthru/core/time_left.dart';
 import 'package:runthru/design/design.dart';
 
 /// Book mode: a calm, paged view the reader turns themselves, like an
@@ -518,11 +519,7 @@ class _BookFooter extends StatelessWidget {
 
   String get _timeLeft {
     if (!canGoForward) return 'Last page';
-    if (minutesLeft <= 0) return 'Less than a minute left';
-    if (minutesLeft < 60) return '$minutesLeft min left';
-    final h = minutesLeft ~/ 60;
-    final m = minutesLeft % 60;
-    return m == 0 ? '$h h left' : '$h h $m min left';
+    return formatTimeLeft(minutesLeft);
   }
 
   @override
