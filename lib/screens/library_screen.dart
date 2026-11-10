@@ -109,6 +109,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     // now · N sources" with a count that disagreed with the Sources tab.)
     final titleCount = pdfListAsync.valueOrNull?.length ?? 0;
     final normalizedSearchQuery = _searchQuery.trim().toLowerCase();
+    final searching = normalizedSearchQuery.isNotEmpty;
+    // A search narrows the whole screen, the shelf included.
+    final visibleShelf = searching
+        ? shelf
+              .where(
+                (r) => r.title.toLowerCase().contains(normalizedSearchQuery),
+              )
+              .toList()
+        : shelf;
 
     // Navigate to reader on successful Instapaper article import.
     ref.listen<ArticleImportState>(instapaperArticleImportProvider, (
@@ -195,13 +204,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ),
 
             // ── Continue Reading shelf ──
-            SliverToBoxAdapter(
-              child: _ContinueReadingShelf(
-                items: shelf,
-                onItemTap: _onShelfItemTap,
-                continueTargetKey: libraryContinueTourTargetKey,
+            // While searching, only when something in progress matches.
+            if (!searching || visibleShelf.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _ContinueReadingShelf(
+                  items: visibleShelf,
+                  hasTitles: titleCount > 0,
+                  onItemTap: _onShelfItemTap,
+                  continueTargetKey: libraryContinueTourTargetKey,
+                ),
               ),
-            ),
 
             // ── Filter chips ──
             SliverToBoxAdapter(
@@ -352,14 +364,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  static List<PdfEntry> _filterBooks(List<PdfEntry> books, String query) {
+  /// Books whose title, as the row shows it, or file name contains [query].
+  ///
+  /// The search used to look at the file name and folder path only: a book
+  /// shown as "Alice's Adventures in Wonderland" (file `pg11.epub`) could
+  /// not be found by "wonderland", while "download" matched every file in
+  /// the Download folder. Call during build: it watches the titles.
+  List<PdfEntry> _filterBooks(List<PdfEntry> books, String query) {
     if (query.isEmpty) {
       return books;
     }
     return books
         .where((entry) {
-          return entry.fileName.toLowerCase().contains(query) ||
-              entry.filePath.toLowerCase().contains(query);
+          final title =
+              ref.watch(documentTitleProvider(entry.filePath)).valueOrNull ??
+              prettyFileTitle(entry.fileName);
+          return title.toLowerCase().contains(query) ||
+              entry.fileName.toLowerCase().contains(query);
         })
         .toList(growable: false);
   }
@@ -392,9 +413,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 .clamp(0.0, 1.0);
           }
           rangeLabel = 'Pages ${range.startPage + 1}-${range.endPage + 1}';
-        } else if (bookmark != null) {
-          // Documents are no longer retained in queue state, so word totals
-          // come from the cross-source progress store instead.
+        } else {
+          // Documents are no longer retained in queue state, so progress
+          // comes from the cross-source progress store. (Not only when a
+          // bookmark exists: a finished book keeps its check either way.)
           final record = tileRef
               .read(readingProgressProvider.notifier)
               .getRecord(entry.filePath);
@@ -546,10 +568,14 @@ class _ContinueReadingShelf extends StatelessWidget {
   const _ContinueReadingShelf({
     required this.items,
     required this.onItemTap,
+    this.hasTitles = false,
     this.continueTargetKey,
   });
 
   final List<ProgressRecord> items;
+
+  /// Whether the library already holds something to read.
+  final bool hasTitles;
   final void Function(ProgressRecord) onItemTap;
   final GlobalKey? continueTargetKey;
 
@@ -582,17 +608,24 @@ class _ContinueReadingShelf extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Add a source to start your first reading session.',
+                    Text(
+                      // With books already here, "Add a source" was the
+                      // wrong next step.
+                      hasTitles
+                          ? 'Pick something below to start reading.'
+                          : 'Add a source to start your first reading '
+                                'session.',
                       style: RunThruTypography.metadata,
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16),
-                    RunThruPrimaryButton(
-                      icon: Icons.add_link_rounded,
-                      label: 'Add a source',
-                      onPressed: () => context.go('/sources'),
-                    ),
+                    if (!hasTitles) ...[
+                      const SizedBox(height: 16),
+                      RunThruPrimaryButton(
+                        icon: Icons.add_link_rounded,
+                        label: 'Add a source',
+                        onPressed: () => context.go('/sources'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1142,13 +1175,15 @@ class _ArticlesSliverList extends ConsumerWidget {
         );
       case InstapaperAuthUnauthenticated():
       case InstapaperAuthLegacyFallbackRequired():
-        return const SliverToBoxAdapter(
+        return SliverToBoxAdapter(
           child: _LibrarySection(
             title: 'Articles',
             countLabel: '0 articles',
             dotColor: RunThruTokens.shellTealDeep,
             itemCount: 0,
-            empty: _EmptyArticlesState(),
+            empty: _EmptyArticlesState(
+              message: query.isEmpty ? null : 'No articles match this search.',
+            ),
           ),
         );
       case InstapaperAuthError(:final message):
