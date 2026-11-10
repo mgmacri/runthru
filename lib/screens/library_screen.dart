@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/document_title.dart';
+import 'package:runthru/core/time_left.dart';
 import 'package:runthru/features/content/providers/document_title_provider.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
@@ -645,14 +646,18 @@ class _ContinueHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percent = (item.percent * 100).round();
-    final minutesLeft = item.minutesLeft <= 1
-        ? '<1 min left'
-        : '${item.minutesLeft} min left';
+    final minutesLeft = formatTimeLeft(item.minutesLeft);
+    final source = _SourceBadge._label(item.source);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+      // One announcement, with the visible source name and time left.
       child: Semantics(
-        label: '${item.title}, ${item.source}, $percent percent read',
+        label:
+            'Continue reading ${item.title}, $source, $percent percent read, '
+            '$minutesLeft',
         button: true,
+        excludeSemantics: true,
+        onTap: onTap,
         child: GestureDetector(
           onTap: onTap,
           child: Container(
@@ -677,7 +682,7 @@ class _ContinueHero extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${_SourceBadge._label(item.source)} · $minutesLeft',
+                        '$source · $minutesLeft',
                         style: RunThruTypography.metadata,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
