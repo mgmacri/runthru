@@ -20,6 +20,16 @@ void main() {
       ),
       'The kettle clicked off at seven…',
     );
+    // Markdown: the heading's text, without its marks.
+    expect(
+      titleFromText('# Morning Notes\n\nThe kettle clicked.'),
+      'Morning Notes',
+    );
+    expect(titleFromText('###   Deep  Work\nBody'), 'Deep  Work');
+    expect(titleFromText('#\n\nNotes on tea'), 'Notes on tea');
+    // Not a heading mark: a tag or a number sign inside the line stays.
+    expect(titleFromText('#hashtag thoughts'), '#hashtag thoughts');
+    expect(titleFromText('Issue #42 notes'), 'Issue #42 notes');
     expect(titleFromText('\n\n  '), isNull);
     expect(titleFromText('https://example.com/post'), isNull);
   });

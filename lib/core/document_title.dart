@@ -18,7 +18,9 @@ String prettyFileTitle(String fileName) {
 String? titleFromText(String text) {
   final firstLine = text
       .split('\n')
-      .map((l) => l.trim())
+      // A Markdown heading is read as a heading: its "#" marks are not part
+      // of the title ("# Morning Notes" used to be titled "# Morning Notes").
+      .map((l) => l.trim().replaceFirst(_markdownHeadingMarks, '').trim())
       .firstWhere((l) => l.isNotEmpty, orElse: () => '');
   if (firstLine.isEmpty || RegExp(r'^https?://').hasMatch(firstLine)) {
     return null;
@@ -27,3 +29,6 @@ String? titleFromText(String text) {
   if (firstLine.length <= 60 && words.length <= 10) return firstLine;
   return '${words.take(6).join(' ')}…';
 }
+
+/// Leading "#" marks of a Markdown heading line (and the space after them).
+final RegExp _markdownHeadingMarks = RegExp(r'^#{1,6}(\s+|$)');
