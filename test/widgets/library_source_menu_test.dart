@@ -98,6 +98,55 @@ void main() {
       expect(instaX, greaterThan(pasteX));
     });
 
+    testWidgets('every card stays on the screen, text scaled up or not', (
+      tester,
+    ) async {
+      // A phone: 411dp wide. The upper cards used to run off the right edge.
+      await tester.binding.setSurfaceSize(const Size(411, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final scale in const [1.0, 1.3, 2.0]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: const Size(411, 900),
+                textScaler: TextScaler.linear(scale),
+              ),
+              child: Scaffold(
+                body: Stack(
+                  children: [
+                    LibrarySourceMenu(
+                      key: ValueKey(scale),
+                      actions: [
+                        ..._actions(),
+                        LibrarySourceAction(
+                          icon: Icons.insert_drive_file_outlined,
+                          label: 'File',
+                          semanticsLabel: 'Import files',
+                          onTap: () {},
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.bySemanticsLabel('Open reading sources'));
+        await tester.pumpAndSettle();
+
+        for (final card in tester.widgetList<EmbossedSourceActionCard>(
+          find.byType(EmbossedSourceActionCard),
+        )) {
+          final rect = tester.getRect(find.byWidget(card));
+          expect(rect.right, lessThanOrEqualTo(411), reason: 'at ${scale}x');
+          expect(rect.left, greaterThanOrEqualTo(0), reason: 'at ${scale}x');
+        }
+        expect(tester.takeException(), isNull, reason: 'at ${scale}x');
+      }
+    });
+
     testWidgets('tapping outside closes the stack', (tester) async {
       await tester.pumpWidget(_harness(actions: _actions()));
 

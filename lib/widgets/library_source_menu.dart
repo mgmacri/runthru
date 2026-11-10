@@ -261,6 +261,7 @@ class CascadingSourceStack extends StatelessWidget {
                 _buildPositioned(
                   context,
                   index: i,
+                  count: n,
                   totalMs: totalMs,
                   action: actions[i],
                 ),
@@ -274,6 +275,7 @@ class CascadingSourceStack extends StatelessWidget {
   Widget _buildPositioned(
     BuildContext context, {
     required int index,
+    required int count,
     required int totalMs,
     required LibrarySourceAction action,
   }) {
@@ -289,8 +291,12 @@ class CascadingSourceStack extends StatelessWidget {
     );
 
     // Open-state positioning: each card stacks higher and leans right.
+    // The lean ends at the button's right edge: the top card lines up with
+    // it and the cards below step back to the left. (Leaning outwards from
+    // the bottom card pushed the upper cards off the edge of the screen:
+    // "Folder" and "Instapaper" were cut off.)
     final verticalOffset = -index * 56.0 - index * 16.0;
-    final rightLeanOffset = index * 14.0;
+    final rightLeanOffset = -(count - 1 - index) * 14.0;
     final rotation = index * 0.018; // ~1° per step
 
     return AnimatedBuilder(
