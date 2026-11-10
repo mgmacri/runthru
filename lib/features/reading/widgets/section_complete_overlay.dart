@@ -981,6 +981,7 @@ class _BookProgress extends StatelessWidget {
         children: [
           SizedBox(
             height: 8,
+            width: double.infinity,
             child: total <= _maxSegments
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

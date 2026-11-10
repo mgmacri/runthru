@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:runthru/core/book_structure.dart';
 import 'package:runthru/core/time_left.dart';
 import 'package:runthru/design/design.dart';
 
@@ -28,6 +29,9 @@ class BookModeView extends StatefulWidget {
     required this.onFontSizeChanged,
     this.paragraphStarts = const {},
     this.chapterStarts = const {},
+    this.headingStarts,
+    this.structure,
+    this.onEnd,
     this.wordOffset = 0,
     this.totalWords,
     this.topInset = 0,
@@ -68,6 +72,18 @@ class BookModeView extends StatefulWidget {
   /// opens with a heading starts a fresh page, as in an e-reader.
   final Set<int> chapterStarts;
 
+  /// Document-wide word indices where a heading line starts, when the
+  /// document records its headings. Null for documents that do not: short
+  /// unpunctuated paragraphs are then taken for headings.
+  final Set<int>? headingStarts;
+
+  /// The book's sections. Each chapter then opens on a fresh page under a
+  /// designed heading (label, rule, title) instead of a bold line.
+  final BookStructure? structure;
+
+  /// Called when the reader turns past the last page.
+  final VoidCallback? onEnd;
+
   /// Document index of `words[0]`.
   final int wordOffset;
 
@@ -103,7 +119,11 @@ class BookModeViewState extends State<BookModeView> {
   /// Moves to the next page, if any.
   void nextPage() {
     final page = _page;
-    if (page == null || page.end >= widget.words.length - 1) return;
+    if (page == null) return;
+    if (page.end >= widget.words.length - 1) {
+      widget.onEnd?.call();
+      return;
+    }
     _direction = 1;
     HapticFeedback.selectionClick();
     widget.onTurn(page.end + 1);
@@ -123,6 +143,34 @@ class BookModeViewState extends State<BookModeView> {
 
   bool _isChapterStart(int i) =>
       widget.chapterStarts.contains(i + widget.wordOffset);
+
+  /// The chapter whose heading covers local word [i], if any: the page
+  /// then opens with that chapter's designed heading.
+  BookSection? _openerAt(int i) {
+    final structure = widget.structure;
+    if (structure == null) return null;
+    final global = i + widget.wordOffset;
+    final section = structure.sectionAt(global);
+    if (section.kind != SectionKind.body || !section.isTitled) return null;
+    if (global < section.start || global > section.textStart) return null;
+    if (global == section.textStart && section.headingWords > 0) return null;
+    return section;
+  }
+
+  /// Whether local word [i] starts a section (any kind): a fresh page.
+  bool _isSectionStart(int i) {
+    final structure = widget.structure;
+    if (structure == null) return false;
+    final global = i + widget.wordOffset;
+    final section = structure.sectionAt(global);
+    return section.start == global && section.isTitled;
+  }
+
+  bool? _isFlaggedHeading(int i) {
+    final starts = widget.headingStarts;
+    if (starts == null) return null;
+    return starts.contains(i + widget.wordOffset);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +219,10 @@ class BookModeViewState extends State<BookModeView> {
           style: style,
           headingStyle: headingStyle,
           isChapterStart: _isChapterStart,
+          isSectionStart: _isSectionStart,
+          isFlaggedHeading: _isFlaggedHeading,
+          openerAt: _openerAt,
+          wordOffset: widget.wordOffset,
           width: pageWidth,
           height: pageHeight.clamp(style.fontSize! * 3, double.infinity),
           paragraphGap: style.fontSize! * 0.75,
@@ -227,6 +279,7 @@ class BookModeViewState extends State<BookModeView> {
                             key: ValueKey('page-${page.start}'),
                             page: page,
                             layout: layout,
+                            animateOpener: !reduced,
                           ),
                         ),
                       ),
@@ -281,10 +334,17 @@ class BookModeViewState extends State<BookModeView> {
 
 /// One laid-out page: words [start]..[end] inclusive.
 class _PageSpec {
-  const _PageSpec(this.start, this.end);
+  const _PageSpec(this.start, this.end, {this.opener, this.textStart});
 
   final int start;
   final int end;
+
+  /// The chapter this page opens, when it starts at a chapter's heading.
+  final BookSection? opener;
+
+  /// First word of running text on the page (after the opener's heading
+  /// words). Equals [start] on ordinary pages.
+  final int? textStart;
 }
 
 /// Measures pages. Paragraph painters use the same style, width and text
@@ -294,6 +354,10 @@ class _BookLayout {
     required this.words,
     required this.isParagraphStart,
     required this.isChapterStart,
+    required this.isSectionStart,
+    required this.isFlaggedHeading,
+    required this.openerAt,
+    required this.wordOffset,
     required this.style,
     required this.headingStyle,
     required this.width,
@@ -305,6 +369,19 @@ class _BookLayout {
   final List<String> words;
   final bool Function(int) isParagraphStart;
   final bool Function(int) isChapterStart;
+
+  /// Whether a local word starts a titled section (a fresh page).
+  final bool Function(int) isSectionStart;
+
+  /// Whether a local word starts a heading line; null when the document
+  /// does not record headings.
+  final bool? Function(int) isFlaggedHeading;
+
+  /// The chapter whose heading covers a local word, if any.
+  final BookSection? Function(int) openerAt;
+
+  /// Document index of `words[0]`.
+  final int wordOffset;
   final TextStyle style;
   final TextStyle headingStyle;
   final double width;
@@ -332,6 +409,10 @@ class _BookLayout {
   /// ("Chapter Two: The Ledger"). Only whole paragraphs qualify.
   bool isHeading(int first, int last) {
     if (!isParagraphStart(first)) return false;
+    // Documents that record their headings are taken at their word: a
+    // short line such as "Author: Lewis Carroll" is not one.
+    final flagged = isFlaggedHeading(first);
+    if (flagged != null) return flagged;
     final count = last - first + 1;
     if (count > 10) return false;
     return !_closingPunctuation.hasMatch(words[last]);
@@ -352,13 +433,32 @@ class _BookLayout {
     var used = 0.0;
     var i = start;
     var first = true;
+    BookSection? opener;
+    int? textStart;
+
+    // A page that starts on a chapter's heading opens with the designed
+    // heading; the heading's own words are not laid out as text.
+    final section = openerAt(start);
+    if (section != null) {
+      opener = section;
+      used = openerHeight(section);
+      i = (section.textStart - wordOffset).clamp(start, words.length);
+      textStart = i;
+      first = false;
+      if (i >= words.length) {
+        return _PageSpec(start, words.length - 1, opener: opener, textStart: i);
+      }
+    }
+
     while (i < words.length) {
       // Paragraph (or the rest of one, if the page starts mid-paragraph).
       final end = paragraphEnd(i);
-      // A new chapter starts a fresh page. Spine files are only chapters
-      // when they open with a heading: scanned-book EPUBs split files by
-      // print page, mid-sentence.
-      if (!first && isChapterStart(i) && isHeading(i, end)) break;
+      // A new chapter starts a fresh page. Without section data, spine
+      // files are only chapters when they open with a heading:
+      // scanned-book EPUBs split files by print page, mid-sentence.
+      final startsFresh =
+          isSectionStart(i) || (isChapterStart(i) && isHeading(i, end));
+      if (i > start && startsFresh) break;
       final gap = first ? 0.0 : gapBefore(i, end);
       final remaining = height - used - gap;
       if (remaining < _lineHeight) break;
@@ -387,12 +487,82 @@ class _BookLayout {
       painter.dispose();
       if (fitEndChar > 0) {
         final lastWord = para.lastWordEndingBy(fitEndChar);
-        if (lastWord >= i) return _PageSpec(start, lastWord);
+        if (lastWord >= i) {
+          return _PageSpec(
+            start,
+            lastWord,
+            opener: opener,
+            textStart: textStart,
+          );
+        }
       }
       break;
     }
     // Always show at least one word so a giant word cannot stall paging.
-    return _PageSpec(start, (i - 1).clamp(start, words.length - 1));
+    return _PageSpec(
+      start,
+      (i - 1).clamp(start, words.length - 1),
+      opener: opener,
+      textStart: textStart,
+    );
+  }
+
+  // ── Chapter opener metrics (shared by pagination and rendering) ──
+
+  /// Space above the opener, as a fraction of the page: a chapter opens
+  /// lower down the page, as in print.
+  static const double openerDrop = 0.1;
+
+  TextStyle get openerOverlineStyle => RunThruTypography.chapterOverline;
+
+  TextStyle get openerTitleStyle => RunThruTypography.chapterTitle.copyWith(
+    fontSize: (style.fontSize! * 1.55).clamp(24.0, 44.0),
+  );
+
+  TextStyle get openerSubtitleStyle => RunThruTypography.chapterSubtitle
+      .copyWith(fontSize: (style.fontSize! * 0.82).clamp(13.0, 22.0));
+
+  static const double openerRuleHeight = 12;
+  static const double openerGap = 14;
+
+  /// Height of the block below the opener before the text begins.
+  double get openerTail => style.fontSize! * 1.6;
+
+  double _lineBlock(String text, TextStyle textStyle, int maxLines) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: direction,
+      textAlign: TextAlign.center,
+      textScaler: TextScaler.noScaling,
+      maxLines: maxLines,
+      ellipsis: '\u2026',
+    )..layout(maxWidth: width);
+    final h = painter.height;
+    painter.dispose();
+    return h;
+  }
+
+  /// Total height the opener of [section] takes at the top of its page.
+  /// Never more than 70% of the page, so text always follows it.
+  double openerHeight(BookSection section) {
+    var h = height * openerDrop;
+    final group = section.groupTitle ?? '';
+    if (group.isNotEmpty) {
+      h += _lineBlock(group.toUpperCase(), openerOverlineStyle, 1) + 8;
+    }
+    if (section.overline.isNotEmpty) {
+      h +=
+          _lineBlock(section.overline.toUpperCase(), openerOverlineStyle, 2) +
+          openerGap;
+    }
+    h += openerRuleHeight + openerGap;
+    h += _lineBlock(section.headline, openerTitleStyle, 4);
+    final subtitle = section.subtitle ?? '';
+    if (subtitle.isNotEmpty) {
+      h += 10 + _lineBlock(subtitle, openerSubtitleStyle, 3);
+    }
+    h += openerTail;
+    return h.clamp(0.0, height * 0.7);
   }
 
   /// First word of the page that ends just before [currentStart].
@@ -461,23 +631,47 @@ class _ParagraphText {
 }
 
 class _PageText extends StatelessWidget {
-  const _PageText({super.key, required this.page, required this.layout});
+  const _PageText({
+    super.key,
+    required this.page,
+    required this.layout,
+    this.animateOpener = false,
+  });
 
   final _PageSpec page;
   final _BookLayout layout;
 
+  /// Whether a chapter opener on this page plays its entrance.
+  final bool animateOpener;
+
   @override
   Widget build(BuildContext context) {
     final paragraphs = <Widget>[];
-    var i = page.start;
+    final opener = page.opener;
+    if (opener != null) {
+      paragraphs.add(
+        _ChapterOpener(
+          key: ValueKey('opener-${opener.start}'),
+          section: opener,
+          layout: layout,
+          animate: animateOpener,
+        ),
+      );
+    }
+    var i = page.textStart ?? page.start;
+    var firstBlock = opener == null;
     while (i <= page.end) {
       // Classify by the whole paragraph (as pagination did), render only
       // the part that is on this page.
       final fullEnd = layout.paragraphEnd(i);
       final end = fullEnd.clamp(i, page.end);
-      if (paragraphs.isNotEmpty) {
-        paragraphs.add(SizedBox(height: layout.gapBefore(i, fullEnd)));
+      if (!firstBlock) {
+        final gap = opener != null && i == page.textStart
+            ? 0.0
+            : layout.gapBefore(i, fullEnd);
+        if (gap > 0) paragraphs.add(SizedBox(height: gap));
       }
+      firstBlock = false;
       final heading = layout.isHeading(i, fullEnd);
       final text = Text(
         _ParagraphText(layout.words, i, end).text,
@@ -496,6 +690,163 @@ class _PageText extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: paragraphs,
+      ),
+    );
+  }
+}
+
+/// A chapter's heading at the top of its first page: the label spaced out
+/// above a short rule, then the title, as a printed chapter opening.
+///
+/// Its height is [_BookLayout.openerHeight], the same figure pagination
+/// reserved, so the text below starts exactly where the page was measured
+/// to. The entrance is a single fade and rise; none with reduced motion.
+class _ChapterOpener extends StatelessWidget {
+  const _ChapterOpener({
+    super.key,
+    required this.section,
+    required this.layout,
+    required this.animate,
+  });
+
+  final BookSection section;
+  final _BookLayout layout;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = section.groupTitle ?? '';
+    final subtitle = section.subtitle ?? '';
+    final spoken = [
+      if (group.isNotEmpty) group,
+      if (section.overline.isNotEmpty) section.overline,
+      section.headline,
+      if (subtitle.isNotEmpty) subtitle,
+    ].join('. ');
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: layout.height * _BookLayout.openerDrop),
+        if (group.isNotEmpty) ...[
+          Text(
+            group.toUpperCase(),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textScaler: TextScaler.noScaling,
+            style: layout.openerOverlineStyle.copyWith(
+              color: RunThruTokens.shellInkSoft,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (section.overline.isNotEmpty) ...[
+          Text(
+            section.overline.toUpperCase(),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textScaler: TextScaler.noScaling,
+            style: layout.openerOverlineStyle,
+          ),
+          const SizedBox(height: _BookLayout.openerGap),
+        ],
+        const SizedBox(
+          height: _BookLayout.openerRuleHeight,
+          child: Center(child: _OpenerRule()),
+        ),
+        const SizedBox(height: _BookLayout.openerGap),
+        Text(
+          section.headline,
+          textAlign: TextAlign.center,
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+          textScaler: TextScaler.noScaling,
+          style: layout.openerTitleStyle,
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textScaler: TextScaler.noScaling,
+            style: layout.openerSubtitleStyle,
+          ),
+        ],
+      ],
+    );
+
+    final block = Semantics(
+      header: true,
+      label: spoken,
+      child: ExcludeSemantics(
+        // The reserved height, whatever the fonts measure to: text below
+        // must start where pagination expects.
+        child: SizedBox(
+          height: layout.openerHeight(section),
+          child: ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: 0,
+              maxHeight: double.infinity,
+              child: content,
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!animate) return block;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: RunThruTiming.titleCardEnter,
+      curve: Curves.easeOutCubic,
+      child: block,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 14),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// The short rule with a centre diamond under a chapter label.
+class _OpenerRule extends StatelessWidget {
+  const _OpenerRule();
+
+  @override
+  Widget build(BuildContext context) {
+    final line = Expanded(
+      child: SizedBox(
+        height: 1.4,
+        child: ColoredBox(
+          color: RunThruTokens.shellTeal.withValues(alpha: 0.55),
+        ),
+      ),
+    );
+    return SizedBox(
+      width: 120,
+      child: Row(
+        children: [
+          line,
+          const SizedBox(width: 7),
+          Transform.rotate(
+            angle: 0.785398, // 45°
+            child: const SizedBox(
+              width: 6,
+              height: 6,
+              child: ColoredBox(color: RunThruTokens.shellTeal),
+            ),
+          ),
+          const SizedBox(width: 7),
+          line,
+        ],
       ),
     );
   }

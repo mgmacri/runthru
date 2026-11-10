@@ -237,7 +237,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// position back to the start of the current sentence.
   void _snapToSentenceStartForBook() {
     if (_words.isEmpty) return;
-    final start = _sentenceStartAt(_currentGlobalIndex);
+    var start = _sentenceStartAt(_currentGlobalIndex);
+    // At a chapter's first sentence the page opens with the chapter's
+    // heading, so the page starts at the heading.
+    final section = _structure.sectionAt(start);
+    if (section.isTitled && start <= section.textStart) start = section.start;
     final local = (start - _sliceOffset).clamp(0, _words.length - 1);
     ref.read(wordTimerProvider.notifier).seekTo(local);
     _cacheTimerPosition(local);
@@ -291,6 +295,34 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         next: section,
       );
     });
+  }
+
+  /// Book mode: the reader turned past the last page.
+  void _onBookEnd() {
+    if (_interlude != null || !_finishScreenApplies) return;
+    _showBookComplete();
+  }
+
+  // Heading line starts (document-wide word indices), cached per document.
+  // Null when the document records no headings at all (text extracted
+  // before headings were kept): Book mode then recognises them by shape.
+  Set<int>? _headingStartsCache;
+  ExtractedDocument? _headingStartsDoc;
+
+  Set<int>? get _headingStarts {
+    final doc = _fullDoc;
+    if (doc == null) return null;
+    if (!identical(doc, _headingStartsDoc)) {
+      _headingStartsDoc = doc;
+      final starts = <int>{};
+      var index = 0;
+      for (final sentence in doc.sentences) {
+        if (sentence.isHeading) starts.add(index);
+        index += sentence.words.length;
+      }
+      _headingStartsCache = starts.isEmpty ? null : starts;
+    }
+    return _headingStartsCache;
   }
 
   // Paragraph starts (document-wide word indices), cached per document and
@@ -2322,6 +2354,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                         _bookParagraphStarts,
                                                     chapterStarts:
                                                         _chapterStarts,
+                                                    headingStarts:
+                                                        _headingStarts,
+                                                    structure: _structure,
+                                                    onEnd: _onBookEnd,
                                                     wordOffset: _sliceOffset,
                                                     totalWords:
                                                         _allDocWords.length,
