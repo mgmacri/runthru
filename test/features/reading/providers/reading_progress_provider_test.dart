@@ -173,6 +173,115 @@ void main() {
     });
   });
 
+  group('finished items', () {
+    Future<ReadingProgress> open(ProviderContainer container) async {
+      await container.read(readingProgressProvider.future);
+      return container.read(readingProgressProvider.notifier);
+    }
+
+    Future<void> write(
+      ReadingProgress notifier,
+      int wordIndex, {
+      bool finished = false,
+    }) => notifier.record(
+      contentId: 'file:///novel.epub',
+      source: 'local',
+      title: 'A Novel',
+      wordIndex: wordIndex,
+      totalWords: 1000,
+      finished: finished,
+    );
+
+    test('a book read in one sitting is recorded as finished', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final notifier = await open(container);
+
+      // No earlier record: nothing was saved before the last page.
+      await write(notifier, 960, finished: true);
+
+      final record = notifier.getRecord('file:///novel.epub');
+      expect(record, isNotNull);
+      expect(record!.finished, isTrue);
+      expect(record.wordIndex, 960);
+      expect(notifier.shelf, isEmpty);
+    });
+
+    test('reading on into the notes keeps it finished', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final notifier = await open(container);
+
+      await write(notifier, 400);
+      // The story ends at 960; the index runs to 1000.
+      await write(notifier, 960, finished: true);
+      await write(notifier, 985);
+
+      expect(notifier.getRecord('file:///novel.epub')!.finished, isTrue);
+      expect(notifier.getRecord('file:///novel.epub')!.wordIndex, 985);
+      expect(notifier.shelf, isEmpty);
+
+      // Reopened later and closed without reading: still finished.
+      await write(notifier, 985);
+      expect(notifier.getRecord('file:///novel.epub')!.finished, isTrue);
+      expect(notifier.shelf, isEmpty);
+    });
+
+    test('going back into the text puts it in progress again', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final notifier = await open(container);
+
+      await write(notifier, 960, finished: true);
+      // Read it again, from chapter two.
+      await write(notifier, 120);
+
+      expect(notifier.getRecord('file:///novel.epub')!.finished, isFalse);
+      expect(notifier.shelf.single.contentId, 'file:///novel.epub');
+    });
+
+    test('the finished mark survives a restart', () async {
+      final container = makeContainer();
+      final notifier = await open(container);
+      await write(notifier, 960, finished: true);
+      container.dispose();
+
+      final reopened = makeContainer();
+      addTearDown(reopened.dispose);
+      final again = await open(reopened);
+      expect(again.getRecord('file:///novel.epub')!.finished, isTrue);
+      expect(again.shelf, isEmpty);
+    });
+  });
+
+  group('ProgressRecord.displayPercent', () {
+    ProgressRecord at(int wordIndex, {bool finished = false}) => ProgressRecord(
+      contentId: 'x',
+      source: 'local',
+      title: 'X',
+      wordIndex: wordIndex,
+      totalWords: 100000,
+      lastReadAt: DateTime(2026, 11, 10),
+      finished: finished,
+    );
+
+    test('a started book never shows 0', () {
+      expect(at(0).displayPercent, 0);
+      expect(at(12).displayPercent, 1);
+      expect(at(499).displayPercent, 1);
+      expect(at(42000).displayPercent, 42);
+    });
+
+    test('an unfinished book never shows 100', () {
+      expect(at(99990).displayPercent, 99);
+      expect(at(100000).displayPercent, 99);
+    });
+
+    test('a finished book shows 100 wherever the story ended', () {
+      expect(at(96000, finished: true).displayPercent, 100);
+    });
+  });
+
   group('ReadingProgress.shelf', () {
     test('includes in-progress Drive records', () async {
       final container = makeContainer();

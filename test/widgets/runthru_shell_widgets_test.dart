@@ -71,6 +71,46 @@ void main() {
       expect(find.text('42'), findsOneWidget);
     });
 
+    testWidgets('progress ring: a started item is never 0, an unfinished '
+        'one never 100', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _harness(const RunThruProgressRing(value: 0.002)),
+      );
+      expect(find.text('1'), findsOneWidget);
+      expect(find.bySemanticsLabel('1 percent read'), findsOneWidget);
+
+      await tester.pumpWidget(
+        _harness(const RunThruProgressRing(value: 0.998)),
+      );
+      expect(find.text('99'), findsOneWidget);
+      expect(find.byIcon(Icons.check_rounded), findsNothing);
+
+      await tester.pumpWidget(_harness(const RunThruProgressRing(value: 0)));
+      expect(find.text('0'), findsOneWidget);
+      handle.dispose();
+    });
+
+    testWidgets('progress ring: finished shows a check, not a number', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      // The story ended at 96% of the file; the rest is notes.
+      await tester.pumpWidget(
+        _harness(const RunThruProgressRing(value: 0.96, finished: true)),
+      );
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      expect(find.text('96'), findsNothing);
+      expect(find.text('100'), findsNothing);
+      expect(find.bySemanticsLabel('Finished'), findsOneWidget);
+
+      // Read to the very last word.
+      await tester.pumpWidget(_harness(const RunThruProgressRing(value: 1)));
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      expect(find.text('100'), findsNothing);
+      handle.dispose();
+    });
+
     testWidgets('status pill and primary button render expected labels', (
       tester,
     ) async {

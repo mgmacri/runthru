@@ -305,12 +305,17 @@ class RunThruProgressRing extends StatelessWidget {
   const RunThruProgressRing({
     super.key,
     required this.value,
+    this.finished = false,
     this.size = 46,
     this.strokeWidth = 4,
   });
 
   /// Progress from 0 to 1.
   final double value;
+
+  /// Whether the item was read to the end: a closed ring and a check, even
+  /// when the story ends before the last page (notes, index).
+  final bool finished;
 
   /// Square size.
   final double size;
@@ -320,10 +325,12 @@ class RunThruProgressRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clamped = value.clamp(0.0, 1.0);
-    final percent = (clamped * 100).round();
+    final done = finished || value >= 1.0;
+    final clamped = done ? 1.0 : value.clamp(0.0, 1.0);
+    // A started item never reads "0", an unfinished one never "100".
+    final percent = clamped <= 0 ? 0 : (clamped * 100).round().clamp(1, 99);
     return Semantics(
-      label: '$percent percent read',
+      label: done ? 'Finished' : '$percent percent read',
       container: true,
       child: SizedBox(
         width: size,
@@ -334,12 +341,21 @@ class RunThruProgressRing extends StatelessWidget {
             strokeWidth: strokeWidth,
           ),
           child: Center(
-            child: Text(
-              '$percent',
-              style: RunThruTypography.tinyLabel.copyWith(
-                color: RunThruTokens.shellInk,
-              ),
-            ),
+            child: done
+                ? Icon(
+                    Icons.check_rounded,
+                    size: size * 0.48,
+                    color: RunThruTokens.shellTeal,
+                  )
+                // The label above already says the figure.
+                : ExcludeSemantics(
+                    child: Text(
+                      '$percent',
+                      style: RunThruTypography.tinyLabel.copyWith(
+                        color: RunThruTokens.shellInk,
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),

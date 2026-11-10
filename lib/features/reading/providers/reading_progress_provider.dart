@@ -73,6 +73,16 @@ class ProgressRecord {
   double get percent =>
       totalWords > 0 ? (wordIndex / totalWords).clamp(0.0, 1.0) : 0.0;
 
+  /// Whole percent for display. An item that has been started never shows
+  /// 0 and one that is not finished never shows 100: "0" beside a book in
+  /// Continue Reading and "100" beside one still on the shelf both read as
+  /// mistakes.
+  int get displayPercent {
+    if (finished) return 100;
+    if (totalWords <= 0 || wordIndex <= 0) return 0;
+    return (percent * 100).round().clamp(1, 99);
+  }
+
   /// Approximate minutes remaining at 238 wpm average.
   int get minutesLeft {
     final wordsLeft = (totalWords - wordIndex).clamp(0, totalWords);
@@ -134,6 +144,11 @@ class ReadingProgress extends _$ReadingProgress {
   /// If [totalWords] changed since the last record, [wordIndex] is clamped to
   /// the new total to prevent an out-of-range position.
   ///
+  /// [finished] marks the item as read to the end at [wordIndex]. A later
+  /// write keeps that mark for as long as the reader has only gone on from
+  /// there (the notes after the story); going back into the text makes it
+  /// an item in progress again.
+  ///
   /// [lastReadAt] is exposed for testing; in production it defaults to now.
   /// Maximum retained records — oldest (by [ProgressRecord.lastReadAt])
   /// are evicted beyond this, so the store never grows without bound.
@@ -147,6 +162,7 @@ class ReadingProgress extends _$ReadingProgress {
     required int totalWords,
     DateTime? lastReadAt,
     String? contentHash,
+    bool finished = false,
   }) async {
     // Collapse any pre-existing duplicates (legacy persisted data or a
     // concurrent write that landed before this call) into a single entry per
@@ -161,6 +177,11 @@ class ReadingProgress extends _$ReadingProgress {
       );
     }
     final clampedWord = wordIndex.clamp(0, totalWords);
+    final existing = byId[contentId];
+    final stillFinished =
+        existing != null &&
+        existing.finished &&
+        clampedWord >= existing.wordIndex;
     byId[contentId] = ProgressRecord(
       contentId: contentId,
       source: source,
@@ -168,7 +189,8 @@ class ReadingProgress extends _$ReadingProgress {
       wordIndex: clampedWord,
       totalWords: totalWords,
       lastReadAt: lastReadAt ?? DateTime.now(),
-      contentHash: contentHash ?? byId[contentId]?.contentHash,
+      finished: finished || stillFinished,
+      contentHash: contentHash ?? existing?.contentHash,
     );
 
     var records = byId.values.toList();

@@ -394,6 +394,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         );
         final range = bookmark?.readingRange;
         double readingProgress = 0.0;
+        var finished = false;
         String? rangeLabel;
 
         if (range != null) {
@@ -413,12 +414,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               .getRecord(entry.filePath);
           if (record != null && record.totalWords > 0) {
             readingProgress = record.percent;
+            finished = record.finished;
           }
         }
 
         return _BookTile(
           entry: displayEntry,
           progress: readingProgress,
+          finished: finished,
           rangeLabel: rangeLabel,
           divider: false,
           onTap: displayEntry.status == PdfStatus.ready
@@ -647,7 +650,7 @@ class _ContinueHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = (item.percent * 100).round();
+    final percent = item.displayPercent;
     final minutesLeft = formatTimeLeft(item.minutesLeft);
     final source = _SourceBadge._label(item.source);
     return Padding(
@@ -718,13 +721,18 @@ class _ShelfCardState extends State<_ShelfCard> {
 
   @override
   Widget build(BuildContext context) {
-    final percent = (widget.item.percent * 100).round();
+    final percent = widget.item.displayPercent;
+    // The ring already gives the percentage; the line under the title says
+    // what is left, as the leading card does.
+    final minutesLeft = formatTimeLeft(widget.item.minutesLeft);
 
     final source = _SourceBadge._label(widget.item.source);
     // One announcement with the visible source name; the row's own text is
     // excluded so it is not read again.
     return Semantics(
-      label: '${widget.item.title}, $source, $percent percent read',
+      label:
+          '${widget.item.title}, $source, $percent percent read, '
+          '$minutesLeft',
       button: true,
       excludeSemantics: true,
       onTap: widget.onTap,
@@ -737,7 +745,7 @@ class _ShelfCardState extends State<_ShelfCard> {
           opacity: _pressed ? 0.82 : 1,
           child: RunThruShellRow(
             title: widget.item.title,
-            metadata: '$source · $percent%',
+            metadata: '$source · $minutesLeft',
             icon: _iconForSource(widget.item.source),
             trailing: RunThruProgressRing(value: widget.item.percent, size: 42),
           ),
@@ -922,11 +930,15 @@ class _BookTile extends StatefulWidget {
     required this.onTap,
     required this.onLongPress,
     required this.divider,
+    this.finished = false,
     this.rangeLabel,
   });
 
   final PdfEntry entry;
   final double progress;
+
+  /// Whether the book was read to the end.
+  final bool finished;
   final String? rangeLabel;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -983,8 +995,12 @@ class _BookTileState extends State<_BookTile> {
             metadata: widget.rangeLabel ?? _statusLabel(widget.entry),
             icon: Icons.menu_book_rounded,
             divider: widget.divider,
-            trailing: widget.progress > 0
-                ? RunThruProgressRing(value: widget.progress, size: 42)
+            trailing: widget.progress > 0 || widget.finished
+                ? RunThruProgressRing(
+                    value: widget.progress,
+                    finished: widget.finished,
+                    size: 42,
+                  )
                 : RunThruStatusPill(
                     label: _statusPillLabel(widget.entry.status),
                     tone: statusTone,

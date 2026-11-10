@@ -596,11 +596,31 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     );
   }
 
-  /// Removes this item from the Continue Reading shelf once fully read.
+  /// Records this item as read to the end, which takes it off the Continue
+  /// Reading shelf. Written with the position, not as a flag on whatever was
+  /// last saved: a book read in one sitting has no earlier record, and the
+  /// store keeps the mark only while the reader stays at or past this point.
   void _markShelfFinished() {
     if (_isClipboard && !_isInstapaper) return;
     _finishedAt = _lastGlobalIndex;
-    unawaited(_shelfProgress.markFinished(widget.filePath));
+    final total = _allDocWords.isNotEmpty
+        ? _allDocWords.length
+        : _lastTimerState.totalWords;
+    if (total <= 0) {
+      unawaited(_shelfProgress.markFinished(widget.filePath));
+      return;
+    }
+    unawaited(
+      _shelfProgress.record(
+        contentId: widget.filePath,
+        source: _progressSource,
+        title: _shelfTitle,
+        wordIndex: _lastGlobalIndex,
+        totalWords: total,
+        contentHash: _queue.contentHashOf(widget.filePath),
+        finished: true,
+      ),
+    );
   }
 
   /// Where the reader was when the book was marked finished, or -1. While
