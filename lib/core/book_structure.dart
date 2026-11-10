@@ -633,6 +633,14 @@ BookStructure analyzeBookStructure(ExtractedDocument doc) {
   var bodyStart = frontLimit;
   if (explicitBody >= 0 && explicitBody < backLimit) {
     bodyStart = explicitBody > frontLimit ? explicitBody : frontLimit;
+    // A prologue is part of the story even when the file is typed as
+    // front matter (some tools do): the book starts with it.
+    for (var i = sectionNodes.length - 1; i >= 0; i--) {
+      final n = sectionNodes[i];
+      if (n.word >= bodyStart) continue;
+      if (n.role != SectionRole.prologue || n.word < frontLimit) break;
+      bodyStart = n.word;
+    }
   } else {
     final first = _firstBodyNode(sectionNodes, frontLimit, total);
     if (first != null && first.word > frontLimit) {

@@ -218,6 +218,29 @@ void main() {
       expect(licence.role, SectionRole.license);
     });
 
+    test('a prologue typed as front matter still opens the book', () {
+      final d = _Doc();
+      d.nav('Foreword', type: 'frontmatter foreword');
+      d.h('Foreword');
+      d.text(300);
+      final prologue = d.words;
+      d.nav('Prologue', type: 'frontmatter prologue');
+      d.h('Prologue');
+      d.text(200);
+      d.nav('Chapter One', type: 'bodymatter chapter');
+      d.h('Chapter One');
+      d.text(400);
+      d.nav('Chapter Two', type: 'bodymatter chapter');
+      d.h('Chapter Two');
+      d.text(400);
+
+      final st = analyzeBookStructure(d.build());
+      _expectContiguous(st);
+      expect(st.bodyStart, prologue);
+      expect(st.chapters.first.role, SectionRole.prologue);
+      expect(st.skippedFrontTitles, ['Foreword']);
+    });
+
     test('a lone child under a heading is its subtitle, not a chapter', () {
       final d = _Doc();
       d.nav('CHAPTER 1. Loomings.');
