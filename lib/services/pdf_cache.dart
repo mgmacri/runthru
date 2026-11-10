@@ -77,9 +77,16 @@ class PdfCache {
       final json = jsonDecode(jsonStr) as Map<String, Object?>;
       return ExtractedDocument.fromJson(json);
     });
-    // Invalidate cache entries without page boundaries (old format).
-    if (!doc.hasPageBoundaries) return null;
-    return doc;
+    return isUsable(doc) ? doc : null;
+  }
+
+  /// Whether a cached [doc] can be served. Entries without page boundaries
+  /// (the oldest format) and entries written by an older extractor are not:
+  /// their text lacks headings and outline and, for PDFs, still carries
+  /// running headers and split words. The caller re-extracts instead.
+  @visibleForTesting
+  static bool isUsable(ExtractedDocument doc) {
+    return doc.hasPageBoundaries && doc.version >= kExtractionVersion;
   }
 
   /// Encodes [doc] to gzip'd UTF-8 JSON and writes it to [cacheFile]. Encode

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -218,6 +219,60 @@ void main() {
 
         // Recently read book intact.
         expect(await store.getSection(identity.contentHash, 0), isNotNull);
+      },
+    );
+
+    test('headings and the source outline survive the round trip', () async {
+      const doc = ExtractedDocument(
+        sentences: [
+          Sentence(
+            words: ['Chapter', 'One'],
+            startsParagraph: true,
+            heading: 1,
+          ),
+          Sentence(words: ['It', 'began.'], startsParagraph: true),
+        ],
+        pageBoundaries: [
+          PageBoundary(pageNumber: 0, startSentenceIndex: 0, startWordIndex: 0),
+        ],
+        outline: [
+          OutlineEntry(
+            title: 'Chapter One',
+            startWordIndex: 0,
+            startSentenceIndex: 0,
+            type: 'chapter',
+          ),
+        ],
+        totalPages: 1,
+      );
+      await store.putDocument(identity, doc);
+
+      final back = await store.getDocument(identity.contentHash);
+      expect(back, isNotNull);
+      expect(back!.sentences.first.heading, 1);
+      expect(back.outline.single.title, 'Chapter One');
+      expect(back.outline.single.type, 'chapter');
+    });
+
+    test(
+      'a book written by an older schema is re-ingested, not served',
+      () async {
+        await store.putDocument(identity, bigDoc());
+        // Rewrite the manifest as schema 1 (a book stored before headings).
+        final manifest = File(
+          '${tempDir.path}/content_store/${identity.contentHash}/manifest.json',
+        );
+        final json =
+            jsonDecode(manifest.readAsStringSync()) as Map<String, Object?>;
+        json['schemaVersion'] = 1;
+        manifest.writeAsStringSync(jsonEncode(json));
+
+        expect(await store.hasBook(identity.contentHash), isFalse);
+        expect(await store.getDocument(identity.contentHash), isNull);
+
+        await store.putDocument(identity, bigDoc());
+        expect(await store.hasBook(identity.contentHash), isTrue);
+        expect(await store.getDocument(identity.contentHash), isNotNull);
       },
     );
 

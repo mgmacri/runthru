@@ -103,11 +103,11 @@ class ContentStore {
     return (await getMetadata(bookId))?.totalSections ?? 0;
   }
 
-  /// Whether [bookId] is fully ingested (manifest present).
+  /// Whether [bookId] is fully ingested at the current schema version.
+  /// A book written by an older schema counts as absent: it is re-extracted
+  /// and rewritten the next time it is opened.
   Future<bool> hasBook(String bookId) async {
-    final dir = await _bookDir(bookId);
-    if (dir == null) return false;
-    return File('$dir/manifest.json').existsSync();
+    return (await getMetadata(bookId))?.isCurrent ?? false;
   }
 
   /// One bounded word window, from memory LRU, then disk. Null when the
@@ -161,7 +161,8 @@ class ContentStore {
   /// this is O(book), not O(section); background code must use [getSection].
   Future<ExtractedDocument?> getDocument(String bookId) async {
     final meta = await getMetadata(bookId);
-    if (meta == null) return null;
+    // An older schema's text lacks headings and outline: re-extract.
+    if (meta == null || !meta.isCurrent) return null;
     final sentences = <Sentence>[];
     for (var i = 0; i < meta.totalSections; i++) {
       final section = await getSection(bookId, i);
@@ -175,6 +176,7 @@ class ContentStore {
       sentences: sentences,
       pageBoundaries: meta.pageBoundaries,
       totalPages: meta.totalPages,
+      outline: meta.outline,
     );
   }
 
@@ -326,6 +328,7 @@ class ContentStore {
       totalSections: sections.length,
       totalPages: doc.totalPages,
       pageBoundaries: doc.pageBoundaries,
+      outline: doc.outline,
     );
     final manifestBytes = utf8.encode(jsonEncode(manifest.toJson()));
     File('$dirPath/manifest.json').writeAsBytesSync(manifestBytes);

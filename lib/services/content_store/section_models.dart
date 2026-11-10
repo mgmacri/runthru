@@ -5,7 +5,12 @@ library;
 import 'package:runthru/services/models.dart';
 
 /// Current on-disk schema version for the content store.
-const int kContentStoreSchemaVersion = 1;
+///
+/// * 1: sentences and page boundaries.
+/// * 2: heading levels on sentences, the source outline in the manifest,
+///   and text from extraction version 2. Older books are re-extracted and
+///   rewritten on their next open; nothing else depends on the old text.
+const int kContentStoreSchemaVersion = 2;
 
 /// Target words per section. Sections are sentence-aligned, so real sizes
 /// vary around this; it keeps any single load bounded (~1500 words ≈ a few
@@ -292,6 +297,7 @@ class BookMetadata {
     required this.totalSections,
     required this.totalPages,
     this.pageBoundaries = const [],
+    this.outline = const [],
     this.schemaVersion = kContentStoreSchemaVersion,
   });
 
@@ -308,6 +314,11 @@ class BookMetadata {
       pageBoundaries:
           (json['pageBoundaries'] as List<Object?>?)
               ?.map((e) => PageBoundary.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const [],
+      outline:
+          (json['outline'] as List<Object?>?)
+              ?.map((e) => OutlineEntry.fromJson(e as Map<String, Object?>))
               .toList() ??
           const [],
       schemaVersion: json['schemaVersion'] as int? ?? 0,
@@ -338,6 +349,13 @@ class BookMetadata {
   /// Page → word/sentence offsets (small; metadata-grade).
   final List<PageBoundary> pageBoundaries;
 
+  /// The source's own navigation (table of contents, landmarks, bookmarks).
+  final List<OutlineEntry> outline;
+
+  /// Whether this book was written by the current schema. Older books are
+  /// treated as absent so they are re-extracted with current data.
+  bool get isCurrent => schemaVersion == kContentStoreSchemaVersion;
+
   /// On-disk schema version (idempotent migrations check this).
   final int schemaVersion;
 
@@ -351,6 +369,7 @@ class BookMetadata {
     'totalSections': totalSections,
     'totalPages': totalPages,
     'pageBoundaries': pageBoundaries.map((b) => b.toJson()).toList(),
+    if (outline.isNotEmpty) 'outline': outline.map((e) => e.toJson()).toList(),
     'schemaVersion': schemaVersion,
   };
 }
