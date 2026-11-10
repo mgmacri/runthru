@@ -217,7 +217,7 @@ class LibraryImport {
         return;
       }
       if (!context.mounted) return;
-      _showSnack(context, '$copied book(s) added');
+      _showSnack(context, booksAddedMessage(copied));
     } on PlatformException catch (e) {
       appLog('import', 'Android SAF: native channel failed: ${e.message}');
       await _deleteDirQuietly(dir);
@@ -279,7 +279,7 @@ class LibraryImport {
         return;
       }
       if (!context.mounted) return;
-      _showSnack(context, '$copied book(s) added');
+      _showSnack(context, booksAddedMessage(copied));
     } on PlatformException catch (e) {
       appLog('import', 'iOS: native channel failed: ${e.message}');
       await _deleteDirQuietly(dir);
@@ -326,7 +326,7 @@ class LibraryImport {
       displayName: 'Imported files',
     );
     if (!context.mounted) return;
-    _showSnack(context, '$copied file(s) added');
+    _showSnack(context, booksAddedMessage(copied));
   }
 
   /// Creates a unique app-managed directory under `<appDocs>/library/`.
@@ -360,6 +360,12 @@ class LibraryImport {
     }
     return true;
   }
+
+  /// What the confirmation says after [count] books were added.
+  /// (It used to read "7 book(s) added".)
+  @visibleForTesting
+  static String booksAddedMessage(int count) =>
+      count == 1 ? '1 book added' : '$count books added';
 
   static void _showSnack(BuildContext context, String message) {
     if (!context.mounted) return;

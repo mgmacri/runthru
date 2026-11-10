@@ -91,4 +91,10 @@ void main() {
       },
     );
   });
+
+  test('the confirmation counts books in plain words', () {
+    expect(LibraryImport.booksAddedMessage(1), '1 book added');
+    expect(LibraryImport.booksAddedMessage(7), '7 books added');
+    expect(LibraryImport.booksAddedMessage(1), isNot(contains('(s)')));
+  });
 }
