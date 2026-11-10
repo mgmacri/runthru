@@ -515,3 +515,44 @@ final RegExp _endsSentence = RegExp('[.!?\u2026][\u201D\u2019"\')\\]]*\$');
 
 /// Splits stripped chapter text into sentences with paragraph starts.
 List<Sentence> _textToSentences(String text) => textToSentences(text);
+
+/// The EPUB's own title (`dc:title` in its package file), or null.
+///
+/// Reads only `container.xml` and the OPF, never chapter content, in a
+/// background isolate. Used for library and reader titles instead of the
+/// file name ("The Lighthouse Keeper's Ledger", not "lighthouse.epub").
+Future<String?> epubTitle(String filePath) async {
+  try {
+    return await Isolate.run(() {
+      final file = File(filePath);
+      if (!file.existsSync()) return null;
+      final archive = ZipDecoder().decodeBytes(file.readAsBytesSync());
+      String? read(String path) {
+        final want = path.replaceAll('\\', '/').toLowerCase();
+        for (final f in archive.files) {
+          if (f.name.replaceAll('\\', '/').toLowerCase() == want) {
+            return utf8.decode(f.content as List<int>, allowMalformed: true);
+          }
+        }
+        return null;
+      }
+
+      final container = read('META-INF/container.xml');
+      if (container == null) return null;
+      final opfPath = XmlDocument.parse(
+        container,
+      ).findAllElements('rootfile').firstOrNull?.getAttribute('full-path');
+      if (opfPath == null) return null;
+      final opf = read(opfPath);
+      if (opf == null) return null;
+      final title = XmlDocument.parse(opf)
+          .findAllElements('*')
+          .where((e) => e.name.local == 'title')
+          .map((e) => e.innerText.replaceAll(RegExp(r'\s+'), ' ').trim())
+          .firstWhere((t) => t.isNotEmpty, orElse: () => '');
+      return title.isEmpty ? null : title;
+    }).timeout(const Duration(seconds: 5));
+  } on Object {
+    return null;
+  }
+}

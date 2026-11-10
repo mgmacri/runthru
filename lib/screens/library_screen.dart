@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:runthru/core/document_title.dart';
+import 'package:runthru/features/content/providers/document_title_provider.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
@@ -711,10 +713,14 @@ class _ShelfCardState extends State<_ShelfCard> {
   Widget build(BuildContext context) {
     final percent = (widget.item.percent * 100).round();
 
+    final source = _SourceBadge._label(widget.item.source);
+    // One announcement with the visible source name; the row's own text is
+    // excluded so it is not read again.
     return Semantics(
-      label:
-          '${widget.item.title}, ${widget.item.source}, $percent percent read',
+      label: '${widget.item.title}, $source, $percent percent read',
       button: true,
+      excludeSemantics: true,
+      onTap: widget.onTap,
       child: GestureDetector(
         onTapDown: (_) => setState(() => _pressed = true),
         onTapCancel: () => setState(() => _pressed = false),
@@ -724,11 +730,9 @@ class _ShelfCardState extends State<_ShelfCard> {
           opacity: _pressed ? 0.82 : 1,
           child: RunThruShellRow(
             title: widget.item.title,
-            metadata: '${_SourceBadge._label(widget.item.source)} · $percent%',
+            metadata: '$source · $percent%',
             icon: _iconForSource(widget.item.source),
             trailing: RunThruProgressRing(value: widget.item.percent, size: 42),
-            semanticLabel:
-                '${widget.item.title}, ${widget.item.source}, $percent percent read',
           ),
         ),
       ),
@@ -1067,9 +1071,29 @@ class _BookTileState extends State<_BookTile> {
   Widget build(BuildContext context) {
     final statusTone = _statusTone(widget.entry.status);
 
+    return Consumer(
+      builder: (context, ref, _) {
+        final title =
+            ref
+                .watch(documentTitleProvider(widget.entry.filePath))
+                .valueOrNull ??
+            prettyFileTitle(widget.entry.fileName);
+        return _buildTile(title, statusTone);
+      },
+    );
+  }
+
+  Widget _buildTile(String title, RunThruStatusTone statusTone) {
+    // One announcement: the row's own text is excluded so TalkBack does not
+    // read the title three times.
     return Semantics(
-      label: '${widget.entry.fileName}, ${_statusLabel(widget.entry)}',
+      label: '$title, ${widget.rangeLabel ?? _statusLabel(widget.entry)}',
       button: widget.onTap != null,
+      excludeSemantics: true,
+      // Excluding the row's own semantics drops its gesture actions, so the
+      // label node carries them for TalkBack / VoiceOver.
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
       child: GestureDetector(
         onTapDown: widget.onTap == null
             ? null
@@ -1083,7 +1107,7 @@ class _BookTileState extends State<_BookTile> {
         child: Opacity(
           opacity: _pressed ? 0.82 : 1,
           child: RunThruShellRow(
-            title: widget.entry.fileName,
+            title: title,
             metadata: widget.rangeLabel ?? _statusLabel(widget.entry),
             icon: Icons.menu_book_rounded,
             divider: widget.divider,

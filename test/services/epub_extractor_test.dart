@@ -297,6 +297,15 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('epubTitle reads the package title', () async {
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/file_name.epub';
+      await File(epubPath).writeAsBytes(_createTestEpub());
+      expect(await epubTitle(epubPath), 'Test EPUB');
+      expect(await epubTitle('${tempDir.path}/missing.epub'), isNull);
+      await tempDir.delete(recursive: true);
+    });
+
     test('skips the nav document and non-linear spine items', () async {
       final bytes = _createTestEpub(
         chapterContents: [

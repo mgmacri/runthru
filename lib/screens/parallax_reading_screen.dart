@@ -20,7 +20,9 @@ import 'package:runthru/core/orp.dart';
 import 'package:runthru/core/reading_range_resolver.dart';
 import 'package:runthru/core/sentence_resolver.dart';
 import 'package:runthru/core/text_segmentation.dart';
+import 'package:runthru/core/document_title.dart';
 import 'package:runthru/core/time_left.dart';
+import 'package:runthru/features/content/providers/document_title_provider.dart';
 import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
@@ -194,6 +196,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     ref.read(wordTimerProvider.notifier).seekTo(local);
     _cacheTimerPosition(local);
     _wordNotifier.value = _words[local];
+    // Book mode never pauses, so record progress (Continue Reading,
+    // Instapaper) on each page turn.
+    _recordShelfProgress();
+    _recordInstapaperProgress(_lastTimerState, _lastGlobalIndex);
   }
 
   // Paragraph starts (document-wide word indices), cached per document and
@@ -417,12 +423,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   ///
   /// Prefers the supplied document title (Instapaper articles, clipboard);
   /// falls back to the file's base name for local books.
-  String get _shelfTitle {
-    final clipTitle = widget.clipboardDocument?.title.trim();
-    if (clipTitle != null && clipTitle.isNotEmpty) return clipTitle;
-    final base = widget.filePath.split(RegExp(r'[/\\]')).last;
-    return base.isNotEmpty ? base : widget.filePath;
-  }
+  /// Continue Reading card title: the same title the reader header shows.
+  String get _shelfTitle => _documentTitle;
 
   /// Records the current position to the cross-source Continue Reading store.
   ///
@@ -458,13 +460,21 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     return 'local';
   }
 
+  /// Local files (not Drive, Instapaper or clipboard URIs).
+  bool get _isLocalFile => !_isClipboard && !_isInstapaper && !_isDrive;
+
   String get _documentTitle {
     final clipTitle = widget.clipboardDocument?.title.trim();
     if (clipTitle != null && clipTitle.isNotEmpty) return clipTitle;
-    final base = widget.filePath.split(RegExp(r'[/\\]')).last;
-    final dot = base.lastIndexOf('.');
-    final name = dot > 0 ? base.substring(0, dot) : base;
-    return name.isNotEmpty ? name : widget.filePath;
+    if (_isLocalFile) {
+      // The EPUB's own title when it has one ("The Lighthouse Keeper's
+      // Ledger", not "lighthouse").
+      final title = ref
+          .read(documentTitleProvider(widget.filePath))
+          .valueOrNull;
+      if (title != null) return title;
+    }
+    return prettyFileTitle(widget.filePath);
   }
 
   String get _documentSubtitle {
@@ -1404,6 +1414,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       }),
     );
     final readingMode = ref.watch(readingModeNotifierProvider);
+    // Rebuild the header when the document's metadata title resolves.
+    if (_isLocalFile) ref.watch(documentTitleProvider(widget.filePath));
     ref.listen<ReadingMode>(readingModeNotifierProvider, (prev, next) {
       if (prev == next) return;
       unawaited(
