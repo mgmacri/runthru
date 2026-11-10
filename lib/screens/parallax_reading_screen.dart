@@ -2567,8 +2567,11 @@ class _ProgressRail extends ConsumerWidget {
               borderRadius: BorderRadius.circular(999),
               child: Align(
                 alignment: Alignment.centerLeft,
+                // heightFactor: without it the fill has no height of its
+                // own and the rail always looks empty.
                 child: FractionallySizedBox(
                   widthFactor: progress.clamp(0.0, 1.0),
+                  heightFactor: 1,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
