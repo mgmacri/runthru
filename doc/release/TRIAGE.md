@@ -28,6 +28,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | B-05 | Gate script wrote analyzer/test output to fixed `/tmp` files shared by every worktree, so parallel swarm gates reported each other's failures | P1 | done | claude | `scripts/verify_release_readiness.sh` | per-run `mktemp` logs |
 | B-06 | Onboarding "Next" threw `LateInitializationError` with reduced motion on (`nextPage(Duration.zero)`), stranding users on card 1. Found on emulator with animations off | P0 | done | claude | `lib/widgets/reading_goal_onboarding_gate.dart`, `test/widgets/reading_entry_onboarding_gate_test.dart` | jumpToPage under reduced motion; regression test |
 | B-07 | Onboarding drew the design mockup's fake status bar ("8:19 · 5G", signal, battery) under the real one; TalkBack read it out | P1 | done | claude | `lib/widgets/reading_goal_onboarding_gate.dart`, `test/screens/home_shell_test.dart` | widget removed in 3554151; test now asserts it is absent |
+| B-08 | EPUB text showed raw markup (`epub:type="titlepage"`, `class="level1">`, `id="toc-li-2">`) in every reading mode: the opening-block-tag rule ate only `<p ` and left attributes behind. Head `<title>` was also read as body text | P0 | done | claude | `lib/services/epub_extractor.dart`, `test/services/epub_extractor_test.dart` | consume whole tag, drop `<head>`; regression test |
 
 ## Reading screen (lane `reading`)
 
@@ -60,4 +61,6 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 |----|-------|--------|
 | P-8 | Range picker picks first occurrence of duplicate word | needs pdfrx positional data; edge case |
 | LEG | Remove `/read-legacy` + `ReadingScreen` | keep as deep-link fallback for one release |
+| EPUB-NAV | EPUB `nav.xhtml` (table of contents) is in the spine and read as text | dropping it changes chapter counts that `epubChapterCountInIsolate` computes separately; fix both together in 2.0.1 |
+| EPUB-CACHE | Text extracted before B-08 and migrated from legacy caches keeps the leaked markup (identity is content hash, so re-import does not re-extract) | ContentStore is new in 2.0 so no shipped ContentStore cache exists; bump `kContentStoreSchemaVersion` with a read-path re-extract in 2.0.1 |
 | AIQ | `SectionProcessingRequest.fromJson` uses `as` casts; a wrongly typed persisted entry throws `TypeError` that `_decode` does not catch | nothing enqueues in 2.0 (A-02 deferred); fix before A-02 lands |

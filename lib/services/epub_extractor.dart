@@ -400,6 +400,12 @@ String _stripHtml(String html) {
     '',
   );
 
+  // Drop <head> so the document <title> is not read as body text.
+  text = text.replaceAll(
+    RegExp(r'<head[\s>][\s\S]*?</head>', caseSensitive: false),
+    '',
+  );
+
   // Remove inline style attributes from remaining tags before stripping.
   text = text.replaceAll(RegExp(r'\s+style\s*=\s*"[^"]*"'), '');
   text = text.replaceAll(RegExp(r"\s+style\s*=\s*'[^']*'"), '');
@@ -413,10 +419,12 @@ String _stripHtml(String html) {
     ),
     '\n',
   );
-  // Opening block tags also get a newline before them.
+  // Opening block tags become a newline. Consume the whole tag, attributes
+  // included: matching only `<p ` used to leave `class="x">` behind, and the
+  // generic strip below could no longer see it as a tag.
   text = text.replaceAll(
     RegExp(
-      r'<(p|div|h[1-6]|li|tr|blockquote|section|article)[\s>]',
+      r'<(p|div|h[1-6]|li|tr|blockquote|section|article)(\s[^>]*)?>',
       caseSensitive: false,
     ),
     '\n',

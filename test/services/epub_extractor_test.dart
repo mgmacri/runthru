@@ -269,6 +269,38 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('block tags with attributes leave no markup behind', () async {
+      final bytes = _createTestEpub(
+        chapterContents: [
+          '<html xmlns:epub="http://www.idpf.org/2007/ops"><head>'
+              '<title>Head Title</title></head>'
+              '<body epub:type="bodymatter">'
+              '<section id="chapter-one" class="level1" epub:type="chapter">'
+              '<h1 class="chap">Chapter One</h1>'
+              '<p class="first" id="p1">The ferry reached the island.</p>'
+              '<div\nclass="multi-line">Still here.</div>'
+              '<ol><li id="toc-li-2"><a href="ch002.xhtml">Two</a></li></ol>'
+              '</section></body></html>',
+        ],
+      );
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/test.epub';
+      await File(epubPath).writeAsBytes(bytes);
+
+      final doc = await epubExtract(epubPath);
+      final allText = doc.allWords.join(' ');
+
+      expect(
+        allText,
+        'Chapter One The ferry reached the island. Still here. Two',
+      );
+      for (final leak in ['class=', 'id=', 'epub:type', '">', 'Head']) {
+        expect(allText, isNot(contains(leak)), reason: leak);
+      }
+
+      await tempDir.delete(recursive: true);
+    });
+
     test('strips inline styles', () async {
       final bytes = _createTestEpub(
         chapterContents: [
