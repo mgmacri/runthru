@@ -73,8 +73,11 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   WordTimerNotifier() : super(const WordTimerState());
 
   Timer? _timer;
-  DateTime? _lastTick;
-  bool _isFirstTick = false;
+
+  /// When the word now on screen is due to be replaced; null before the
+  /// first word of a run is scheduled. A tick that fires late takes its
+  /// lateness out of the next word, so the long-run rate is the set speed.
+  DateTime? _dueAt;
 
   // P18 Grade C — auto-rewind 3 words on resume from pause
   bool _wasPaused = false;
@@ -205,8 +208,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   }
 
   void _startTimer() {
-    _lastTick = clock.now();
-    _isFirstTick = true;
+    _dueAt = null;
     _scheduleNext();
   }
 
@@ -250,26 +252,33 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
       }
     }
 
+    // Drift correction: take out of this word however late the tick that
+    // brought it up fired, but never more than half the word's time (one
+    // long frame must not make a word flash by unread).
+    //
+    // This used to compare the time since the tick itself, which is always
+    // about zero, with the whole interval. The "drift" was therefore minus
+    // one interval on every word after the first, each word was shown for
+    // twice its time, and the reader ran at half the speed it displayed
+    // (125 words a minute at "250 WPM").
+    final now = clock.now();
     var delay = adjustedInterval;
-
-    // Skip drift correction on the first tick after play/resume —
-    // _lastTick was just set in _startTimer(), so elapsed ≈ 0 and
-    // the raw formula would produce delay ≈ 2×interval.
-    if (_isFirstTick) {
-      _isFirstTick = false;
-    } else if (_lastTick != null) {
-      final now = clock.now();
-      final elapsed = now.difference(_lastTick!).inMilliseconds;
-      final drift = elapsed - adjustedInterval;
-      delay = (adjustedInterval - drift).clamp(1, adjustedInterval * 2);
+    final due = _dueAt;
+    if (due != null) {
+      final late = now.difference(due).inMilliseconds;
+      if (late > 0) {
+        delay = (adjustedInterval - late).clamp(
+          (adjustedInterval / 2).ceil(),
+          adjustedInterval,
+        );
+      }
     }
+    _dueAt = now.add(Duration(milliseconds: delay));
 
     _timer = Timer(Duration(milliseconds: delay), _tick);
   }
 
   void _tick() {
-    _lastTick = clock.now();
-
     if (state.currentIndex < state.totalWords - 1) {
       state = state.copyWith(currentIndex: state.currentIndex + 1);
       if (state.isPlaying && !state.isFinished) {
@@ -285,7 +294,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   void _stopTimer() {
     _timer?.cancel();
     _timer = null;
-    _lastTick = null;
+    _dueAt = null;
   }
 
   @override
