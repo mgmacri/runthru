@@ -462,6 +462,55 @@ void main() {
     });
   });
 
+  group('Play on the last word', () {
+    testWidgets('a book shows its finish screen instead of doing nothing', (
+      tester,
+    ) async {
+      final doc = _book(chapterWords: 40);
+      final c = await _open(tester, document: doc);
+      final notifier = c.read(wordTimerProvider.notifier);
+      // Stay paused, and land on the last word without reading up to it
+      // (as after opening the contents there, or coming back to the app).
+      await tester.tapAt(const Offset(210, 450));
+      await _run(tester, 0.6);
+      notifier.pause();
+      notifier.seekTo(doc.totalWords - 1);
+      await _run(tester, 2);
+      expect(find.byType(BookCompleteOverlay), findsNothing);
+      expect(_timer(c).isFinished, isTrue);
+
+      await tester.tap(find.bySemanticsLabel('Resume reading'));
+      await _run(tester, 0.5);
+      expect(find.byType(BookCompleteOverlay), findsOneWidget);
+      expect(find.byKey(BookCompleteOverlay.readAgainKey), findsOneWidget);
+      expect(find.byKey(BookCompleteOverlay.libraryKey), findsOneWidget);
+      // Nothing after the last word to offer.
+      expect(find.byKey(BookCompleteOverlay.keepReadingKey), findsNothing);
+      await _run(tester, 2);
+    });
+
+    testWidgets('a short text starts over', (tester) async {
+      // 80 words: too short for a finish screen.
+      final doc = _book(chapterWords: 10);
+      expect(doc.totalWords, lessThan(RunThruTiming.bookCompleteMinWords));
+      final c = await _open(tester, document: doc, chapterMoments: false);
+      final notifier = c.read(wordTimerProvider.notifier);
+      notifier.pause();
+      notifier.seekTo(doc.totalWords - 1);
+      await _run(tester, 1.5);
+      expect(_timer(c).isFinished, isTrue);
+      expect(_timer(c).isPlaying, isFalse);
+
+      await tester.tap(find.bySemanticsLabel('Resume reading'));
+      await _run(tester, 0.4);
+      expect(find.byType(BookCompleteOverlay), findsNothing);
+      expect(_timer(c).isPlaying, isTrue);
+      expect(_timer(c).currentIndex, lessThan(20));
+      notifier.pause();
+      await _run(tester, 1);
+    });
+  });
+
   group('leaving the app', () {
     testWidgets('pauses reading; coming back stays paused', (tester) async {
       final c = await _open(tester);

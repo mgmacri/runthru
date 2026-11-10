@@ -1031,6 +1031,22 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   void _play() {
     if (_words.isEmpty) return;
     final timer = ref.read(wordTimerProvider.notifier);
+    // On the last word there is nothing left to play, and the timer ignores
+    // Play. A book gets its finish screen (library, read it again, the
+    // extras); a short text starts over. Before, opening the contents or
+    // leaving the app on the last word dropped the finish screen for good
+    // and left a Play button that did nothing.
+    final timerState = ref.read(wordTimerProvider);
+    if (timerState.isFinished && _readingRange == null) {
+      if (_finishScreenApplies) {
+        _showBookComplete();
+        return;
+      }
+      if (timerState.totalWords > 1) {
+        _restartFromBeginning();
+        return;
+      }
+    }
     final global = _currentGlobalIndex;
     if (_chapterMomentsOn) {
       final start = playStartFor(_structure, global);
