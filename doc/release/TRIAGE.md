@@ -26,6 +26,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | B-03 | Google Drive source panel title row overflowed 44px at 390pt width (iPhone 14) | P1 | done | claude | `lib/features/content/widgets/google_drive_source_panel.dart` | 838dce8 |
 | B-04 | Primary button announced its label twice and exposed no semantic tap | P1 | done | claude | `lib/widgets/runthru_shell_widgets.dart` | cfe365b |
 | B-05 | Gate script wrote analyzer/test output to fixed `/tmp` files shared by every worktree, so parallel swarm gates reported each other's failures | P1 | done | claude | `scripts/verify_release_readiness.sh` | per-run `mktemp` logs |
+| B-06 | Onboarding "Next" threw `LateInitializationError` with reduced motion on (`nextPage(Duration.zero)`), stranding users on card 1. Found on emulator with animations off | P0 | done | claude | `lib/widgets/reading_goal_onboarding_gate.dart`, `test/widgets/reading_entry_onboarding_gate_test.dart` | jumpToPage under reduced motion; regression test |
 
 ## Reading screen (lane `reading`)
 

@@ -97,10 +97,15 @@ class _ReadingGoalOnboardingOverlayState
       setState(() => _phase = _OnboardingPhase.tour);
       return;
     }
+    // Reduced motion must jump: nextPage(duration: Duration.zero) completes
+    // inside DrivenScrollActivity's constructor and throws
+    // LateInitializationError, leaving the user stuck on the first card.
+    if (isReducedMotion(context)) {
+      _introController.jumpToPage(_introIndex + 1);
+      return;
+    }
     _introController.nextPage(
-      duration: isReducedMotion(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
     );
   }
@@ -395,10 +400,6 @@ class _IntroCarousel extends StatelessWidget {
     final last = currentIndex == _introCards.length - 1;
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(28, 4, 28, 0),
-          child: _PreviewStatusBar(),
-        ),
         SizedBox(
           height: 48,
           child: Stack(
@@ -583,33 +584,6 @@ class _IntroCopy extends StatelessWidget {
             height: 1.48,
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _PreviewStatusBar extends StatelessWidget {
-  const _PreviewStatusBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        Text(
-          '8:19',
-          textScaler: TextScaler.noScaling,
-          style: RunThruTypography.tinyLabel,
-        ),
-        Spacer(),
-        Text(
-          '5G',
-          textScaler: TextScaler.noScaling,
-          style: RunThruTypography.tinyLabel,
-        ),
-        SizedBox(width: 6),
-        Icon(Icons.signal_cellular_alt_rounded, size: 12),
-        SizedBox(width: 6),
-        Icon(Icons.battery_full_rounded, size: 14),
       ],
     );
   }

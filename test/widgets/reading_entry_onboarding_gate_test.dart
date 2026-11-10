@@ -86,6 +86,39 @@ void main() {
       expect(find.text('reader-relaunch'), findsOneWidget);
     });
 
+    testWidgets('Next advances intro cards with reduced motion on', (
+      tester,
+    ) async {
+      final config = _FakeConfigNotifier(const AppConfig());
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [configProvider.overrideWith(() => config)],
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
+            home: const ReadingEntryOnboardingGate(
+              child: _PlaybackProbe(label: 'reduced'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('WELCOME TO RUNTHRU'), findsOneWidget);
+
+      await tester.tap(find.text('Next'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('WHY IT FEELS EASIER'), findsOneWidget);
+
+      await tester.tap(find.text('Next'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('ON YOUR TERMS'), findsOneWidget);
+    });
+
     testWidgets('waits for persisted config before reader entry', (
       tester,
     ) async {
