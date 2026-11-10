@@ -18,6 +18,7 @@ import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
 import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/config.dart';
+import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/neumorphic_card.dart';
 import 'package:runthru/widgets/paged_tile_well.dart';
 import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
@@ -108,6 +109,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     // Header counts what is actually here. (It used to claim "Synced just
     // now · N sources" with a count that disagreed with the Sources tab.)
     final titleCount = pdfListAsync.valueOrNull?.length ?? 0;
+    // Times are given at the reader's own speed, as in the reader.
+    final readerWpm =
+        ref.watch(configProvider.select((c) => c.valueOrNull?.defaultWpm)) ??
+        const AppConfig().defaultWpm;
     final normalizedSearchQuery = _searchQuery.trim().toLowerCase();
     final searching = normalizedSearchQuery.isNotEmpty;
     // A search narrows the whole screen, the shelf included.
@@ -209,6 +214,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               SliverToBoxAdapter(
                 child: _ContinueReadingShelf(
                   items: visibleShelf,
+                  wpm: readerWpm,
                   hasTitles: titleCount > 0,
                   onItemTap: _onShelfItemTap,
                   continueTargetKey: libraryContinueTourTargetKey,
@@ -568,11 +574,15 @@ class _ContinueReadingShelf extends StatelessWidget {
   const _ContinueReadingShelf({
     required this.items,
     required this.onItemTap,
+    required this.wpm,
     this.hasTitles = false,
     this.continueTargetKey,
   });
 
   final List<ProgressRecord> items;
+
+  /// The reader's speed, for the time left on each item.
+  final int wpm;
 
   /// Whether the library already holds something to read.
   final bool hasTitles;
@@ -634,6 +644,7 @@ class _ContinueReadingShelf extends StatelessWidget {
             _ContinueHero(
               targetKey: continueTargetKey,
               item: leading!,
+              wpm: wpm,
               onTap: () => onItemTap(leading),
             ),
             if (rest.isNotEmpty)
@@ -644,7 +655,11 @@ class _ContinueReadingShelf extends StatelessWidget {
                   child: Column(
                     children: [
                       for (final item in rest)
-                        _ShelfCard(item: item, onTap: () => onItemTap(item)),
+                        _ShelfCard(
+                          item: item,
+                          wpm: wpm,
+                          onTap: () => onItemTap(item),
+                        ),
                     ],
                   ),
                 ),
@@ -659,18 +674,20 @@ class _ContinueReadingShelf extends StatelessWidget {
 class _ContinueHero extends StatelessWidget {
   const _ContinueHero({
     required this.item,
+    required this.wpm,
     required this.onTap,
     this.targetKey,
   });
 
   final ProgressRecord item;
+  final int wpm;
   final VoidCallback onTap;
   final GlobalKey? targetKey;
 
   @override
   Widget build(BuildContext context) {
     final percent = item.displayPercent;
-    final minutesLeft = formatTimeLeft(item.minutesLeft);
+    final minutesLeft = formatTimeLeft(item.minutesLeftAt(wpm));
     final source = _SourceBadge._label(item.source);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
@@ -726,9 +743,14 @@ class _ContinueHero extends StatelessWidget {
 }
 
 class _ShelfCard extends StatefulWidget {
-  const _ShelfCard({required this.item, required this.onTap});
+  const _ShelfCard({
+    required this.item,
+    required this.wpm,
+    required this.onTap,
+  });
 
   final ProgressRecord item;
+  final int wpm;
   final VoidCallback onTap;
 
   @override
@@ -743,7 +765,7 @@ class _ShelfCardState extends State<_ShelfCard> {
     final percent = widget.item.displayPercent;
     // The ring already gives the percentage; the line under the title says
     // what is left, as the leading card does.
-    final minutesLeft = formatTimeLeft(widget.item.minutesLeft);
+    final minutesLeft = formatTimeLeft(widget.item.minutesLeftAt(widget.wpm));
 
     final source = _SourceBadge._label(widget.item.source);
     // One announcement with the visible source name; the row's own text is
@@ -975,21 +997,61 @@ class _BookTileState extends State<_BookTile> {
 
     return Consumer(
       builder: (context, ref, _) {
-        final title =
-            ref
-                .watch(documentTitleProvider(widget.entry.filePath))
-                .valueOrNull ??
-            prettyFileTitle(widget.entry.fileName);
-        return _buildTile(title, statusTone);
+        final path = widget.entry.filePath;
+        final info = ref.watch(documentInfoProvider(path)).valueOrNull;
+        final title = info?.title ?? prettyFileTitle(widget.entry.fileName);
+        final words = ref.watch(documentWordCountProvider(path)).valueOrNull;
+        final wpm = ref.watch(
+          configProvider.select((c) => c.valueOrNull?.defaultWpm),
+        );
+        final time = widget.rangeLabel == null
+            ? bookRowTime(widget.entry, words: words, wpm: wpm)
+            : null;
+        final detail =
+            widget.rangeLabel ??
+            bookRowDetail(widget.entry, author: info?.author, time: time);
+        return _buildTile(
+          title,
+          detail,
+          // With an author, the time is its own piece: the name is
+          // shortened before the time is.
+          time != null && detail != time ? time : null,
+          statusTone,
+        );
       },
     );
   }
 
-  Widget _buildTile(String title, RunThruStatusTone statusTone) {
+  /// How long the book takes at the reader's speed ("1 h 52 min"), once
+  /// its length is known.
+  @visibleForTesting
+  static String? bookRowTime(PdfEntry entry, {int? words, int? wpm}) {
+    if (entry.status != PdfStatus.ready) return null;
+    if (words == null || words <= 0 || wpm == null || wpm <= 0) return null;
+    return formatMinutes((words / wpm).ceil());
+  }
+
+  /// The line under a book's title: who wrote it, or failing that how long
+  /// it takes to read; while the file is not ready, its state instead.
+  /// With both an author and a [time], the time is shown after this.
+  @visibleForTesting
+  static String bookRowDetail(PdfEntry entry, {String? author, String? time}) {
+    if (entry.status != PdfStatus.ready) return _statusLabel(entry);
+    final name = author?.trim() ?? '';
+    if (name.isNotEmpty) return name;
+    return time ?? _statusLabel(entry);
+  }
+
+  Widget _buildTile(
+    String title,
+    String detail,
+    String? time,
+    RunThruStatusTone statusTone,
+  ) {
     // One announcement: the row's own text is excluded so TalkBack does not
     // read the title three times.
     return Semantics(
-      label: '$title, ${widget.rangeLabel ?? _statusLabel(widget.entry)}',
+      label: time == null ? '$title, $detail' : '$title, $detail, $time',
       button: widget.onTap != null,
       excludeSemantics: true,
       // Excluding the row's own semantics drops its gesture actions, so the
@@ -1010,7 +1072,8 @@ class _BookTileState extends State<_BookTile> {
           opacity: _pressed ? 0.82 : 1,
           child: RunThruShellRow(
             title: title,
-            metadata: widget.rangeLabel ?? _statusLabel(widget.entry),
+            metadata: detail,
+            metadataSuffix: time,
             icon: Icons.menu_book_rounded,
             divider: widget.divider,
             trailing: widget.progress > 0 || widget.finished

@@ -44,6 +44,16 @@ const Map<String, String> _titles = {
   '/storage/Download/books/frank.epub': 'Frankenstein',
 };
 
+const Map<String, String> _authors = {
+  '/storage/Download/books/pg11.epub': 'Lewis Carroll',
+  '/storage/Download/books/pg2701.epub': 'Herman Melville',
+};
+
+/// Known once a book's text has been extracted.
+const Map<String, int> _wordCounts = {
+  '/storage/Download/books/pg11.epub': 27000,
+};
+
 List<PdfEntry> _entries([Iterable<String>? paths]) => [
   for (final path in paths ?? _titles.keys)
     PdfEntry(
@@ -74,8 +84,14 @@ Future<ProviderContainer> _open(
       pdfListProvider.overrideWith((ref) async => books),
       googleDriveAvailableProvider.overrideWithValue(false),
       instapaperAuthProvider.overrideWith(_NoInstapaper.new),
-      documentTitleProvider.overrideWith(
-        (ref, path) async => _titles[path] ?? path.split('/').last,
+      documentInfoProvider.overrideWith(
+        (ref, path) async => DocumentInfo(
+          title: _titles[path] ?? path.split('/').last,
+          author: _authors[path],
+        ),
+      ),
+      documentWordCountProvider.overrideWith(
+        (ref, path) async => _wordCounts[path],
       ),
     ],
   );
@@ -83,7 +99,10 @@ Future<ProviderContainer> _open(
   // the test ends, or the framework reports the timer as leaked.
   _opened = container;
   // Nothing is extracted in these tests.
-  container.read(preprocessingQueueProvider.notifier).pauseBackground();
+  final queue = container.read(preprocessingQueueProvider.notifier);
+  queue.pauseBackground();
+  // Every book is extracted and ready to read.
+  books.forEach(queue.debugSetEntry);
   await container.read(readingProgressProvider.future);
 
   await tester.pumpWidget(
@@ -136,6 +155,20 @@ void main() {
     expect(find.text('Frankenstein'), findsOneWidget);
     expect(find.text('3 books'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  _libraryTest('rows say who wrote the book and how long it takes', (
+    tester,
+  ) async {
+    await _open(tester);
+    // 27,000 words at the default 300 words a minute. The time is its own
+    // piece of text, so a long name gives way to it.
+    expect(find.text('Lewis Carroll'), findsOneWidget);
+    expect(find.text(' · 1 h 30 min'), findsOneWidget);
+    // Not extracted yet: the author alone.
+    expect(find.text('Herman Melville'), findsOneWidget);
+    // Nothing known about it: as before.
+    expect(find.text('Local file'), findsOneWidget);
   });
 
   _libraryTest('there is no empty Docs section or filter', (tester) async {

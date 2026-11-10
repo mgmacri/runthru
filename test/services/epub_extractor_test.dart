@@ -19,6 +19,7 @@ List<int> _createTestEpub({
   ],
   Map<int, String> itemAttributes = const {},
   Map<int, String> itemrefAttributes = const {},
+  String extraMetadata = '',
 }) {
   final archive = Archive();
 
@@ -60,7 +61,7 @@ List<int> _createTestEpub({
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>Test EPUB</dc:title>
-  </metadata>
+$extraMetadata  </metadata>
   <manifest>
 $manifestItems  </manifest>
   <spine>
@@ -312,6 +313,32 @@ void main() {
         doc.allWords.join(' '),
         'She read Titanic, then Dracula. Wind NNE',
       );
+      await tempDir.delete(recursive: true);
+    });
+
+    test('epubInfo reads the title and the first author', () async {
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/file_name.epub';
+      await File(epubPath).writeAsBytes(_createTestEpub());
+      final info = await epubInfo(epubPath);
+      expect(info, isNotNull);
+      expect(info!.title, 'Test EPUB');
+      // The fixture names no author: null, not an empty string.
+      expect(info.author, isNull);
+      expect(await epubInfo('${tempDir.path}/missing.epub'), isNull);
+
+      // Two creators: the first one named is the author shown.
+      final withAuthors = '${tempDir.path}/authors.epub';
+      await File(withAuthors).writeAsBytes(
+        _createTestEpub(
+          extraMetadata:
+              '    <dc:creator>  Herman\n      Melville </dc:creator>\n'
+              '    <dc:creator>An Illustrator</dc:creator>\n',
+        ),
+      );
+      final named = await epubInfo(withAuthors);
+      expect(named!.author, 'Herman Melville');
+      expect(named.title, 'Test EPUB');
       await tempDir.delete(recursive: true);
     });
 

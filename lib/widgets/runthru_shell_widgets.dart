@@ -542,6 +542,7 @@ class RunThruShellRow extends StatelessWidget {
     required this.title,
     required this.metadata,
     required this.icon,
+    this.metadataSuffix,
     this.trailing,
     this.onTap,
     this.divider = true,
@@ -551,8 +552,13 @@ class RunThruShellRow extends StatelessWidget {
   /// Row title.
   final String title;
 
-  /// Secondary metadata text.
+  /// Secondary metadata text. Shortened with an ellipsis when it does not
+  /// fit.
   final String metadata;
+
+  /// A last piece of metadata that is never shortened (a reading time):
+  /// shown after [metadata] and a middle dot. [metadata] gives way to it.
+  final String? metadataSuffix;
 
   /// Leading thumbnail icon.
   final IconData icon;
@@ -592,12 +598,42 @@ class RunThruShellRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  metadata,
-                  style: RunThruTypography.metadata,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                if (metadataSuffix == null)
+                  Text(
+                    metadata,
+                    style: RunThruTypography.metadata,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                else
+                  // The suffix takes what it needs (at most the whole
+                  // line, at very large text sizes); the rest is for the
+                  // metadata, which is shortened to fit.
+                  LayoutBuilder(
+                    builder: (context, constraints) => Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            metadata,
+                            style: RunThruTypography.metadata,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth,
+                          ),
+                          child: Text(
+                            ' · $metadataSuffix',
+                            style: RunThruTypography.metadata,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -606,7 +642,11 @@ class RunThruShellRow extends StatelessWidget {
       ),
     );
     return Semantics(
-      label: semanticLabel ?? '$title, $metadata',
+      label:
+          semanticLabel ??
+          (metadataSuffix == null
+              ? '$title, $metadata'
+              : '$title, $metadata, $metadataSuffix'),
       button: onTap != null,
       child: onTap == null
           ? row

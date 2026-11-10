@@ -84,9 +84,13 @@ class ProgressRecord {
   }
 
   /// Approximate minutes remaining at 238 wpm average.
-  int get minutesLeft {
+  int get minutesLeft => minutesLeftAt(238);
+
+  /// Approximate minutes remaining at [wpm] words a minute: the reader's
+  /// own speed, so the Library agrees with the figure in the reader.
+  int minutesLeftAt(int wpm) {
     final wordsLeft = (totalWords - wordIndex).clamp(0, totalWords);
-    return (wordsLeft / 238).ceil();
+    return (wordsLeft / wpm.clamp(30, 1500)).ceil();
   }
 
   /// Returns a copy with the given fields replaced.

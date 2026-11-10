@@ -1142,12 +1142,25 @@ final RegExp _endsSentence = RegExp('[.!?\u2026][\u201D\u2019"\')\\]]*\$');
 /// Splits stripped chapter text into sentences with paragraph starts.
 List<Sentence> _textToSentences(String text) => textToSentences(text);
 
-/// The EPUB's own title (`dc:title` in its package file), or null.
+/// What an EPUB says about itself in its package file.
+class EpubInfo {
+  /// Creates EPUB package info.
+  const EpubInfo({this.title, this.author});
+
+  /// `dc:title`, or null when the package gives none.
+  final String? title;
+
+  /// The first `dc:creator`, or null when the package gives none.
+  final String? author;
+}
+
+/// The EPUB's own title and author (`dc:title`, `dc:creator`), or null when
+/// the file cannot be read as an EPUB.
 ///
 /// Reads only `container.xml` and the OPF, never chapter content, in a
 /// background isolate. Used for library and reader titles instead of the
 /// file name ("The Lighthouse Keeper's Ledger", not "lighthouse.epub").
-Future<String?> epubTitle(String filePath) async {
+Future<EpubInfo?> epubInfo(String filePath) async {
   try {
     return await Isolate.run(() {
       final file = File(filePath);
@@ -1171,14 +1184,23 @@ Future<String?> epubTitle(String filePath) async {
       if (opfPath == null) return null;
       final opf = read(opfPath);
       if (opf == null) return null;
-      final title = XmlDocument.parse(opf)
-          .findAllElements('*')
-          .where((e) => e.name.local == 'title')
-          .map((e) => e.innerText.replaceAll(RegExp(r'\s+'), ' ').trim())
-          .firstWhere((t) => t.isNotEmpty, orElse: () => '');
-      return title.isEmpty ? null : title;
+      final package = XmlDocument.parse(opf);
+      String? first(String name) {
+        final value = package
+            .findAllElements('*')
+            .where((e) => e.name.local == name)
+            .map((e) => e.innerText.replaceAll(RegExp(r'\s+'), ' ').trim())
+            .firstWhere((t) => t.isNotEmpty, orElse: () => '');
+        return value.isEmpty ? null : value;
+      }
+
+      return EpubInfo(title: first('title'), author: first('creator'));
     }).timeout(const Duration(seconds: 5));
   } on Object {
     return null;
   }
 }
+
+/// The EPUB's own title (`dc:title` in its package file), or null.
+Future<String?> epubTitle(String filePath) async =>
+    (await epubInfo(filePath))?.title;

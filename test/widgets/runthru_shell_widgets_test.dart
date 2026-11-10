@@ -111,6 +111,40 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('shell row: a long author gives way to the reading time', (
+      tester,
+    ) async {
+      for (final width in const [150.0, 220.0, 360.0]) {
+        await tester.pumpWidget(
+          _harness(
+            SizedBox(
+              width: width,
+              child: const RunThruShellRow(
+                title: 'A Book',
+                metadata: 'A Remarkably Long-Winded Author Name',
+                metadataSuffix: '14 h 24 min',
+                icon: Icons.menu_book_rounded,
+                divider: false,
+              ),
+            ),
+          ),
+        );
+        // Never overflows, however narrow the row.
+        expect(tester.takeException(), isNull, reason: 'at $width');
+        expect(find.text(' · 14 h 24 min'), findsOneWidget);
+      }
+      // One announcement, with both parts.
+      final handle = tester.ensureSemantics();
+      await tester.pump();
+      expect(
+        find.bySemanticsLabel(
+          RegExp(r'^A Book, A Remarkably Long-Winded Author Name, 14 h 24 min'),
+        ),
+        findsOneWidget,
+      );
+      handle.dispose();
+    });
+
     testWidgets('status pill and primary button render expected labels', (
       tester,
     ) async {
