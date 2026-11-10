@@ -250,7 +250,8 @@ void main() {
 
       await _run(tester, 2.5);
       expect(find.text('160'), findsOneWidget); // words read
-      expect(find.text('Chapter Two'), findsOneWidget); // next up
+      // Next up (and already named under the title in the header).
+      expect(find.text('Chapter Two'), findsWidgets);
       await tester.tap(find.byKey(SectionCompleteOverlay.continueKey));
       await _run(tester, 0.3);
 
@@ -381,6 +382,83 @@ void main() {
       await _run(tester, 3);
       expect(_timer(c).isFinished, isTrue);
       expect(find.byType(BookCompleteOverlay), findsNothing);
+    });
+  });
+
+  group('chapters in the reader chrome', () {
+    testWidgets('the header names the chapter and opens the contents', (
+      tester,
+    ) async {
+      final c = await _open(tester);
+      await tester.tapAt(const Offset(210, 450));
+      await _run(tester, 0.8);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 0.3);
+
+      // Chapter under the title; time left in it on the rail.
+      expect(find.text('Chapter One'), findsOneWidget);
+      expect(find.textContaining('left in chapter'), findsOneWidget);
+
+      await tester.tap(
+        find.bySemanticsLabel('Contents: A Small Book, Chapter One'),
+      );
+      await _run(tester, 0.8);
+      expect(find.text('Contents'), findsOneWidget);
+      expect(find.text('0 of 3 chapters read'), findsOneWidget);
+
+      // Pick the epilogue: the reader jumps there and announces it.
+      await tester.tap(find.text('Epilogue'));
+      await _run(tester, 0.8);
+      expect(find.text('Contents'), findsNothing);
+      expect(find.byType(ChapterTitleCard), findsOneWidget);
+      expect(_timer(c).currentIndex, 13 + 2 * (2 + 160));
+      await tester.tapAt(const Offset(210, 450));
+      await _run(tester, 0.6);
+      expect(_timer(c).isPlaying, isTrue);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('opening the contents pauses reading; closing stays paused', (
+      tester,
+    ) async {
+      final c = await _open(tester);
+      await tester.tapAt(const Offset(210, 450));
+      await _run(tester, 0.8);
+      expect(_timer(c).isPlaying, isTrue);
+      final before = _timer(c).currentIndex;
+
+      await tester.tap(
+        find.bySemanticsLabel('Contents: A Small Book, Chapter One'),
+      );
+      await _run(tester, 0.8);
+      expect(_timer(c).isPlaying, isFalse);
+      await tester.tap(find.bySemanticsLabel('Close contents'));
+      await _run(tester, 0.8);
+      await _run(tester, 2);
+
+      expect(_timer(c).isPlaying, isFalse);
+      expect(_timer(c).currentIndex, inInclusiveRange(before, before + 3));
+    });
+
+    testWidgets('a text without chapters has no contents button', (
+      tester,
+    ) async {
+      final c = await _open(
+        tester,
+        document: ExtractedDocument(
+          sentences: [
+            for (var s = 0; s < 30; s++)
+              Sentence(words: [for (var i = 0; i < 10; i++) 'w$i']),
+          ],
+        ),
+      );
+      await _run(tester, 0.5);
+      expect(find.bySemanticsLabel(RegExp('^Contents:')), findsNothing);
+      expect(find.textContaining('left in chapter'), findsNothing);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 1);
     });
   });
 

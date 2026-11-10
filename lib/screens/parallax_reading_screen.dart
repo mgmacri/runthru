@@ -32,6 +32,7 @@ import 'package:runthru/features/reading/chapter_flow.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
 import 'package:runthru/features/reading/widgets/chapter_title_card.dart';
+import 'package:runthru/features/reading/widgets/contents_sheet.dart';
 import 'package:runthru/features/reading/widgets/section_complete_overlay.dart';
 import 'package:runthru/features/reading/widgets/book_mode_view.dart';
 import 'package:runthru/features/reading/widgets/full_page_mode_view.dart';
@@ -1142,6 +1143,43 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _recordShelfProgress();
     if (_inBookMode) return;
     _play();
+  }
+
+  /// Whether the whole document is loaded (not a page-range slice), so any
+  /// section can be jumped to.
+  bool get _wholeDocument =>
+      _sliceOffset == 0 && _words.length == _allDocWords.length;
+
+  /// Whether there is a contents list worth showing.
+  bool get _hasContents =>
+      _wholeDocument &&
+      (_structure.hasChapters ||
+          _structure.hasFrontMatter ||
+          _structure.hasBackMatter);
+
+  /// Opens the contents sheet; picking a section jumps to it.
+  Future<void> _openContents() async {
+    if (!mounted || !_hasContents) return;
+    // The finished screens have their own choices.
+    if (_interlude is _CompleteInterlude || _interlude is _BookInterlude) {
+      return;
+    }
+    _cancelInterlude();
+    _bookEndTimer?.cancel();
+    if (ref.read(wordTimerProvider).isPlaying) {
+      ref.read(wordTimerProvider.notifier).pause();
+      _recordShelfProgress();
+      _endAnalyticsSession();
+    }
+    final picked = await showContentsSheet(
+      context,
+      structure: _structure,
+      currentWord: _currentGlobalIndex,
+      wpm: ref.read(wordTimerProvider).wpm,
+      bookTitle: _documentTitle,
+    );
+    if (!mounted || picked == null) return;
+    _jumpToSection(picked);
   }
 
   /// Keeps the run of continuous reading in the current section up to date.
@@ -2776,16 +2814,41 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           8,
                                           0,
                                         ),
-                                        child: _ReaderHeaderRow(
-                                          onBack: _goBack,
-                                          title: _documentTitle,
-                                          subtitle: _documentSubtitle,
-                                          onFont: () =>
-                                              context.push('/reader-settings'),
-                                          onFullScreen: _isDesktop
-                                              ? _toggleFullScreen
-                                              : null,
-                                          isFullScreen: _isFullScreen,
+                                        // Rebuilds when the chapter changes,
+                                        // not on every word.
+                                        child: ValueListenableBuilder<int>(
+                                          valueListenable: _sectionIndex,
+                                          builder: (context, sectionIndex, _) {
+                                            final sections =
+                                                _structure.sections;
+                                            final section =
+                                                sectionIndex < sections.length
+                                                ? sections[sectionIndex]
+                                                : null;
+                                            final chapter =
+                                                section != null &&
+                                                    section.isTitled &&
+                                                    _hasContents
+                                                ? section.displayName()
+                                                : '';
+                                            return _ReaderHeaderRow(
+                                              onBack: _goBack,
+                                              title: _documentTitle,
+                                              subtitle: chapter.isNotEmpty
+                                                  ? chapter
+                                                  : _documentSubtitle,
+                                              onContents: _hasContents
+                                                  ? _openContents
+                                                  : null,
+                                              onFont: () => context.push(
+                                                '/reader-settings',
+                                              ),
+                                              onFullScreen: _isDesktop
+                                                  ? _toggleFullScreen
+                                                  : null,
+                                              isFullScreen: _isFullScreen,
+                                            );
+                                          },
                                         ),
                                       ),
                                       // Book mode shows one progress figure,
@@ -2798,7 +2861,12 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                             20,
                                             8,
                                           ),
-                                          child: _ProgressRail(wpm: wpm),
+                                          child: _ProgressRail(
+                                            wpm: wpm,
+                                            structure: _wholeDocument
+                                                ? _structure
+                                                : null,
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -3060,6 +3128,7 @@ class _ReaderHeaderRow extends StatelessWidget {
     required this.onBack,
     required this.title,
     this.subtitle,
+    this.onContents,
     this.onFont,
     this.onFullScreen,
     this.isFullScreen = false,
@@ -3068,6 +3137,9 @@ class _ReaderHeaderRow extends StatelessWidget {
   final VoidCallback onBack;
   final String title;
   final String? subtitle;
+
+  /// Opens the contents list. When set, the title block is a button.
+  final VoidCallback? onContents;
   final VoidCallback? onFont;
   final VoidCallback? onFullScreen;
   final bool isFullScreen;
@@ -3088,30 +3160,10 @@ class _ReaderHeaderRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: RunThruTypography.rowTitle.copyWith(
-                  color: RunThruTokens.stageText,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle != null && subtitle!.isNotEmpty)
-                Text(
-                  subtitle!,
-                  style: RunThruTypography.tinyLabel.copyWith(
-                    color: RunThruTokens.stageText.withValues(alpha: 0.58),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  textAlign: TextAlign.center,
-                  textScaler: TextScaler.noScaling,
-                ),
-            ],
+          child: _HeaderTitle(
+            title: title,
+            subtitle: subtitle,
+            onContents: onContents,
           ),
         ),
         const SizedBox(width: 8),
@@ -3145,6 +3197,83 @@ class _ReaderHeaderRow extends StatelessWidget {
         ],
         const ModeSwitcher(),
       ],
+    );
+  }
+}
+
+/// The book's title with the current chapter beneath it. With
+/// [onContents] the block is one button that opens the contents list.
+class _HeaderTitle extends StatelessWidget {
+  const _HeaderTitle({required this.title, this.subtitle, this.onContents});
+
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onContents;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = this.subtitle ?? '';
+    final onContents = this.onContents;
+    final faint = RunThruTokens.stageText.withValues(alpha: 0.62);
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: RunThruTypography.rowTitle.copyWith(
+            color: RunThruTokens.stageText,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+        ),
+        if (subtitle.isNotEmpty || onContents != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  subtitle.isNotEmpty ? subtitle : 'Contents',
+                  style: RunThruTypography.tinyLabel.copyWith(
+                    color: onContents == null
+                        ? faint
+                        : RunThruTokens.shellTealDeep,
+                    fontSize: 11,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  textScaler: TextScaler.noScaling,
+                ),
+              ),
+              if (onContents != null)
+                const Icon(
+                  Icons.expand_more_rounded,
+                  size: 14,
+                  color: RunThruTokens.shellTealDeep,
+                ),
+            ],
+          ),
+      ],
+    );
+    if (onContents == null) return column;
+    return Semantics(
+      button: true,
+      label: subtitle.isNotEmpty
+          ? 'Contents: $title, $subtitle'
+          : 'Contents: $title',
+      onTap: onContents,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: onContents,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: RunThruA11y.minTapTarget,
+          ),
+          child: Center(child: ExcludeSemantics(child: column)),
+        ),
+      ),
     );
   }
 }
@@ -3201,25 +3330,48 @@ class _HeadBtn extends StatelessWidget {
 }
 
 class _ProgressRail extends ConsumerWidget {
-  const _ProgressRail({required this.wpm});
+  const _ProgressRail({required this.wpm, this.structure});
 
   final int wpm;
 
-  String _timeLeft(int remainingWords) {
-    if (wpm <= 0 || remainingWords <= 0) return '';
-    return formatTimeLeft((remainingWords / wpm).ceil());
-  }
+  /// The book's sections, when the whole document is loaded: the rail then
+  /// marks where chapters begin and says how much of the chapter is left.
+  final BookStructure? structure;
+
+  int _minutes(int words) => wpm <= 0 || words <= 0 ? 0 : (words / wpm).ceil();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Perf: progress changes every word advance — watching it here keeps the
     // per-word rebuild scoped to this small rail instead of the full screen.
-    final (progress, totalWords) = ref.watch(
-      wordTimerProvider.select((s) => (s.progress, s.totalWords)),
+    final (index, totalWords) = ref.watch(
+      wordTimerProvider.select((s) => (s.currentIndex, s.totalWords)),
     );
-    final remainingWords = (totalWords * (1.0 - progress)).round();
+    final progress = totalWords > 0 ? index / totalWords : 0.0;
+    final remainingWords = (totalWords - index).clamp(0, totalWords);
     final pct = (progress * 100).round().clamp(0, 100);
-    final timeLabel = _timeLeft(remainingWords);
+    final bookLeft = remainingWords <= 0
+        ? ''
+        : formatTimeLeft(_minutes(remainingWords));
+
+    // With chapters: "8 min left in chapter" is the nearer goal.
+    final structure = this.structure;
+    final chaptered =
+        structure != null &&
+        structure.hasChapters &&
+        structure.totalWords == totalWords;
+    var chapterLeft = '';
+    if (chaptered) {
+      final section = structure.sectionAt(index);
+      if (section.kind == SectionKind.body && section.end > index) {
+        chapterLeft =
+            '${formatMinutes(_minutes(section.end - index))} left in chapter';
+      }
+    }
+    final faint = RunThruTypography.tinyLabel.copyWith(
+      color: RunThruTokens.stageText.withValues(alpha: 0.54),
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -3234,25 +3386,37 @@ class _ProgressRail extends ConsumerWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(999),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                // heightFactor: without it the fill has no height of its
-                // own and the rail always looks empty.
-                child: FractionallySizedBox(
-                  widthFactor: progress.clamp(0.0, 1.0),
-                  heightFactor: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          RunThruTokens.shellTeal,
-                          RunThruTokens.shellTealDeep,
-                        ],
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    // heightFactor: without it the fill has no height of
+                    // its own and the rail always looks empty.
+                    child: FractionallySizedBox(
+                      widthFactor: progress.clamp(0.0, 1.0),
+                      heightFactor: 1,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              RunThruTokens.shellTeal,
+                              RunThruTokens.shellTealDeep,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                ),
+                  // Where chapters begin. Repaints only when the book does.
+                  if (chaptered)
+                    RepaintBoundary(
+                      child: CustomPaint(
+                        painter: _ChapterMarksPainter(structure),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -3268,19 +3432,78 @@ class _ProgressRail extends ConsumerWidget {
               ),
               textScaler: TextScaler.noScaling,
             ),
-            const Spacer(),
-            Text(
-              timeLabel.isNotEmpty ? '$timeLabel · $wpm WPM' : '$wpm WPM',
-              style: RunThruTypography.tinyLabel.copyWith(
-                color: RunThruTokens.stageText.withValues(alpha: 0.54),
+            if (chapterLeft.isNotEmpty)
+              Text(
+                '  ·  $wpm WPM',
+                style: faint,
+                textScaler: TextScaler.noScaling,
               ),
-              textScaler: TextScaler.noScaling,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                chapterLeft.isNotEmpty
+                    ? [
+                        chapterLeft,
+                        if (bookLeft.isNotEmpty) bookLeft,
+                      ].join('  ·  ')
+                    : bookLeft.isNotEmpty
+                    ? '$bookLeft · $wpm WPM'
+                    : '$wpm WPM',
+                style: faint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                textScaler: TextScaler.noScaling,
+              ),
             ),
           ],
         ),
       ],
     );
   }
+}
+
+/// Small notches on the progress rail where the book's chapters begin.
+class _ChapterMarksPainter extends CustomPainter {
+  const _ChapterMarksPainter(this.structure);
+
+  final BookStructure structure;
+
+  /// Past this many chapters the notches would be a solid band.
+  static const int _maxMarks = 60;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final chapters = structure.chapters;
+    final total = structure.totalWords;
+    if (total <= 0 || chapters.length < 2 || chapters.length > _maxMarks) {
+      return;
+    }
+    // A light notch reads on the filled rail, a dark one on the empty
+    // rail: drawn side by side, one of them always shows.
+    final light = Paint()
+      ..color = RunThruTokens.stageBase
+      ..strokeWidth = 1.5;
+    final dark = Paint()
+      ..color = RunThruTokens.stageText.withValues(alpha: 0.26)
+      ..strokeWidth = 1;
+    void mark(int word) {
+      final x = size.width * word / total;
+      canvas
+        ..drawLine(Offset(x, 0), Offset(x, size.height), light)
+        ..drawLine(Offset(x + 1.25, 0), Offset(x + 1.25, size.height), dark);
+    }
+
+    for (final chapter in chapters) {
+      if (chapter.start > 0) mark(chapter.start);
+    }
+    // The end of the book's text, when back matter follows.
+    if (structure.bodyEnd < total) mark(structure.bodyEnd);
+  }
+
+  @override
+  bool shouldRepaint(_ChapterMarksPainter oldDelegate) =>
+      !identical(oldDelegate.structure, structure);
 }
 
 class _ContextSentencePanel extends StatelessWidget {
