@@ -293,6 +293,95 @@ void main() {
     });
   });
 
+  group('HomeShell tab routing', () {
+    Future<GoRouter> pumpShell(WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final config = _SyncConfig(
+        const AppConfig(hasSeenReadingGoalOnboarding: true),
+      );
+      final router = GoRouter(
+        initialLocation: '/?tab=1',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, state) => HomeShell(
+              initialTab:
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+            ),
+          ),
+          GoRoute(
+            path: '/over',
+            builder: (_, __) => const Scaffold(body: Text('reader')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [configProvider.overrideWith(() => config)],
+          child: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(800, 600),
+              disableAnimations: true,
+            ),
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        ),
+      );
+      await tester.pump();
+      return router;
+    }
+
+    int visibleTab(WidgetTester tester) => tester
+        .widget<PageView>(find.byType(PageView))
+        .controller!
+        .page!
+        .round();
+
+    testWidgets('leaving a pushed route keeps the tab the reader chose', (
+      tester,
+    ) async {
+      final router = await pumpShell(tester);
+      expect(visibleTab(tester), 1);
+
+      // The reader walks to the Library with the bottom nav…
+      await tester.tap(find.byIcon(Icons.library_books_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(visibleTab(tester), 0);
+
+      // …opens a book and comes back. The stale `?tab=1` must not win.
+      unawaited(router.push('/over'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('reader'), findsOneWidget);
+      router.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(visibleTab(tester), 0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a link to a tab still works after the reader moved away', (
+      tester,
+    ) async {
+      final router = await pumpShell(tester);
+      await tester.tap(find.byIcon(Icons.library_books_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(visibleTab(tester), 0);
+
+      // The Library's "Add a source" links to the same tab again.
+      router.go('/?tab=1');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(visibleTab(tester), 1);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('HomeShell bottom nav zero-width safety', () {
     testWidgets('does not throw at tiny screen width', (tester) async {
       SharedPreferences.setMockInitialValues({});

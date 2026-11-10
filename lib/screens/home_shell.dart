@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:runthru/design/design.dart';
 import 'package:runthru/screens/analytics_screen.dart';
 import 'package:runthru/screens/library_screen.dart';
@@ -60,7 +61,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void didUpdateWidget(covariant HomeShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     final nextIndex = widget.initialTab.clamp(0, 3);
-    if (nextIndex != _currentIndex) {
+    // The route's tab is a request, not state. The router rebuilds this page
+    // whenever a pushed route pops (leaving the reader, for one), and
+    // re-applying a stale `?tab=` then sent the reader's Back button to
+    // whichever tab a link had opened earlier instead of the Library.
+    final isNewRequest =
+        nextIndex != oldWidget.initialTab.clamp(0, 3) ||
+        widget.focusRequestId != oldWidget.focusRequestId;
+    if (isNewRequest && nextIndex != _currentIndex) {
       setState(() {
         _currentIndex = nextIndex;
         _displayedNavIndex = nextIndex;
@@ -112,6 +120,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _pendingNavIndex = null;
       _navIsTransitioning = false;
     });
+    _syncRouteToTab(index);
   }
 
   void _onPageChanged(int index) {
@@ -120,6 +129,21 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _currentIndex = index;
       _displayedNavIndex = _pendingNavIndex ?? index;
     });
+    // A swipe between tabs (no nav tap pending) settles here.
+    if (_pendingNavIndex == null) _syncRouteToTab(index);
+  }
+
+  /// Keeps the route's `?tab=` equal to the visible tab, so a later link to
+  /// a tab (the Library's "Add a source") is always a new request, even
+  /// after the reader moved away from the tab an earlier link opened.
+  void _syncRouteToTab(int index) {
+    final router = GoRouter.maybeOf(context);
+    if (router == null) return;
+    final uri = router.routeInformationProvider.value.uri;
+    if (uri.path != '/') return;
+    final current = int.tryParse(uri.queryParameters['tab'] ?? '') ?? 0;
+    if (current == index) return;
+    router.go(index == 0 ? '/' : '/?tab=$index');
   }
 
   void _onNavTapped(int index) {
