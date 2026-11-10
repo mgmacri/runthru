@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -970,7 +971,9 @@ class _FontPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     const fonts = RunThruTypography.availableFonts;
     final bundled = fonts.where((f) => f.isBundled).toList();
-    final system = fonts.where((f) => !f.isBundled).toList();
+    final system = fonts
+        .where((f) => !f.isBundled && _systemFontInstalled(f.family))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1066,5 +1069,38 @@ class _FontPicker extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// System fonts the current platform actually ships. Offering a font the
+/// device does not have silently falls back to the default, which looks
+/// like the setting is broken.
+bool _systemFontInstalled(String family) {
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+      return const {'Roboto', 'serif', 'monospace'}.contains(family);
+    case TargetPlatform.iOS:
+      return const {
+        'Helvetica Neue',
+        'Helvetica',
+        'Arial',
+        'San Francisco',
+        'Georgia',
+        'Times New Roman',
+        'Palatino',
+        'Courier New',
+        'Verdana',
+        'Trebuchet MS',
+        'Futura',
+        'Gill Sans',
+        'Optima',
+        'Avenir',
+        'Avenir Next',
+      }.contains(family);
+    case TargetPlatform.fuchsia:
+    case TargetPlatform.linux:
+    case TargetPlatform.macOS:
+    case TargetPlatform.windows:
+      return family != 'serif' && family != 'monospace';
   }
 }

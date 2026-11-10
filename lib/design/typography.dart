@@ -191,6 +191,9 @@ class RunThruTypography {
     FontChoice('Optima', 'Optima', false),
     FontChoice('Avenir', 'Avenir', false),
     FontChoice('Avenir Next', 'Avenir Next', false),
+    // Android system families (Noto Serif, Droid Sans Mono).
+    FontChoice('serif', 'Noto Serif', false),
+    FontChoice('monospace', 'Monospace', false),
   ];
 }
 
