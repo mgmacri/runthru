@@ -33,6 +33,7 @@ Fill during Step 1 of `RELEASE_PLAN.md`. One row per failure. Repro goes in the 
 | B-10 | Reader "Aa" pushed `/settings`, which redirects to `/?tab=3` and stacked a second home shell over the reader: the book was left, and Back from the next book landed on Settings | P1 | done | claude | `lib/navigation/app_router.dart`, `lib/screens/settings_screen.dart`, `lib/screens/parallax_reading_screen.dart`, `test/widgets/reading_goal_presets_test.dart` | `/reader-settings` route with back button; verified on emulator |
 | B-11 | Reader speed tray highlighted 300 (and told TalkBack it was selected) whenever the speed was between chips, e.g. the 250 WPM Comfortable default, contradicting the header | P1 | done | claude | `lib/screens/parallax_reading_screen.dart`, `test/screens/parallax_reading_screen_test.dart` | exact match only; regression test |
 | B-12 | Pause overlay's Focus Mode toggle was centred (`Alignment(0, 0.15)`) and covered the paused focal word, hiding where the reader stopped | P1 | done | claude | `lib/widgets/pause_fog_3d.dart` | moved below the header; verified on emulator |
+| B-13 | Paused Word-mode sentence panel is capped at 4 lines; in a long sentence the bold current word fell past line 4 and was faded out | P2 | done | claude | `lib/core/sentence_resolver.dart`, `lib/screens/parallax_reading_screen.dart`, `test/core/sentence_resolver_test.dart` | 30-word window around the current word with ellipses; unit tests |
 
 ## Reading screen (lane `reading`)
 

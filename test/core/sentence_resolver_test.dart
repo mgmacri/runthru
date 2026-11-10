@@ -56,4 +56,41 @@ void main() {
       expect(sentenceBoundsForWord(const [], 4), (start: 0, end: -1));
     });
   });
+
+  group('sentenceWindowAround', () {
+    List<String> words(int n) => [for (var i = 0; i < n; i++) 'w$i'];
+
+    test('short sentences are returned whole', () {
+      final w = sentenceWindowAround(words(12), 7);
+      expect(w.words.length, 12);
+      expect(w.highlight, 7);
+      expect(w.clippedStart, isFalse);
+      expect(w.clippedEnd, isFalse);
+    });
+
+    test('long sentence keeps the current word visible near the end', () {
+      final all = words(80);
+      final w = sentenceWindowAround(all, 75);
+      expect(w.words.length, 30);
+      expect(w.words[w.highlight], 'w75');
+      expect(w.clippedStart, isTrue);
+      expect(w.clippedEnd, isFalse);
+    });
+
+    test('long sentence keeps context before a mid-sentence word', () {
+      final w = sentenceWindowAround(words(80), 40);
+      expect(w.words[w.highlight], 'w40');
+      expect(w.highlight, 10);
+      expect(w.clippedStart, isTrue);
+      expect(w.clippedEnd, isTrue);
+    });
+
+    test('word near the start does not clip the start', () {
+      final w = sentenceWindowAround(words(80), 2);
+      expect(w.words.first, 'w0');
+      expect(w.highlight, 2);
+      expect(w.clippedStart, isFalse);
+      expect(w.clippedEnd, isTrue);
+    });
+  });
 }

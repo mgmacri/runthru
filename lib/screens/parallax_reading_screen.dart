@@ -2369,6 +2369,10 @@ class _ContextSentencePanel extends StatelessWidget {
       color: RunThruTokens.stageText,
       fontWeight: FontWeight.w700,
     );
+    // The panel holds four lines. In a long sentence the current word could
+    // fall past line four and be faded out, so show a window around it.
+    final window = sentenceWindowAround(words, highlightIndex);
+    final shown = window.words;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 340),
@@ -2382,11 +2386,13 @@ class _ContextSentencePanel extends StatelessWidget {
               textScaler: TextScaler.noScaling,
               text: TextSpan(
                 children: [
-                  for (var i = 0; i < words.length; i++)
+                  if (window.clippedStart) TextSpan(text: '… ', style: faint),
+                  for (var i = 0; i < shown.length; i++)
                     TextSpan(
-                      text: i == words.length - 1 ? words[i] : '${words[i]} ',
-                      style: i == highlightIndex ? inked : faint,
+                      text: i == shown.length - 1 ? shown[i] : '${shown[i]} ',
+                      style: i == window.highlight ? inked : faint,
                     ),
+                  if (window.clippedEnd) TextSpan(text: ' …', style: faint),
                 ],
               ),
             ),

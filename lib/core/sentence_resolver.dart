@@ -63,3 +63,34 @@ int resumeIndex(BookmarkData bookmark, ExtractedDocument doc) {
   }
   return lastStart < minIndex ? minIndex : lastStart;
 }
+
+/// A slice of a sentence that fits a small context panel and always contains
+/// the current word.
+typedef SentenceWindow = ({
+  List<String> words,
+  int highlight,
+  bool clippedStart,
+  bool clippedEnd,
+});
+
+/// Returns at most [maxWords] of [words] around [highlight], keeping about a
+/// third of the window before the current word so the reader sees what led
+/// up to it. Short sentences come back whole.
+SentenceWindow sentenceWindowAround(
+  List<String> words,
+  int highlight, {
+  int maxWords = 30,
+}) {
+  final h = words.isEmpty ? 0 : highlight.clamp(0, words.length - 1);
+  if (words.length <= maxWords) {
+    return (words: words, highlight: h, clippedStart: false, clippedEnd: false);
+  }
+  final start = (h - maxWords ~/ 3).clamp(0, words.length - maxWords);
+  final end = start + maxWords;
+  return (
+    words: words.sublist(start, end),
+    highlight: h - start,
+    clippedStart: start > 0,
+    clippedEnd: end < words.length,
+  );
+}
