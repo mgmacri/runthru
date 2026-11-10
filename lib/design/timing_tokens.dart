@@ -101,4 +101,62 @@ abstract final class RunThruTiming {
   /// Slide-in animation duration for hint overlays in milliseconds.
   // P6 Grade D — tunable
   static const int hintSlideInMs = 200;
+
+  // ── Chapter moments (R-15, R-16) ──
+
+  /// Entrance of a chapter title card: label, rule, then the title words.
+  static const Duration titleCardEnter = Duration(milliseconds: 760);
+
+  /// Stagger between title words rising in.
+  static const Duration titleWordStagger = Duration(milliseconds: 70);
+
+  /// How long a title card stays up after its entrance, before per-word time.
+  static const Duration titleCardHold = Duration(milliseconds: 1400);
+
+  /// Extra hold per title word: longer titles take longer to read.
+  static const Duration titleCardHoldPerWord = Duration(milliseconds: 120);
+
+  /// Longest a title card holds without the reader's tap.
+  static const Duration titleCardMaxHold = Duration(milliseconds: 3800);
+
+  /// Title card exit: the card lifts away into the first word.
+  static const Duration titleCardExit = Duration(milliseconds: 260);
+
+  /// Extra hold when the card also offers the skipped front matter, so the
+  /// offer can be read and taken.
+  static const Duration titleCardSkippedNoteHold = Duration(milliseconds: 1400);
+
+  /// A sub-heading announcement: entrance and exit.
+  static const Duration subHeadingEnter = Duration(milliseconds: 260);
+
+  /// Sub-heading exit.
+  static const Duration subHeadingExit = Duration(milliseconds: 200);
+
+  /// A sub-heading announcement: base hold and per-word extra.
+  static const Duration subHeadingHold = Duration(milliseconds: 850);
+
+  /// Extra hold per sub-heading word.
+  static const Duration subHeadingHoldPerWord = Duration(milliseconds: 130);
+
+  /// Chapter complete: ring draws, check draws, badge pops.
+  static const Duration celebrationBadge = Duration(milliseconds: 1050);
+
+  /// Chapter complete: the burst around the badge.
+  static const Duration celebrationBurst = Duration(milliseconds: 1500);
+
+  /// Chapter complete: figures count up to their values.
+  static const Duration celebrationCountUp = Duration(milliseconds: 700);
+
+  /// Countdown before the next chapter starts on its own.
+  static const Duration celebrationAutoContinue = Duration(seconds: 6);
+
+  /// How long the last word of a book stays before the finish screen.
+  static const Duration bookEndDwell = Duration(milliseconds: 750);
+
+  /// Words a reader must have read in a chapter for its end to be
+  /// celebrated (jumping to a chapter's last page is not finishing it).
+  static const int celebrationMinWords = 150;
+
+  /// Smallest document that gets a finish screen.
+  static const int bookCompleteMinWords = 150;
 }

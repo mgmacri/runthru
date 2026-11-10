@@ -157,6 +157,26 @@ class RunThruTokens extends ThemeExtension<RunThruTokens> {
     Color(0xFFC71F2D), // High Risk Red
   ];
 
+  // ── Chapter moments (title cards, chapter and book complete) ──
+  // Burst colours: the shell teal and status hues already in the palette,
+  // so a celebration reads as RunThru, not as stock confetti.
+  static const List<Color> celebrationColors = [
+    shellTeal,
+    shellReady,
+    shellProcessing,
+    shellError,
+    pauseWaveLineMid,
+    Color(0xFFFBE337), // Buttercup (anchor palette)
+  ];
+  // Laid over the stage behind a title card or a celebration. Opaque: a
+  // ghost of the last word or the play button showing through reads as a
+  // glitch.
+  static const Color stageMomentWash = stageBase;
+  // Soft light bloom behind a chapter title (the stage highlight colour,
+  // so it reads as light falling on the page, not as a tint).
+  static const Color stageMomentGlow = Color(0xD9F4F5F0);
+  static const Color stageMomentGlowClear = Color(0x00F4F5F0);
+
   static const List<String> anchorColorNames = [
     'Hot Coral',
     'Blazing Orange',

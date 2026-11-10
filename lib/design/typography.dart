@@ -126,6 +126,59 @@ class RunThruTypography {
     color: RunThruTokens.shellTealDeep,
   );
 
+  // ── Chapter moments (title cards, chapter complete) ──
+
+  /// Editorial display family for chapter titles.
+  static const String displayFamily = 'BricolageGrotesque';
+
+  /// Small spaced label above a chapter title ("CHAPTER 3").
+  static const TextStyle chapterOverline = TextStyle(
+    fontFamily: 'Satoshi',
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+    letterSpacing: 3.2,
+    color: RunThruTokens.shellTealDeep,
+  );
+
+  /// Chapter title on a title card.
+  static const TextStyle chapterTitle = TextStyle(
+    fontFamily: displayFamily,
+    fontSize: 34,
+    fontWeight: FontWeight.w700,
+    height: 1.12,
+    letterSpacing: -0.4,
+    color: RunThruTokens.stageText,
+  );
+
+  /// Subtitle under a chapter title.
+  static const TextStyle chapterSubtitle = TextStyle(
+    fontFamily: _uiFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    height: 1.35,
+    color: RunThruTokens.shellInkSoft,
+  );
+
+  /// Headline of a chapter-complete or book-complete moment.
+  static const TextStyle momentHeadline = TextStyle(
+    fontFamily: displayFamily,
+    fontSize: 26,
+    fontWeight: FontWeight.w700,
+    height: 1.15,
+    letterSpacing: -0.2,
+    color: RunThruTokens.stageText,
+  );
+
+  /// A figure in a row of reading stats ("2,186").
+  static const TextStyle statValue = TextStyle(
+    fontFamily: displayFamily,
+    fontSize: 22,
+    fontWeight: FontWeight.w700,
+    height: 1.1,
+    color: RunThruTokens.stageText,
+  );
+
   // ── Reading Stage (user-selectable font) ──
 
   static TextStyle readingWord(
