@@ -273,19 +273,25 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
   }
 
   Widget _buildCenterContent(BuildContext context, double fadeVal) {
+    // Sits just below the reader header. Centred, it covered the paused
+    // focal word in Word mode (and the reading band in the text modes), so
+    // the reader could not see where they stopped.
     return Align(
-      alignment: const Alignment(0, 0.15),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.onFocusModeChanged != null) ...[
-            _FocusModeToggle(
-              enabled: widget.focusModeEnabled,
-              onChanged: widget.onFocusModeChanged!,
-            ),
-            const SizedBox(height: 14),
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 128),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.onFocusModeChanged != null) ...[
+              _FocusModeToggle(
+                enabled: widget.focusModeEnabled,
+                onChanged: widget.onFocusModeChanged!,
+              ),
+              const SizedBox(height: 14),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
