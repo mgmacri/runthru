@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:runthru/design/design.dart';
 import 'package:runthru/features/reading/widgets/masked_reading_view.dart';
 
 /// Full Page mode — stepless moving spotlight.
@@ -17,7 +18,11 @@ class FullPageModeView extends StatelessWidget {
     required this.fontFamily,
     required this.fontSize,
     required this.wpm,
+    this.anchorColor = RunThruTokens.stageFocalRed,
   });
+
+  /// Colour of the ORP letter on inked words (the reader's anchor setting).
+  final Color anchorColor;
 
   /// All words in the current document/slice.
   final List<String> words;
@@ -52,6 +57,7 @@ class FullPageModeView extends StatelessWidget {
       wpm: wpm,
       params: MaskedReadingParams.fullPage,
       semanticModeLabel: 'Full page mode',
+      anchorColor: anchorColor,
     );
   }
 }

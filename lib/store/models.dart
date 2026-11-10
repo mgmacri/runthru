@@ -82,12 +82,24 @@ class BookmarkData {
   };
 }
 
+/// Default anchor-letter colour: High Risk Red, index 11 of
+/// `RunThruTokens.anchorColors`. It clears 4.5:1 on the reading stage;
+/// Hot Coral (index 0) fails the Settings contrast check.
+const int kDefaultAnchorColorIndex = 11;
+
+/// Storage key for the anchor colour. Before 2.0 the setting was saved as
+/// `anchorColorIndex` but only the legacy reader honoured it, so nearly every
+/// saved value is the old Hot Coral default rather than a real choice. A new
+/// key lets those users start on [kDefaultAnchorColorIndex]; the legacy key
+/// is left in place, never deleted.
+const String _anchorColorKey = 'anchorColorIndexV2';
+
 class AppConfig {
   const AppConfig({
     this.defaultWpm = 300,
     this.pdfFolderPath,
     this.bookmarks = const {},
-    this.anchorColorIndex = 0,
+    this.anchorColorIndex = kDefaultAnchorColorIndex,
     this.fontScale = 1.0,
     this.hasPremium = false,
     this.parallaxIntensity = ParallaxIntensity.none,
@@ -136,7 +148,8 @@ class AppConfig {
       defaultWpm: json['defaultWpm'] as int? ?? 300,
       pdfFolderPath: json['pdfFolderPath'] as String?,
       bookmarks: bookmarks,
-      anchorColorIndex: json['anchorColorIndex'] as int? ?? 0,
+      anchorColorIndex:
+          json[_anchorColorKey] as int? ?? kDefaultAnchorColorIndex,
       fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
       hasPremium: json['premiumUnlocked'] as bool? ?? false,
       parallaxIntensity: parallaxIntensity,
@@ -252,7 +265,7 @@ class AppConfig {
     'defaultWpm': defaultWpm,
     'pdfFolderPath': pdfFolderPath,
     'bookmarks': bookmarks.map((key, value) => MapEntry(key, value.toJson())),
-    'anchorColorIndex': anchorColorIndex,
+    _anchorColorKey: anchorColorIndex,
     'fontScale': fontScale,
     'premiumUnlocked': hasPremium,
     'parallaxIntensity': parallaxIntensity.name,

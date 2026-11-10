@@ -100,7 +100,11 @@ class MaskedReadingView extends StatelessWidget {
     required this.params,
     required this.semanticModeLabel,
     this.rulerKey,
+    this.anchorColor = RunThruTokens.stageFocalRed,
   });
+
+  /// Colour of the ORP letter on inked words (the reader's anchor setting).
+  final Color anchorColor;
 
   /// Tri-zone mask overlay key (for tests).
   static const Key maskKey = ValueKey('masked-reading-tri-zone-mask');
@@ -140,6 +144,17 @@ class MaskedReadingView extends StatelessWidget {
 
   /// Optional key for the ruler underline accent.
   final Key? rulerKey;
+
+  /// Whether a line centred at [lineMid] (stage coordinates) sits in the
+  /// clear reading band, with a quarter-line tolerance for rounding.
+  static bool _inBand(
+    double lineMid,
+    double bandTop,
+    double bandBottom,
+    double lineHeight,
+  ) =>
+      lineMid >= bandTop - lineHeight * 0.25 &&
+      lineMid <= bandBottom + lineHeight * 0.25;
 
   Duration get _sweepDuration {
     final safeWpm = wpm.clamp(30, 1000);
@@ -231,6 +246,9 @@ class MaskedReadingView extends StatelessWidget {
                         for (final line in lines) ...[
                           if (line.gapBefore > 0)
                             SizedBox(height: line.gapBefore),
+                          // Accent ORP letters only on lines inside the clear
+                          // band. Under the dim mask they turn into pink
+                          // speckles that pull the eye away from the band.
                           SizedBox(
                             height: lh,
                             child: Row(
@@ -251,6 +269,15 @@ class MaskedReadingView extends StatelessWidget {
                                     inkedStyle: inkedStyle,
                                     sweepDuration: _sweepDuration,
                                     reduced: reduced,
+                                    anchorColor:
+                                        _inBand(
+                                          line.mid + translateY,
+                                          bandTop,
+                                          bandBottom,
+                                          lh,
+                                        )
+                                        ? anchorColor
+                                        : inkedStyle.color!,
                                   ),
                                 ],
                               ],
@@ -354,16 +381,21 @@ class MaskedReadingView extends StatelessWidget {
                       child: ExcludeSemantics(
                         child: DecoratedBox(
                           key: spotlightKey,
+                          // A full-width band, brightest on the reading line.
+                          // (A RadialGradient here is sized by the band's
+                          // short side, so it drew a small grey blot at the
+                          // centre of the screen instead of a band.)
                           decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              radius: 0.9,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
                               colors: [
+                                RunThruTokens.shellAccent.withValues(alpha: 0),
                                 RunThruTokens.shellAccent.withValues(
-                                  alpha: 0.14,
+                                  alpha: 0.07,
                                 ),
                                 RunThruTokens.shellAccent.withValues(alpha: 0),
                               ],
-                              stops: const [0, 0.72],
                             ),
                           ),
                         ),

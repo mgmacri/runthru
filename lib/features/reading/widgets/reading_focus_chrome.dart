@@ -3,20 +3,21 @@ import 'package:runthru/core/orp.dart';
 import 'package:runthru/design/design.dart';
 
 /// Splits [word] into spans with the ORP (optimal recognition point)
-/// letter tinted in the stage focal colour. Shared by the continuous-text
-/// reading modes for inked (read/active) words.
-List<InlineSpan> anchoredWordSpans(String word, TextStyle style) {
-  if (word.isEmpty) return [TextSpan(text: word, style: style)];
-  final stripped = word.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
-  final strippedStart = stripped.isEmpty ? 0 : word.indexOf(stripped);
-  final orpIndex = stripped.isEmpty ? 0 : bucketedOrpIndex(stripped);
-  final anchorIndex = (strippedStart < 0 ? orpIndex : strippedStart + orpIndex)
-      .clamp(0, word.length - 1);
+/// letter tinted in [anchorColor]. Shared by the continuous-text reading
+/// modes for inked (read/active) words. Words without letters (a lone dash)
+/// get no tint.
+List<InlineSpan> anchoredWordSpans(
+  String word,
+  TextStyle style, {
+  Color anchorColor = RunThruTokens.stageFocalRed,
+}) {
+  final anchorIndex = anchorIndexInWord(word);
+  if (anchorIndex < 0) return [TextSpan(text: word, style: style)];
   return [
     TextSpan(text: word.substring(0, anchorIndex), style: style),
     TextSpan(
       text: word.substring(anchorIndex, anchorIndex + 1),
-      style: style.copyWith(color: RunThruTokens.stageFocalRed),
+      style: style.copyWith(color: anchorColor),
     ),
     TextSpan(text: word.substring(anchorIndex + 1), style: style),
   ];
@@ -48,7 +49,11 @@ class KaraokeWord extends StatelessWidget {
     required this.inkedStyle,
     required this.sweepDuration,
     required this.reduced,
+    this.anchorColor = RunThruTokens.stageFocalRed,
   });
+
+  /// Colour of the ORP letter on inked words (the reader's anchor setting).
+  final Color anchorColor;
 
   /// The word text.
   final String word;
@@ -85,13 +90,25 @@ class KaraokeWord extends StatelessWidget {
         return RichText(
           textScaler: TextScaler.noScaling,
           softWrap: false,
-          text: TextSpan(children: anchoredWordSpans(word, inkedStyle)),
+          text: TextSpan(
+            children: anchoredWordSpans(
+              word,
+              inkedStyle,
+              anchorColor: anchorColor,
+            ),
+          ),
         );
       case KaraokeWordState.active:
         final inked = RichText(
           textScaler: TextScaler.noScaling,
           softWrap: false,
-          text: TextSpan(children: anchoredWordSpans(word, inkedStyle)),
+          text: TextSpan(
+            children: anchoredWordSpans(
+              word,
+              inkedStyle,
+              anchorColor: anchorColor,
+            ),
+          ),
         );
         return Stack(
           clipBehavior: Clip.none,

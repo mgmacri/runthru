@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:runthru/design/design.dart';
 import 'package:runthru/features/reading/widgets/masked_reading_view.dart';
 
 /// Paragraph mode — tri-zone line ruler.
@@ -17,7 +18,11 @@ class ParagraphModeView extends StatelessWidget {
     required this.fontFamily,
     required this.fontSize,
     required this.wpm,
+    this.anchorColor = RunThruTokens.stageFocalRed,
   });
+
+  /// Colour of the ORP letter on inked words (the reader's anchor setting).
+  final Color anchorColor;
 
   static const Key readingLineKey = ValueKey('paragraph-mode-reading-line');
 
@@ -55,6 +60,7 @@ class ParagraphModeView extends StatelessWidget {
       params: MaskedReadingParams.paragraph,
       semanticModeLabel: 'Paragraph mode',
       rulerKey: readingLineKey,
+      anchorColor: anchorColor,
     );
   }
 }

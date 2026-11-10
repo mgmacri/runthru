@@ -75,4 +75,51 @@ void main() {
       expect(orpIndexInOriginal('"hello"'), 4);
     });
   });
+
+  group('anchorIndexInWord', () {
+    test('plain words match the bucketed ORP index', () {
+      for (final word in [
+        'a',
+        'the',
+        'relies',
+        'recognition',
+        'incomprehensibility',
+      ]) {
+        expect(anchorIndexInWord(word), bucketedOrpIndex(word), reason: word);
+      }
+    });
+
+    test('trailing punctuation does not shift the anchor', () {
+      expect(anchorIndexInWord('Minow,'), 1); // i
+      expect(anchorIndexInWord('Suleyman,'), 2); // l
+      expect(anchorIndexInWord('recognition,'), 3); // o
+    });
+
+    test('short punctuated words still land on a letter', () {
+      for (final word in ['to.', 'it,', 'I.', 'go!', 'no?', 'a;']) {
+        final i = anchorIndexInWord(word);
+        expect(RegExp('[A-Za-z]').hasMatch(word[i]), isTrue, reason: word);
+      }
+    });
+
+    test('leading quotes and internal apostrophes are skipped', () {
+      expect(anchorIndexInWord('\u201CKeep'), 2); // e
+      expect(anchorIndexInWord('I\u2019m,'), 2); // m
+      expect(anchorIndexInWord("don't"), 1); // o
+      expect(anchorIndexInWord('well-known'), 2); // l
+    });
+
+    test('non-ASCII letters count', () {
+      expect(anchorIndexInWord('café'), 1);
+      expect(anchorIndexInWord('naïveté'), 2);
+      expect(anchorIndexInWord('Ελληνικά'), 2);
+    });
+
+    test('tokens without letters or digits have no anchor', () {
+      expect(anchorIndexInWord('—'), -1);
+      expect(anchorIndexInWord('…'), -1);
+      expect(anchorIndexInWord(''), -1);
+      expect(anchorIndexInWord('1,004.6'), 2); // 0
+    });
+  });
 }

@@ -23,7 +23,11 @@ class SentenceModeView extends StatelessWidget {
     required this.fontFamily,
     required this.fontSize,
     this.wpm = 300,
+    this.anchorColor = RunThruTokens.stageFocalRed,
   });
+
+  /// Colour of the ORP letter on inked words (the reader's anchor setting).
+  final Color anchorColor;
 
   /// All words in the current document/slice.
   final List<String> words;
@@ -101,7 +105,10 @@ class SentenceModeView extends StatelessWidget {
           final translationX = anchorX - metrics.currentAnchorX;
           final reducedMotion = isReducedMotion(context);
 
-          final stageHeight = (fontSize * 1.6).clamp(64.0, 180.0);
+          // Ticks sit just outside the text box and the active word's
+          // underline, so they frame the line without touching it.
+          final tickGap = _tickGapFor(fontSize);
+          final stageHeight = tickGap + _GuideLine.height * 2;
 
           return ClipRect(
             child: Center(
@@ -152,8 +159,8 @@ class SentenceModeView extends StatelessWidget {
                       ),
                     ),
                     const IgnorePointer(child: _EdgeFade(key: edgeFadeKey)),
-                    const IgnorePointer(
-                      child: _FixedGuideLines(key: fixedGuideKey),
+                    IgnorePointer(
+                      child: _FixedGuideLines(key: fixedGuideKey, gap: tickGap),
                     ),
                   ],
                 ),
@@ -193,6 +200,7 @@ class SentenceModeView extends StatelessWidget {
           inkedStyle: inkedStyle,
           sweepDuration: _sweepDuration,
           reduced: reduced,
+          anchorColor: anchorColor,
         ),
       );
       if (i < sentence.length - 1) {
@@ -237,7 +245,9 @@ class SentenceModeView extends StatelessWidget {
     TextDirection textDirection,
   ) {
     if (word.isEmpty) return 0;
-    final anchorIndex = _anchorIndexForWord(word);
+    final anchorIndex = anchorIndexInWord(word);
+    // No letters (a lone dash): centre the line on the token itself.
+    if (anchorIndex < 0) return _measureText(word, style, textDirection) / 2;
     final prefix = word.substring(0, anchorIndex);
     final anchor = word.substring(anchorIndex, anchorIndex + 1);
     return _measureText(prefix, style, textDirection) +
@@ -289,32 +299,40 @@ class _EdgeFade extends StatelessWidget {
   }
 }
 
+/// Vertical space between the two ticks: the line's text box (height 1.15)
+/// plus room for the active-word underline below it (3dp offset + 2.5dp
+/// stroke) and an even breathing gap on both sides.
+double _tickGapFor(double fontSize) {
+  const underlineReach = 3 + 2.5;
+  const breathing = 6.0;
+  return fontSize * 1.15 + (underlineReach + breathing) * 2;
+}
+
 class _FixedGuideLines extends StatelessWidget {
-  const _FixedGuideLines({super.key});
+  const _FixedGuideLines({super.key, required this.gap});
+
+  final double gap;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final gap = (constraints.maxHeight - 36).clamp(18.0, 52.0);
-        return SizedBox.expand(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const _GuideLine(color: RunThruTokens.shellAccent),
-              SizedBox(height: gap),
-              const _GuideLine(color: RunThruTokens.shellAccent),
-            ],
-          ),
-        );
-      },
+    return SizedBox.expand(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _GuideLine(color: RunThruTokens.shellAccent),
+          SizedBox(height: gap),
+          const _GuideLine(color: RunThruTokens.shellAccent),
+        ],
+      ),
     );
   }
 }
 
 class _GuideLine extends StatelessWidget {
   const _GuideLine({required this.color});
+
+  static const double height = 16;
 
   final Color color;
 
@@ -325,7 +343,7 @@ class _GuideLine extends StatelessWidget {
         color: color.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: const SizedBox(width: 2, height: 18),
+      child: const SizedBox(width: 2, height: height),
     );
   }
 }
@@ -338,14 +356,4 @@ class _SentenceMetrics {
 
   final double currentAnchorX;
   final double spaceWidth;
-}
-
-int _anchorIndexForWord(String word) {
-  if (word.isEmpty) return 0;
-  final stripped = word.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
-  if (stripped.isEmpty) return 0;
-  final leadingPunctuation = word.indexOf(stripped);
-  final orpIndex = bucketedOrpIndex(stripped);
-  return (leadingPunctuation < 0 ? orpIndex : leadingPunctuation + orpIndex)
-      .clamp(0, word.length - 1);
 }

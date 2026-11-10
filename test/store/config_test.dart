@@ -54,6 +54,26 @@ void main() {
       expect(config.focusModeEnabled, isFalse);
     });
 
+    test('anchor colour defaults to the high-contrast red', () {
+      expect(const AppConfig().anchorColorIndex, kDefaultAnchorColorIndex);
+      expect(AppConfig.fromJson({}).anchorColorIndex, kDefaultAnchorColorIndex);
+    });
+
+    test(
+      'legacy anchorColorIndex is ignored; the chosen colour roundtrips',
+      () {
+        // Pre-2.0 configs saved the Hot Coral default (0) under the old key,
+        // which the main reader never honoured.
+        final legacy = AppConfig.fromJson({'anchorColorIndex': 0});
+        expect(legacy.anchorColorIndex, kDefaultAnchorColorIndex);
+
+        final chosen = AppConfig.fromJson(
+          const AppConfig(anchorColorIndex: 8).toJson(),
+        );
+        expect(chosen.anchorColorIndex, 8);
+      },
+    );
+
     test('corrupt Google Drive access mode defaults to selected files', () {
       final config = AppConfig.fromJson({
         'googleDriveAccessMode': 'workspaceReadOnly',

@@ -40,3 +40,22 @@ int leadingPunctuationCount(String word) {
 int orpIndexInOriginal(String word) {
   return leadingPunctuationCount(word) + orpIndex(word);
 }
+
+final RegExp _anchorableChar = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+/// Index in [word] of the character every reading mode tints as the anchor,
+/// or -1 when [word] has no letters or digits (a lone dash or ellipsis).
+///
+/// Punctuation anywhere in the word (leading quotes, trailing commas,
+/// apostrophes, hyphens) is skipped, and letters outside ASCII count, so the
+/// anchor always lands on a letter: "Minow," → `i`, "I’m," → `m`, "café" → `a`.
+/// The position within the letters follows [bucketedOrpIndex].
+int anchorIndexInWord(String word) {
+  final letters = <int>[];
+  for (var i = 0; i < word.length; i++) {
+    if (_anchorableChar.hasMatch(word[i])) letters.add(i);
+  }
+  if (letters.isEmpty) return -1;
+  final bucket = ((letters.length + 2) ~/ 4).clamp(0, letters.length - 1);
+  return letters[bucket];
+}

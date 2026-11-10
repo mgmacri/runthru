@@ -1517,6 +1517,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                       key: const ValueKey(
                                                         'sentence',
                                                       ),
+                                                      anchorColor: anchorColor,
                                                       words: _words,
                                                       currentIndex:
                                                           currentIndex,
@@ -1534,6 +1535,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                       key: const ValueKey(
                                                         'paragraph',
                                                       ),
+                                                      anchorColor: anchorColor,
                                                       words: _words,
                                                       currentIndex:
                                                           currentIndex,
@@ -1551,6 +1553,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                       key: const ValueKey(
                                                         'fullPage',
                                                       ),
+                                                      anchorColor: anchorColor,
                                                       words: _words,
                                                       currentIndex:
                                                           currentIndex,
@@ -1566,6 +1569,30 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                 },
                                               );
                                             },
+                                          ),
+                                        ),
+                                      // The header and action tray have no
+                                      // background, so continuous text would
+                                      // scroll straight under the buttons.
+                                      // Fade it into the stage behind them.
+                                      if (!crState.isActive &&
+                                          readingMode != ReadingMode.singleWord)
+                                        Positioned.fill(
+                                          child: _ChromeFade(
+                                            top:
+                                                MediaQuery.paddingOf(
+                                                  context,
+                                                ).top +
+                                                (config.focusModeEnabled
+                                                    ? 0
+                                                    : _kReaderHeaderExtent),
+                                            bottom:
+                                                MediaQuery.paddingOf(
+                                                  context,
+                                                ).bottom +
+                                                (config.focusModeEnabled
+                                                    ? 0
+                                                    : _kReaderTrayExtent),
                                           ),
                                         ),
                                       // Mounted in focus mode too — the pause
@@ -1814,6 +1841,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                   config.readingFontFamily,
                                               isPaused: !isPlaying,
                                               dimWhenPaused: true,
+                                              anchorColor: anchorColor,
                                             ),
                                           ),
                                         // Pause veil is now handled by PauseFog3D
@@ -2026,6 +2054,69 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 }
 
 // ── Reader chrome ─────────────────────────────────────────────────────────────
+
+/// Height of the header row + progress rail below the top safe area.
+const double _kReaderHeaderExtent = 104;
+
+/// Height of the persistent action tray above the bottom safe area.
+const double _kReaderTrayExtent = 172;
+
+/// Distance over which continuous text fades out before reaching the chrome.
+const double _kChromeFeather = 36;
+
+/// Opaque stage colour behind the reader chrome, fading to clear over
+/// [_kChromeFeather], so Sentence, Paragraph and Full Page text never runs
+/// under the header or the play/speed tray. Two flat gradients, no layer.
+class _ChromeFade extends StatelessWidget {
+  const _ChromeFade({required this.top, required this.bottom});
+
+  final double top;
+  final double bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    const solid = RunThruTokens.stageBase;
+    final clear = RunThruTokens.stageBase.withValues(alpha: 0);
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: top + _kChromeFeather,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [solid, solid, clear],
+                  stops: [0, top / (top + _kChromeFeather), 1],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: bottom + _kChromeFeather,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [solid, solid, clear],
+                  stops: [0, bottom / (bottom + _kChromeFeather), 1],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _ReaderHeaderRow extends StatelessWidget {
   const _ReaderHeaderRow({
@@ -2621,8 +2712,10 @@ class _PauseBar extends StatelessWidget {
 
 // ── ORP Focal Word ────────────────────────────────────────────────────────────
 
-const _readerFocalGuideLineHeight = 16.0;
-const _readerFocalGuideGap = 34.0;
+const _readerFocalGuideLineHeight = 14.0;
+// Gap between the word's em box and each guide tick. Kept tight so the ticks
+// read as part of the word, not as separate marks floating above and below.
+const _readerFocalGuideGap = 6.0;
 const _readerFocalTargetBreathingRoom = 8.0;
 
 EdgeInsets _focalTargetPadding(double fontSize) {
@@ -2680,7 +2773,11 @@ class _OrpFocalWord extends StatelessWidget {
     required this.fontFamily,
     required this.isPaused,
     this.dimWhenPaused = true,
+    this.anchorColor = RunThruTokens.stageFocalRed,
   });
+
+  /// Colour of the anchor letter and guide ticks (the reader's setting).
+  final Color anchorColor;
 
   final GlobalKey? focalTargetKey;
   final String word;
@@ -2693,12 +2790,10 @@ class _OrpFocalWord extends StatelessWidget {
   Widget build(BuildContext context) {
     if (word.isEmpty) return const SizedBox.shrink();
 
-    final stripped = word.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
-    if (stripped.isEmpty) return const SizedBox.shrink();
-
-    final orpIdx = bucketedOrpIndex(word);
-    final leadingPunc = word.length - stripped.length;
-    final displayOrpIdx = (leadingPunc + orpIdx).clamp(0, word.length - 1);
+    // One anchor rule for every mode: always a letter, never punctuation.
+    // -1 means the token has no letters (a lone dash): show it plainly,
+    // centred, instead of flashing an empty stage.
+    final displayOrpIdx = anchorIndexInWord(word);
 
     final style = TextStyle(
       fontSize: fontSize,
@@ -2713,16 +2808,21 @@ class _OrpFocalWord extends StatelessWidget {
     // centre sits exactly on the fixed centre column (design reader.jsx
     // FocalWord). Widths are measured synchronously so the pin never lags
     // a frame behind the word flash.
-    final prefixWidth = _textWidth(
-      word.substring(0, displayOrpIdx),
-      style,
-      direction,
-    );
-    final letterWidth = _textWidth(word[displayOrpIdx], style, direction);
-    final wordWidth = _textWidth(word, style, direction);
-    final shift = wordWidth / 2 - (prefixWidth + letterWidth / 2);
+    final double shift;
+    if (displayOrpIdx < 0) {
+      shift = 0;
+    } else {
+      final prefixWidth = _textWidth(
+        word.substring(0, displayOrpIdx),
+        style,
+        direction,
+      );
+      final letterWidth = _textWidth(word[displayOrpIdx], style, direction);
+      final wordWidth = _textWidth(word, style, direction);
+      shift = wordWidth / 2 - (prefixWidth + letterWidth / 2);
+    }
 
-    final guideLineColor = RunThruTokens.stageFocalRed.withValues(alpha: 0.55);
+    final guideLineColor = anchorColor.withValues(alpha: 0.55);
     const guideLineWidth = 2.0;
     const guideLineRadius = 2.0;
     final guideOffset =
@@ -2768,16 +2868,16 @@ class _OrpFocalWord extends StatelessWidget {
               child: RichText(
                 textScaler: TextScaler.noScaling,
                 text: TextSpan(
-                  children: [
-                    TextSpan(text: word.substring(0, displayOrpIdx)),
-                    TextSpan(
-                      text: word[displayOrpIdx],
-                      style: const TextStyle(
-                        color: RunThruTokens.stageFocalRed,
-                      ),
-                    ),
-                    TextSpan(text: word.substring(displayOrpIdx + 1)),
-                  ],
+                  children: displayOrpIdx < 0
+                      ? [TextSpan(text: word)]
+                      : [
+                          TextSpan(text: word.substring(0, displayOrpIdx)),
+                          TextSpan(
+                            text: word[displayOrpIdx],
+                            style: TextStyle(color: anchorColor),
+                          ),
+                          TextSpan(text: word.substring(displayOrpIdx + 1)),
+                        ],
                   style: style,
                 ),
               ),
