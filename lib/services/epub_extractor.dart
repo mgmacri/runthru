@@ -137,7 +137,7 @@ Stream<double> epubExtractWithProgress(
             for (final s in sentences) {
               globalWordIndex += s.words.length;
             }
-            allSentences.addAll(sentences);
+            _appendChapter(allSentences, sentences);
           }
         }
 
@@ -215,7 +215,7 @@ Future<ExtractedDocument> _extractInIsolate(String filePath) async {
       for (final s in sentences) {
         globalWordIndex += s.words.length;
       }
-      allSentences.addAll(sentences);
+      _appendChapter(allSentences, sentences);
     }
   }
 
@@ -270,7 +270,7 @@ Future<PageRangeResult> _extractRangeInIsolate(
       for (final s in sentences) {
         globalWordIndex += s.words.length;
       }
-      allSentences.addAll(sentences);
+      _appendChapter(allSentences, sentences);
     }
   }
 
@@ -488,6 +488,30 @@ String _stripHtml(String html) {
 
   return text.trim();
 }
+
+/// Appends one spine file's sentences.
+///
+/// Scanned-book EPUBs split files by print page, so a sentence can run
+/// across a file boundary ("…before building and" | "crashing over…").
+/// When the new file opens lowercase and the previous text did not end a
+/// sentence, the opening sentence continues the previous paragraph rather
+/// than starting a new one.
+void _appendChapter(List<Sentence> all, List<Sentence> chapter) {
+  if (all.isNotEmpty && chapter.isNotEmpty) {
+    final previous = all.last.words.isEmpty ? '' : all.last.words.last;
+    final first = chapter.first;
+    final opener = first.words.isEmpty ? '' : first.words.first;
+    if (opener.isNotEmpty &&
+        _startsLowercase.hasMatch(opener) &&
+        !_endsSentence.hasMatch(previous)) {
+      chapter = [Sentence(words: first.words), ...chapter.skip(1)];
+    }
+  }
+  all.addAll(chapter);
+}
+
+final RegExp _startsLowercase = RegExp(r'^[\p{Ll}]', unicode: true);
+final RegExp _endsSentence = RegExp('[.!?\u2026][\u201D\u2019"\')\\]]*\$');
 
 /// Splits stripped chapter text into sentences with paragraph starts.
 List<Sentence> _textToSentences(String text) => textToSentences(text);

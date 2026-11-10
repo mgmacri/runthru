@@ -142,6 +142,35 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     return {for (final b in doc.pageBoundaries) b.startWordIndex};
   }
 
+  /// Paragraph starts for Book mode. Documents without paragraph data
+  /// (PDFs, books cached before 2.0) get readable fallback paragraphs, a
+  /// break after every few sentences, instead of one wall of text.
+  Set<int> get _bookParagraphStarts {
+    final real = _paragraphStarts;
+    if (real.isNotEmpty) return real;
+    final doc = _fullDoc;
+    if (doc == null) return const {};
+    if (identical(doc, _fallbackStartsDoc) &&
+        doc.sentences.length == _fallbackStartsSentenceCount) {
+      return _fallbackStartsCache;
+    }
+    // Source page boundaries are not used: PDF and scanned-EPUB pages break
+    // mid-sentence.
+    final starts = <int>{};
+    var index = 0;
+    for (var i = 0; i < doc.sentences.length; i++) {
+      if (i % _kFallbackSentencesPerParagraph == 0) starts.add(index);
+      index += doc.sentences[i].words.length;
+    }
+    _fallbackStartsDoc = doc;
+    _fallbackStartsSentenceCount = doc.sentences.length;
+    return _fallbackStartsCache = starts;
+  }
+
+  Set<int> _fallbackStartsCache = const {};
+  ExtractedDocument? _fallbackStartsDoc;
+  int _fallbackStartsSentenceCount = -1;
+
   /// Book mode's page view, for swipe and keyboard page turns.
   final GlobalKey<BookModeViewState> _bookKey = GlobalKey<BookModeViewState>();
 
@@ -1676,7 +1705,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                               size,
                                                             ),
                                                     paragraphStarts:
-                                                        _paragraphStarts,
+                                                        _bookParagraphStarts,
                                                     chapterStarts:
                                                         _chapterStarts,
                                                     wordOffset: _sliceOffset,
@@ -2214,6 +2243,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
 /// Height of the header row + progress rail below the top safe area.
 const double _kReaderHeaderExtent = 104;
+
+/// Sentences per fallback paragraph in Book mode (documents without
+/// paragraph data).
+const int _kFallbackSentencesPerParagraph = 4;
 
 /// Height of the header row alone (Book mode hides the progress rail).
 const double _kReaderHeaderRowExtent = 72;

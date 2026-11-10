@@ -63,8 +63,8 @@ class BookModeView extends StatefulWidget {
   /// Document-wide word indices that start a paragraph.
   final Set<int> paragraphStarts;
 
-  /// Document-wide word indices that open a chapter. A chapter always
-  /// starts on a fresh page, as in an e-reader.
+  /// Document-wide word indices where a spine file (EPUB) begins. One that
+  /// opens with a heading starts a fresh page, as in an e-reader.
   final Set<int> chapterStarts;
 
   /// Document index of `words[0]`.
@@ -118,9 +118,7 @@ class BookModeViewState extends State<BookModeView> {
   }
 
   bool _isParagraphStart(int i) =>
-      i == 0 ||
-      widget.paragraphStarts.contains(i + widget.wordOffset) ||
-      widget.chapterStarts.contains(i + widget.wordOffset);
+      i == 0 || widget.paragraphStarts.contains(i + widget.wordOffset);
 
   bool _isChapterStart(int i) =>
       widget.chapterStarts.contains(i + widget.wordOffset);
@@ -308,10 +306,17 @@ class _BookLayout {
   final double paragraphGap;
   final TextDirection direction;
 
-  /// End (inclusive) of the paragraph that starts at [i].
+  /// More words than any page can hold. A block is never measured past
+  /// this, so a document without paragraph data (one giant "paragraph")
+  /// cannot stall layout; the remainder continues on the next line.
+  static const int maxBlockWords = 1200;
+
+  /// End (inclusive) of the paragraph that starts at [i], capped at
+  /// [maxBlockWords].
   int paragraphEnd(int i) {
     var end = i;
-    while (end + 1 < words.length && !isParagraphStart(end + 1)) {
+    final limit = (i + maxBlockWords - 1).clamp(i, words.length - 1);
+    while (end < limit && !isParagraphStart(end + 1)) {
       end++;
     }
     return end;
@@ -326,9 +331,12 @@ class _BookLayout {
     return !_closingPunctuation.hasMatch(words[last]);
   }
 
-  /// Space above a paragraph that is not first on its page.
-  double gapBefore(int first, int last) =>
-      isHeading(first, last) ? paragraphGap * 2 : paragraphGap;
+  /// Space above a paragraph that is not first on its page. A block that
+  /// continues a capped paragraph gets none.
+  double gapBefore(int first, int last) {
+    if (!isParagraphStart(first)) return 0;
+    return isHeading(first, last) ? paragraphGap * 2 : paragraphGap;
+  }
 
   TextStyle styleFor(int first, int last) =>
       isHeading(first, last) ? headingStyle : style;
@@ -339,10 +347,12 @@ class _BookLayout {
     var i = start;
     var first = true;
     while (i < words.length) {
-      // A new chapter always starts a fresh page.
-      if (!first && isChapterStart(i)) break;
       // Paragraph (or the rest of one, if the page starts mid-paragraph).
       final end = paragraphEnd(i);
+      // A new chapter starts a fresh page. Spine files are only chapters
+      // when they open with a heading: scanned-book EPUBs split files by
+      // print page, mid-sentence.
+      if (!first && isChapterStart(i) && isHeading(i, end)) break;
       final gap = first ? 0.0 : gapBefore(i, end);
       final remaining = height - used - gap;
       if (remaining < _lineHeight) break;

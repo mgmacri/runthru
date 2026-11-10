@@ -274,6 +274,29 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('a sentence running across spine files stays one paragraph', () async {
+      final bytes = _createTestEpub(
+        chapterContents: [
+          '<html><body><h1>Chapter One</h1><p>Waves like this began small before building and</p></body></html>',
+          '<html><body><p>crashing over the earth. A new thought.</p></body></html>',
+          '<html><body><p>Next file starts a sentence.</p></body></html>',
+        ],
+      );
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/test.epub';
+      await File(epubPath).writeAsBytes(bytes);
+
+      final doc = await epubExtract(epubPath);
+      final starts = [
+        for (final s in doc.sentences)
+          if (s.startsParagraph) s.words.first,
+      ];
+      // "crashing" continues the previous paragraph; "Next" begins one.
+      expect(starts, ['Chapter', 'Waves', 'Next']);
+
+      await tempDir.delete(recursive: true);
+    });
+
     test('skips the nav document and non-linear spine items', () async {
       final bytes = _createTestEpub(
         chapterContents: [

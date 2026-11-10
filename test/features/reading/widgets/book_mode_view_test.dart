@@ -165,4 +165,94 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     }
   });
+
+  testWidgets('a document with no paragraph data still pages quickly', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final wall = [for (var i = 0; i < 20000; i++) 'w$i'];
+    var start = 0;
+    late StateSetter set;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                set = setState;
+                return BookModeView(
+                  words: wall,
+                  startIndex: start,
+                  onTurn: (i) => set(() => start = i),
+                  fontFamily: 'Roboto',
+                  fontSize: 20,
+                  letterSpacing: 0,
+                  wordSpacing: 0,
+                  wpm: 250,
+                  onFontSizeChanged: (_) {},
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    final seen = <String>[];
+    final watch = Stopwatch()..start();
+    for (var page = 0; page < 5; page++) {
+      seen.addAll(_pageText(tester).split(' '));
+      await tester.tap(find.byKey(BookModeView.nextKey));
+      await tester.pump();
+    }
+    watch.stop();
+    expect(seen, wall.sublist(0, seen.length));
+    expect(watch.elapsedMilliseconds, lessThan(5000));
+    // Going back from deep in the wall lands on the previous page.
+    final before = _pageText(tester);
+    await tester.tap(find.byKey(BookModeView.previousKey));
+    await tester.pump();
+    await tester.tap(find.byKey(BookModeView.nextKey));
+    await tester.pump();
+    expect(_pageText(tester), before);
+  });
+
+  testWidgets('a spine boundary without a heading does not break the page', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final words = [
+      for (var i = 0; i < 40; i++) 'a$i',
+      for (var i = 0; i < 40; i++) 'b$i',
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: Scaffold(
+            body: BookModeView(
+              words: words,
+              startIndex: 0,
+              onTurn: (_) {},
+              fontFamily: 'Roboto',
+              fontSize: 16,
+              letterSpacing: 0,
+              wordSpacing: 0,
+              wpm: 250,
+              onFontSizeChanged: (_) {},
+              // A scanned print page boundary mid-sentence at word 40.
+              chapterStarts: const {40},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(_pageText(tester), contains('b39'));
+  });
 }
