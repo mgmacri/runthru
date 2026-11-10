@@ -264,38 +264,46 @@ class MaskedReadingView extends StatelessWidget {
                           // Accent ORP letters only on lines inside the clear
                           // band. Under the dim mask they turn into pink
                           // speckles that pull the eye away from the band.
+                          // A single token wider than the column (a URL, a
+                          // long compound) cannot wrap: shrink that line to
+                          // fit instead of running off the edge.
                           SizedBox(
                             height: lh,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (final word in line.words) ...[
-                                  if (word.spaceBefore > 0)
-                                    SizedBox(width: word.spaceBefore),
-                                  KaraokeWord(
-                                    word: word.word,
-                                    globalIndex: word.globalIndex,
-                                    state: word.globalIndex == safeIndex
-                                        ? KaraokeWordState.active
-                                        : word.globalIndex < safeIndex
-                                        ? KaraokeWordState.done
-                                        : KaraokeWordState.next,
-                                    faintStyle: faintStyle,
-                                    inkedStyle: inkedStyle,
-                                    sweepDuration: _sweepDuration,
-                                    reduced: reduced,
-                                    anchorColor:
-                                        _inBand(
-                                          line.mid + translateY,
-                                          bandTop,
-                                          bandBottom,
-                                          lh,
-                                        )
-                                        ? anchorColor
-                                        : inkedStyle.color!,
-                                  ),
+                            width: maxLineWidth,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final word in line.words) ...[
+                                    if (word.spaceBefore > 0)
+                                      SizedBox(width: word.spaceBefore),
+                                    KaraokeWord(
+                                      word: word.word,
+                                      globalIndex: word.globalIndex,
+                                      state: word.globalIndex == safeIndex
+                                          ? KaraokeWordState.active
+                                          : word.globalIndex < safeIndex
+                                          ? KaraokeWordState.done
+                                          : KaraokeWordState.next,
+                                      faintStyle: faintStyle,
+                                      inkedStyle: inkedStyle,
+                                      sweepDuration: _sweepDuration,
+                                      reduced: reduced,
+                                      anchorColor:
+                                          _inBand(
+                                            line.mid + translateY,
+                                            bandTop,
+                                            bandBottom,
+                                            lh,
+                                          )
+                                          ? anchorColor
+                                          : inkedStyle.color!,
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ],

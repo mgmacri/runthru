@@ -132,6 +132,45 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets(
+      'a token wider than the column shrinks instead of overflowing',
+      (tester) async {
+        // A URL cannot wrap; it used to run 48px past the right edge.
+        await tester.pumpWidget(
+          wrap(
+            const ParagraphModeView(
+              words: [
+                'Other',
+                'formats:',
+                'www.example.org/ebooks/a-very-long-unbreakable-address/11',
+                'and',
+                'more',
+              ],
+              currentIndex: 2,
+              letterSpacing: 0,
+              wordSpacing: 0,
+              fontFamily: 'AtkinsonHyperlegible',
+              fontSize: 60,
+              wpm: 300,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        final box = tester.getRect(
+          find.byKey(const ValueKey('paragraph-word-highlight-2')),
+        );
+        final stage = tester.getRect(find.byType(ParagraphModeView));
+        expect(
+          box.right,
+          lessThanOrEqualTo(
+            stage.right - MaskedReadingParams.paragraph.pad + 0.5,
+          ),
+        );
+      },
+    );
+
     testWidgets('empty document does not crash', (tester) async {
       await tester.pumpWidget(
         wrap(
