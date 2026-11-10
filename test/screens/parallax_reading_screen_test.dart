@@ -10,9 +10,13 @@ import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/screens/parallax_reading_screen.dart';
+import 'package:runthru/services/device_capability.dart';
+import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/services/models.dart';
+import 'package:runthru/services/preprocessing_queue.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('ParallaxReadingScreen Drive source contract', () {
@@ -304,6 +308,83 @@ void main() {
       expect(tester.takeException(), isNull);
       // Let the title lookup's timeout and sync throttles finish.
       await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('leaving a library book releases its text without throwing', (
+      tester,
+    ) async {
+      // dispose() used to change PreprocessingQueue state while the tree was
+      // being torn down. Riverpod asserts on that, and the throw skipped the
+      // rest of dispose: system bars stayed hidden after leaving a book.
+      SharedPreferences.setMockInitialValues({});
+      final config = _FakeConfigNotifier(
+        const AppConfig(hasSeenReadingGoalOnboarding: true, defaultWpm: 600),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          configProvider.overrideWith(() => config),
+          deviceCapabilityProvider.overrideWithValue(
+            const DeviceCapability(
+              processorCount: 4,
+              maxWorkers: 2,
+              isMobile: false,
+            ),
+          ),
+          pdfListProvider.overrideWith((ref) async => const <PdfEntry>[]),
+        ],
+      );
+      const path = '/books/queued.pdf';
+      final queue = container.read(preprocessingQueueProvider.notifier);
+      queue.pauseBackground();
+      queue.debugSetEntry(
+        PdfEntry(
+          filePath: path,
+          fileName: 'queued.pdf',
+          status: PdfStatus.ready,
+          document: ExtractedDocument(
+            sentences: [
+              Sentence(words: [for (var i = 0; i < 40; i++) 'w$i']),
+            ],
+            pageBoundaries: const [
+              PageBoundary(
+                pageNumber: 0,
+                startSentenceIndex: 0,
+                startWordIndex: 0,
+              ),
+            ],
+            totalPages: 1,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: ParallaxReadingScreen(filePath: path)),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(
+        container.read(preprocessingQueueProvider)[path]!.document,
+        isNotNull,
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const SizedBox.shrink(),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pump();
+      expect(
+        container.read(preprocessingQueueProvider)[path]!.document,
+        isNull,
+      );
+
+      await tester.pump(const Duration(seconds: 10));
+      container.dispose();
     });
 
     testWidgets('speed chips highlight only an exact speed match', (

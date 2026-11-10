@@ -367,7 +367,21 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   @override
   void dispose() {
     _endAnalyticsSession();
-    _recordShelfProgress();
+    // Provider state must not change while the element tree is being torn
+    // down: Riverpod asserts on it, and the throw used to abort the rest of
+    // dispose() (system bars stayed hidden, the lifecycle observer leaked,
+    // the last position was not persisted). Snapshot what is needed now and
+    // write it once this frame is done.
+    final shelfWrite = _shelfProgressWrite();
+    final queue = _queue;
+    final filePath = widget.filePath;
+    scheduleMicrotask(() {
+      shelfWrite?.call();
+      // Drop the session's document from queue state — the text stays in
+      // PdfCache and is rehydrated by the next prioritize().
+      queue.releaseDocument(filePath);
+      queue.resumeBackground();
+    });
     unawaited(_flushInstapaperProgress());
     unawaited(_progressSync.dispose());
     _restartFlashTimer?.cancel();
@@ -377,10 +391,6 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _focusNode.dispose();
     _sweepEngine.dispose();
     _motionCtrl.dispose();
-    // Drop the session's document from queue state — the text stays in
-    // PdfCache and is rehydrated by the next prioritize().
-    _queue.releaseDocument(widget.filePath);
-    _queue.resumeBackground();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (_isDesktop && _isFullScreen) windowManager.setFullScreen(false);
     WidgetsBinding.instance.removeObserver(this);
@@ -439,20 +449,31 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   ///
   /// No-op for ephemeral clipboard sessions (Rule 28). Instapaper articles and
   /// local books are persisted so they surface on the library shelf.
-  void _recordShelfProgress() {
-    if (_isClipboard && !_isInstapaper) return;
+  void _recordShelfProgress() => _shelfProgressWrite()?.call();
+
+  /// The Continue Reading write for the current position, or null when there
+  /// is nothing to record. All values are captured now, so the returned
+  /// closure is safe to run after this state is disposed.
+  void Function()? _shelfProgressWrite() {
+    if (_isClipboard && !_isInstapaper) return null;
     final total = _allDocWords.isNotEmpty
         ? _allDocWords.length
         : _lastTimerState.totalWords;
-    if (total <= 0 || _lastGlobalIndex <= 0) return;
-    unawaited(
-      _shelfProgress.record(
-        contentId: widget.filePath,
-        source: _progressSource,
-        title: _shelfTitle,
-        wordIndex: _lastGlobalIndex,
+    if (total <= 0 || _lastGlobalIndex <= 0) return null;
+    final shelf = _shelfProgress;
+    final contentId = widget.filePath;
+    final source = _progressSource;
+    final title = _shelfTitle;
+    final wordIndex = _lastGlobalIndex;
+    final contentHash = _queue.contentHashOf(widget.filePath);
+    return () => unawaited(
+      shelf.record(
+        contentId: contentId,
+        source: source,
+        title: title,
+        wordIndex: wordIndex,
         totalWords: total,
-        contentHash: _queue.contentHashOf(widget.filePath),
+        contentHash: contentHash,
       ),
     );
   }
