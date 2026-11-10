@@ -206,4 +206,50 @@ void main() {
       expect(config.state.requireValue.focusModeEnabled, isTrue);
     });
   });
+
+  group('Settings pushed over the reader', () {
+    testWidgets('shows a back button that returns to the reader', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            configProvider.overrideWith(
+              () => FakeConfigNotifier(const AppConfig()),
+            ),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SettingsScreen(showBack: true),
+                      ),
+                    ),
+                    child: const Text('reader'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('reader'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Back to reading'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Back to reading'));
+      await tester.pumpAndSettle();
+      expect(find.text('reader'), findsOneWidget);
+      expect(find.byType(SettingsScreen), findsNothing);
+    });
+
+    testWidgets('tab Settings has no back button', (tester) async {
+      await tester.pumpWidget(_settingsHarness(const AppConfig()));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Back to reading'), findsNothing);
+    });
+  });
 }

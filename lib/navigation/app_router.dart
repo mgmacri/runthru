@@ -13,6 +13,7 @@ import 'package:runthru/screens/parallax_reading_screen.dart';
 import 'package:runthru/screens/privacy_policy_screen.dart';
 import 'package:runthru/screens/range_picker_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
+import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/screens/settings_sources_screen.dart';
 import 'package:runthru/services/purchase_service.dart';
 import 'package:runthru/widgets/runthru_shell_widgets.dart';
@@ -80,6 +81,16 @@ final appRouter = GoRouter(
     GoRoute(path: '/sources', redirect: (_, __) => '/?tab=1'),
     GoRoute(path: '/analytics', redirect: (_, __) => '/?tab=2'),
     GoRoute(path: '/settings', redirect: (_, __) => '/?tab=3'),
+    // Settings pushed over the reader ("Aa"). Pushing '/settings' instead
+    // redirected to '/?tab=3' and stacked a second home shell on the reader,
+    // so Back from the next book landed on Settings.
+    GoRoute(
+      path: '/reader-settings',
+      pageBuilder: (context, state) => MaterialPage(
+        key: state.pageKey,
+        child: const SettingsScreen(showBack: true),
+      ),
+    ),
     GoRoute(
       path: '/settings/sources',
       pageBuilder: (context, state) => MaterialPage(

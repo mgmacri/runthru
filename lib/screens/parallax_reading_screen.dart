@@ -1949,7 +1949,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           title: _documentTitle,
                                           subtitle: _documentSubtitle,
                                           onFont: () =>
-                                              context.push('/settings'),
+                                              context.push('/reader-settings'),
                                           onFullScreen: _isDesktop
                                               ? _toggleFullScreen
                                               : null,

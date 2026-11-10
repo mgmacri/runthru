@@ -22,7 +22,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
     super.key,
     this.focusGoogleDriveBrowserSetting = false,
     this.focusRequestId,
+    this.showBack = false,
   });
+
+  /// Shows a back button in the header. True when Settings is pushed over
+  /// the reader (the "Aa" button) rather than shown as a home-shell tab.
+  final bool showBack;
 
   /// Scrolls directly to the Google Drive browser setting after build.
   final bool focusGoogleDriveBrowserSetting;
@@ -158,9 +163,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
-            const RunThruScreenHeader(
+            RunThruScreenHeader(
               title: 'Settings',
               subtitle: 'Reading comfort and sources',
+              leading: widget.showBack
+                  ? RunThruHeaderIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      tooltip: 'Back to reading',
+                      onPressed: () => Navigator.of(context).pop(),
+                    )
+                  : null,
             ),
             // ── Reading Goal ──
             NeumorphicCard(
