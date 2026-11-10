@@ -2440,6 +2440,13 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                           child: PauseFog3D(
                                             isPaused: showPaused,
                                             wpm: wpm,
+                                            // The text modes keep their
+                                            // passage readable when paused.
+                                            strength:
+                                                readingMode ==
+                                                    ReadingMode.singleWord
+                                                ? 1.0
+                                                : 0.22,
                                             focusModeEnabled:
                                                 config.focusModeEnabled,
                                             // Landscape is too short for the

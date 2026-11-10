@@ -26,10 +26,17 @@ class PauseFog3D extends StatefulWidget {
     this.onRecalibrate,
     this.focusModeEnabled = false,
     this.onFocusModeChanged,
+    this.strength = 1.0,
   });
 
   final bool isPaused;
   final int wpm;
+
+  /// How much of the veil and blind is laid over the stage (0..1). Word
+  /// mode uses the full veil: the paused word steps back and the sentence
+  /// panel takes over. The text modes use a light one, so the passage the
+  /// reader paused on stays readable.
+  final double strength;
 
   /// Optional shared parallax position notifier (x/y in −1..1).
   ///
@@ -236,6 +243,7 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
             if (fadeVal == 0) return const SizedBox.shrink();
 
             final riseVal = _rise.value;
+            final strength = widget.strength.clamp(0.0, 1.0);
 
             return Stack(
               fit: StackFit.expand,
@@ -244,7 +252,7 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
                 CustomPaint(
                   painter: _VeilPainter(
                     color: RunThruTokens.stageDarkShadow,
-                    opacity: fadeVal * 0.45,
+                    opacity: fadeVal * 0.45 * strength,
                     parallaxNotifier: parallax,
                   ),
                   size: Size.infinite,
@@ -255,7 +263,7 @@ class _PauseFog3DState extends State<PauseFog3D> with TickerProviderStateMixin {
                   CustomPaint(
                     painter: _WavyRisePainter(
                       riseProgress: riseVal,
-                      fadeProgress: fadeVal,
+                      fadeProgress: fadeVal * strength,
                       flowPhase: _flowController.value,
                       parallaxNotifier: parallax,
                     ),
