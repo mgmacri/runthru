@@ -24,7 +24,7 @@ import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
 import 'package:runthru/widgets/runthru_shell_widgets.dart';
 
 /// Content-type filter for the unified library.
-enum _LibraryFilter { all, books, articles, docs }
+enum _LibraryFilter { all, books, articles }
 
 const int _kTilesPerPage = 4;
 
@@ -263,20 +263,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             if (_filter == _LibraryFilter.all ||
                 _filter == _LibraryFilter.articles) ...[
               _ArticlesSliverList(query: normalizedSearchQuery),
-            ],
-
-            // ── Docs section ──
-            if (_filter == _LibraryFilter.all ||
-                _filter == _LibraryFilter.docs) ...[
-              const SliverToBoxAdapter(
-                child: _LibrarySection(
-                  title: 'Docs',
-                  countLabel: '0 docs',
-                  dotColor: RunThruTokens.shellInkSoft,
-                  itemCount: 0,
-                  empty: _EmptyDocsState(),
-                ),
-              ),
             ],
 
             const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
@@ -769,7 +755,6 @@ class _FilterChipRow extends StatelessWidget {
     _LibraryFilter.all: 'All',
     _LibraryFilter.books: 'Books',
     _LibraryFilter.articles: 'Articles',
-    _LibraryFilter.docs: 'Docs',
   };
 
   @override
@@ -1126,23 +1111,6 @@ class _ArticlesAuthErrorTile extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyDocsState extends StatelessWidget {
-  const _EmptyDocsState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-      child: Text(
-        'No docs yet.',
-        style: RunThruTypography.caption.copyWith(
-          color: RunThruTokens.shellTextSecondary,
         ),
       ),
     );
