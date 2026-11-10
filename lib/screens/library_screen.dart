@@ -105,8 +105,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               (driveAvailable || !r.contentId.startsWith('drive://')),
         )
         .toList();
-    final authState = ref.watch(instapaperAuthProvider);
-    final sourceCount = 1 + (authState is InstapaperAuthAuthenticated ? 1 : 0);
+    // Header counts what is actually here. (It used to claim "Synced just
+    // now · N sources" with a count that disagreed with the Sources tab.)
+    final titleCount = pdfListAsync.valueOrNull?.length ?? 0;
     final normalizedSearchQuery = _searchQuery.trim().toLowerCase();
 
     // Navigate to reader on successful Instapaper article import.
@@ -179,7 +180,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             SliverToBoxAdapter(
               child: _LibraryHeader(
                 failedCount: failedCount,
-                sourceCount: sourceCount,
+                titleCount: titleCount,
                 isSearchOpen: _isSearchOpen,
                 searchQuery: _searchQuery,
                 onSearchChanged: (value) =>
@@ -439,7 +440,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 class _LibraryHeader extends ConsumerWidget {
   const _LibraryHeader({
     required this.failedCount,
-    required this.sourceCount,
+    required this.titleCount,
     required this.isSearchOpen,
     required this.searchQuery,
     required this.onSearchChanged,
@@ -447,7 +448,7 @@ class _LibraryHeader extends ConsumerWidget {
   });
 
   final int failedCount;
-  final int sourceCount;
+  final int titleCount;
   final bool isSearchOpen;
   final String searchQuery;
   final ValueChanged<String> onSearchChanged;
@@ -462,8 +463,9 @@ class _LibraryHeader extends ConsumerWidget {
         children: [
           RunThruScreenHeader(
             title: 'Library',
-            subtitle:
-                'Synced just now · $sourceCount ${sourceCount == 1 ? 'source' : 'sources'}',
+            subtitle: titleCount == 0
+                ? 'Add something to read'
+                : '$titleCount ${titleCount == 1 ? 'title' : 'titles'} on this device',
             actions: [
               if (failedCount > 0) _ErrorBadge(count: failedCount),
               RunThruHeaderIconButton(
@@ -1176,7 +1178,7 @@ class _EmptyBooksState extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Text(
-        message ?? 'No books yet. Import a PDF or EPUB from the + menu.',
+        message ?? 'No books yet. Add a PDF or EPUB from Sources.',
         style: RunThruTypography.caption.copyWith(
           color: RunThruTokens.shellTextSecondary,
         ),
@@ -1198,7 +1200,7 @@ class _EmptyArticlesState extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
         child: Text(
           message ??
-              'No articles yet. Connect Instapaper or paste a URL from the + menu.',
+              'No articles yet. Connect Instapaper in Sources, or share a link to RunThru.',
           style: RunThruTypography.caption.copyWith(
             color: RunThruTokens.shellTextSecondary,
           ),
