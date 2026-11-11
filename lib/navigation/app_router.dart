@@ -158,6 +158,8 @@ final appRouter = GoRouter(
         final bookmarkId = extra?['bookmarkId'] as int?;
         final initialProgress =
             (extra?['initialProgress'] as num?)?.toDouble() ?? 0.0;
+        final progressTimestamp =
+            (extra?['progressTimestamp'] as num?)?.toInt() ?? 0;
         // Use the stable Instapaper bookmarkId (not the title) so the local
         // bookmark key survives title changes from the API and matches across
         // reopens. Falls back to title only if id is missing (defensive).
@@ -172,6 +174,7 @@ final appRouter = GoRouter(
               contentSource: 'instapaper',
               instapaperBookmarkId: bookmarkId,
               instapaperInitialProgress: initialProgress,
+              instapaperProgressTimestamp: progressTimestamp,
               clipboardDocument: ClipboardDocument(
                 title: title,
                 fullText: '',

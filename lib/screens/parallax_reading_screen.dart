@@ -80,6 +80,49 @@ int? bestImportedResumeIndex({
   return bookmark?.wordIndex;
 }
 
+/// Where to open an Instapaper article of [totalWords] words.
+///
+/// This device's saved word is the place, unless the article has been read
+/// further on another device since: Instapaper's position is taken when it
+/// is both newer than the bookmark and ahead of it. A position that is
+/// behind never moves the reader back (it may be a moment's look on another
+/// device while this one had not synced yet).
+///
+/// [savedTotalWords] is the article's length when the bookmark was saved;
+/// if the text has a different length now, the saved word is scaled.
+@visibleForTesting
+int instapaperResumeIndex({
+  required int totalWords,
+  BookmarkData? bookmark,
+  int savedTotalWords = 0,
+  double remoteProgress = 0,
+  int remoteTimestampSeconds = 0,
+}) {
+  if (totalWords <= 0) return 0;
+  final last = totalWords - 1;
+
+  var local = bookmark?.wordIndex ?? 0;
+  if (local > 0 && savedTotalWords > 0 && savedTotalWords != totalWords) {
+    local = (local * totalWords / savedTotalWords).round();
+  }
+  local = local.clamp(0, last);
+
+  final remote = remoteProgress > 0
+      ? (remoteProgress * totalWords).round().clamp(0, last)
+      : 0;
+  if (local <= 0) return remote;
+
+  // Instapaper keeps four decimals of progress: a position this device
+  // sent can come back a word or two off.
+  final slack = (totalWords * 0.0001).ceil().clamp(2, totalWords);
+  final localAt = bookmark?.timestamp;
+  final remoteIsNewer =
+      remoteTimestampSeconds > 0 &&
+      (localAt == null ||
+          remoteTimestampSeconds > localAt.millisecondsSinceEpoch ~/ 1000 + 60);
+  return remoteIsNewer && remote > local + slack ? remote : local;
+}
+
 class ParallaxReadingScreen extends ConsumerStatefulWidget {
   const ParallaxReadingScreen({
     super.key,
@@ -88,6 +131,7 @@ class ParallaxReadingScreen extends ConsumerStatefulWidget {
     this.contentSource = 'local',
     this.instapaperBookmarkId,
     this.instapaperInitialProgress = 0.0,
+    this.instapaperProgressTimestamp = 0,
   });
 
   /// Key of the "Skipped the front matter" note shown over the text when
@@ -113,6 +157,10 @@ class ParallaxReadingScreen extends ConsumerStatefulWidget {
   /// Instapaper’s stored progress (0.0–1.0) at the time the article was opened.
   /// Used to resume from the correct position and prevent regressing progress.
   final double instapaperInitialProgress;
+
+  /// When [instapaperInitialProgress] was recorded (Unix seconds; 0 when
+  /// unknown). See [instapaperResumeIndex].
+  final int instapaperProgressTimestamp;
 
   @override
   ConsumerState<ParallaxReadingScreen> createState() =>
@@ -314,7 +362,16 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// Book mode: the reader turned past the last page.
   void _onBookEnd() {
-    if (_interlude != null || !_finishScreenApplies) return;
+    if (_interlude != null) return;
+    // Finished, whether or not the text is long enough for the finish
+    // screen. (A short article or book used to stay in Continue Reading,
+    // and the article unarchived, when finished in Book mode.)
+    if (_isInstapaper) {
+      _finishInstapaperArticle(turnedPastEnd: true);
+    } else if (_readingRange == null) {
+      _markShelfFinished();
+    }
+    if (!_finishScreenApplies) return;
     _showBookComplete();
   }
 
@@ -552,9 +609,25 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _analyticsService.saveSession(session);
   }
 
+  /// Where this sitting opened the Instapaper article, and whether the
+  /// reader has moved from there since.
+  int _instapaperOpenedAt = -1;
+  bool _instapaperMoved = false;
+
   /// Records current reading position for throttled Instapaper progress sync.
   void _recordInstapaperProgress(WordTimerState timerState, int globalIndex) {
     if (widget.instapaperBookmarkId == null) return;
+
+    // Opening an article and leaving it where it was is not reading. Sending
+    // that position again would stamp it with the present time, and
+    // Instapaper would then discard a further position still waiting to
+    // sync from another device.
+    if (!_instapaperMoved) {
+      if (_instapaperOpenedAt < 0 || globalIndex == _instapaperOpenedAt) return;
+      _instapaperMoved = true;
+    }
+    // Read to the end and not moved since: the finish already said so.
+    if (_finishedAt >= 0 && globalIndex == _finishedAt) return;
 
     final totalWords = _allDocWords.isNotEmpty
         ? _allDocWords.length
@@ -686,13 +759,29 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _lastGlobalIndex = _sliceOffset + localIndex;
   }
 
-  /// Archive the Instapaper bookmark when article is fully read.
-  /// Optimistically removes from the local list and enqueues durably.
-  void _archiveInstapaper() {
+  /// The Instapaper article was read to its end: Instapaper is told (100%,
+  /// then archived, durably queued), and the article leaves the Articles
+  /// list and Continue Reading. The same in every reading mode.
+  ///
+  /// [turnedPastEnd] is Book mode's last page turn, which finishes an
+  /// article on its own. Otherwise the end has to have been reached by
+  /// reading in this sitting: an article that opens on its last word
+  /// (finished on another device and kept there unarchived) is left alone.
+  void _finishInstapaperArticle({bool turnedPastEnd = false}) {
+    if (!_isInstapaper) return;
+    if (!turnedPastEnd && !_instapaperMoved) return;
+    // Already finished here, and not moved since.
+    if (_finishedAt >= 0 && _finishedAt == _lastGlobalIndex) return;
+    _markShelfFinished();
     final bookmarkId = widget.instapaperBookmarkId;
     if (bookmarkId == null) return;
-    appLog('instapaper', 'queue archive bookmarkId=$bookmarkId');
-    _instapaperBookmarks.archive(bookmarkId: bookmarkId);
+    // The last position recorded on the way here (a word short of the end)
+    // must not go out after the finish does.
+    _progressSync.discardPending(contentId: widget.filePath);
+    appLog('instapaper', 'queue finish bookmarkId=$bookmarkId');
+    unawaited(
+      _instapaperBookmarks.archive(bookmarkId: bookmarkId, finished: true),
+    );
   }
 
   @override
@@ -815,23 +904,34 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
     final config = ref.read(configProvider).valueOrNull ?? const AppConfig();
 
-    // Resume preference for imported sources: local bookmark (most recent
-    // on-device position) takes priority. Instapaper can then fall back to the
-    // API's coarse 0..1 progress when no local bookmark exists yet.
+    // Where to open. An Instapaper article: this device's saved word, or
+    // Instapaper's position when it was read further elsewhere since (see
+    // [instapaperResumeIndex]). A Drive document: the newer of its two
+    // local records.
     final initialProgress = widget.instapaperInitialProgress;
     int startIndex = 0;
     if (_words.isNotEmpty) {
-      final localProgressIndex = _bestImportedResumeIndex();
-      if (localProgressIndex != null && localProgressIndex > 0) {
-        startIndex = localProgressIndex.clamp(0, _words.length - 1);
-      } else if (initialProgress > 0) {
-        startIndex = (initialProgress * _words.length).round().clamp(
-          0,
-          _words.length - 1,
+      if (_isInstapaper) {
+        startIndex = instapaperResumeIndex(
+          totalWords: _words.length,
+          bookmark: ref
+              .read(bookmarkStoreProvider.notifier)
+              .resolve(widget.filePath),
+          savedTotalWords:
+              _shelfProgress.getRecord(widget.filePath)?.totalWords ?? 0,
+          remoteProgress: initialProgress,
+          remoteTimestampSeconds: widget.instapaperProgressTimestamp,
         );
+      } else {
+        final localProgressIndex = _bestImportedResumeIndex();
+        if (localProgressIndex != null && localProgressIndex > 0) {
+          startIndex = localProgressIndex.clamp(0, _words.length - 1);
+        }
       }
       startIndex = _firstOpenStart(startIndex);
     }
+    _instapaperOpenedAt = startIndex;
+    _instapaperMoved = false;
 
     _wordNotifier.value = _words[startIndex];
     final timer = ref.read(wordTimerProvider.notifier);
@@ -1392,7 +1492,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _bookEndTimer?.cancel();
     final timer = ref.read(wordTimerProvider.notifier);
     if (ref.read(wordTimerProvider).isPlaying) timer.pause();
-    if (!_isInstapaper) _markShelfFinished();
+    if (_isInstapaper) {
+      _finishInstapaperArticle();
+    } else {
+      _markShelfFinished();
+    }
     final wpm = ref.read(wordTimerProvider).wpm;
     final structure = _structure;
     final titledChapters = structure.chapters.where((s) => s.isTitled).length;
@@ -2182,11 +2286,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           unawaited(_flushInstapaperProgress());
         }
 
-        // Archive Instapaper bookmark when the full article is finished.
+        // The last word of an Instapaper article: finished.
         if (next.isFinished && _isInstapaper) {
-          unawaited(_flushInstapaperProgress());
-          _archiveInstapaper();
-          _markShelfFinished();
+          _finishInstapaperArticle();
         } else if (next.isFinished && _readingRange == null) {
           // Local book read to the end — drop it from Continue Reading.
           _markShelfFinished();

@@ -359,11 +359,17 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
 
   /// Optimistically remove the bookmark from the local list and enqueue
   /// an archive op for Instapaper.
-  Future<void> archive({required int bookmarkId}) async {
+  ///
+  /// [finished] says the article was read to its end: Instapaper is then
+  /// told so (progress 100%) before the article is archived.
+  Future<void> archive({required int bookmarkId, bool finished = false}) async {
     _applyOptimisticArchive(bookmarkId);
     await ref
         .read(instapaperSyncQueueProvider)
-        .enqueueArchive(bookmarkId: bookmarkId);
+        .enqueueArchive(
+          bookmarkId: bookmarkId,
+          finalProgress: finished ? 1.0 : null,
+        );
   }
 
   void _applyOptimisticProgress({

@@ -51,7 +51,7 @@ final instapaperArticleImportProvider =
 
 typedef _$InstapaperArticleImport = AutoDisposeNotifier<ArticleImportState>;
 String _$instapaperBookmarksHash() =>
-    r'8be7bb25d9ba86fe19c9cefa991ea18c0dbe9cbd';
+    r'6ea9f2be0f6cae73866efeb9c4a4ccab4abe20eb';
 
 /// Fetches the user's Instapaper bookmarks when authenticated.
 ///

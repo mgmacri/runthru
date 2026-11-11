@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/features/content/services/reading_progress_sync.dart';
@@ -298,6 +300,41 @@ void main() {
 
       expect(localWrites, equals([99]));
       expect(remoteWrites, equals([1.0]));
+    });
+  });
+
+  test('a discarded pending position is never written', () {
+    fakeAsync((async) {
+      final localWrites = <int>[];
+      final remoteWrites = <double>[];
+      final sync = ReadingProgressSync(
+        writeLocalProgress: ({required contentId, required wordIndex}) async {
+          localWrites.add(wordIndex);
+        },
+        remoteWriter: InstapaperReadingProgressRemoteWriter(
+          bookmarkId: 42,
+          writeProgress: ({required bookmarkId, required progress}) async {
+            remoteWrites.add(progress);
+          },
+        ),
+        now: () => DateTime(2026, 1, 1).add(async.elapsed),
+      );
+
+      // The first position is written at once; the next waits its turn.
+      sync.record(snapshot(wordIndex: 10, progress: 0.10));
+      async.flushMicrotasks();
+      sync.record(snapshot(wordIndex: 99, progress: 0.99));
+      async.flushMicrotasks();
+      expect(remoteWrites, [0.10]);
+
+      // The article was finished: 0.99 must not follow the finish.
+      sync.discardPending(contentId: 'instapaper://42');
+      async.elapse(const Duration(seconds: 30));
+      unawaited(sync.flush());
+      async.flushMicrotasks();
+
+      expect(localWrites, [10]);
+      expect(remoteWrites, [0.10]);
     });
   });
 }

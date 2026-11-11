@@ -366,6 +366,36 @@ void main() {
       },
     );
 
+    test(
+      'a finished article sends its final position, then the archive',
+      () async {
+        final queue = newQueue();
+        await queue.enqueueProgress(
+          bookmarkId: 1,
+          progress: 0.6,
+          timestampSeconds: 10,
+        );
+        await queue.enqueueArchive(
+          bookmarkId: 1,
+          finalProgress: 1,
+          timestampSeconds: 50,
+        );
+        // A position recorded a word before the end arrives late: moot.
+        await queue.enqueueProgress(
+          bookmarkId: 1,
+          progress: 0.99,
+          timestampSeconds: 51,
+        );
+
+        expect(await pending(queue), ['progress:1:1.00:50', 'archive:1']);
+
+        resolved = client;
+        await queue.drain();
+        expect(client.calls, ['progress:1:1.00:50', 'archive:1']);
+        expect(await pending(queue), isEmpty);
+      },
+    );
+
     test('progress is kept inside 0 to 1', () async {
       final queue = newQueue();
       await queue.enqueueProgress(

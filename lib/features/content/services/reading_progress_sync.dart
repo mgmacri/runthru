@@ -153,6 +153,14 @@ class ReadingProgressSync {
     }
   }
 
+  /// Forget a position recorded for [contentId] that has not been written
+  /// yet. For when something final has been said about the item since (it
+  /// was finished): the older position must not be written after it.
+  void discardPending({required String contentId}) {
+    _timers.remove(contentId)?.cancel();
+    _pending.remove(contentId);
+  }
+
   /// Cancel scheduled background writes.
   void cancelTimers() {
     for (final timer in _timers.values) {

@@ -230,32 +230,52 @@ class InstapaperSyncQueue {
     final ts =
         timestampSeconds ?? (DateTime.now().millisecondsSinceEpoch ~/ 1000);
     await _mutate((ops) {
-      // Drop any existing progress op for this bookmark — keep latest only.
-      ops.removeWhere((o) => o is ProgressOp && o.bookmarkId == bookmarkId);
-      // If an archive is already queued, the progress is moot.
+      // If an archive is already queued, the progress is moot. What is
+      // queued for the bookmark stays as it is: with the archive may sit
+      // the final position of an article read to its end.
       final archived = ops.any(
         (o) => o is ArchiveOp && o.bookmarkId == bookmarkId,
       );
-      if (!archived) {
-        ops.add(
-          ProgressOp(
-            bookmarkId: bookmarkId,
-            progress: progress.clamp(0.0, 1.0),
-            timestamp: ts,
-          ),
-        );
-      }
+      if (archived) return;
+      // Drop any existing progress op for this bookmark — keep latest only.
+      ops.removeWhere((o) => o is ProgressOp && o.bookmarkId == bookmarkId);
+      ops.add(
+        ProgressOp(
+          bookmarkId: bookmarkId,
+          progress: progress.clamp(0.0, 1.0),
+          timestamp: ts,
+        ),
+      );
     });
     unawaited(drain());
   }
 
   /// Save an archive op, then send it in the background.
   ///
+  /// With [finalProgress] (the article was read to the end) that position
+  /// is sent first, so the archived article does not stay at whatever
+  /// partial percentage was last synced.
+  ///
   /// Completes when the op is saved.
-  Future<void> enqueueArchive({required int bookmarkId}) async {
+  Future<void> enqueueArchive({
+    required int bookmarkId,
+    double? finalProgress,
+    int? timestampSeconds,
+  }) async {
+    final ts =
+        timestampSeconds ?? (DateTime.now().millisecondsSinceEpoch ~/ 1000);
     await _mutate((ops) {
       // An archive supersedes any pending progress for this bookmark.
       ops.removeWhere((o) => o.bookmarkId == bookmarkId);
+      if (finalProgress != null) {
+        ops.add(
+          ProgressOp(
+            bookmarkId: bookmarkId,
+            progress: finalProgress.clamp(0.0, 1.0),
+            timestamp: ts,
+          ),
+        );
+      }
       ops.add(ArchiveOp(bookmarkId: bookmarkId));
     });
     unawaited(drain());

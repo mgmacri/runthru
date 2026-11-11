@@ -448,6 +448,45 @@ void main() {
       expect(pending.single, isA<ArchiveOp>());
     });
 
+    test('finishing an article queues 100% and then the archive', () async {
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig)
+        ..setTokens(token: 'tok', tokenSecret: 'sec');
+      final sent = <String>[];
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((invocation) async {
+        final uri = invocation.positionalArguments.first as Uri;
+        final body = invocation.namedArguments[#body] as Map<String, String>;
+        if (uri.path == '/api/1/bookmarks/list') {
+          return http.Response(
+            jsonEncode([
+              {'type': 'bookmark', 'bookmark_id': 1001, 'title': 'A'},
+            ]),
+            200,
+          );
+        }
+        sent.add(
+          '${uri.pathSegments.last}:${body['bookmark_id']}'
+          '${body['progress'] == null ? '' : ':${body['progress']}'}',
+        );
+        return http.Response('[]', 200);
+      });
+
+      final container = signedIn(client);
+      await container.read(instapaperBookmarksProvider.future);
+      await container
+          .read(instapaperBookmarksProvider.notifier)
+          .archive(bookmarkId: 1001, finished: true);
+      await container.read(instapaperSyncQueueProvider).drain();
+
+      expect(sent, ['update_read_progress:1001:1.0000', 'archive:1001']);
+      expect(container.read(instapaperBookmarksProvider).value, isEmpty);
+    });
+
     test('a position that could not be sent offline is kept', () async {
       final client = InstapaperClient(httpClient: mockHttp, config: testConfig)
         ..setTokens(token: 'tok', tokenSecret: 'sec');
