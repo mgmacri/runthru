@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
@@ -262,6 +264,30 @@ void main() {
       final config = container.read(configProvider).requireValue;
       expect(config.parallaxIntensity, goal.parallaxIntensity);
       expect(config.defaultWpm, goal.wpm);
+      expect(config.pacingConfig, goal.pacing);
+      expect(config.readingGoalInEffect, goal.preset);
+    });
+
+    // B-54: the goal a free reader chooses is saved with its speed and word
+    // pacing, stays flat, and still shows as chosen after a restart.
+    test('free users keep the goal they chose, flat', () async {
+      final container = await containerWith({});
+      final goal = readingGoalConfigs.firstWhere(
+        (g) => g.preset == ReadingGoalPreset.quickScan,
+      );
+      await container
+          .read(configProvider.notifier)
+          .applyReadingGoalPreset(goal);
+
+      final prefs = await SharedPreferences.getInstance();
+      final restored = AppConfig.fromJson(
+        jsonDecode(prefs.getString('runthru_config')!) as Map<String, Object?>,
+      );
+      expect(restored.defaultWpm, goal.wpm);
+      expect(restored.pacingConfig, goal.pacing);
+      expect(restored.parallaxIntensity, ParallaxIntensity.none);
+      expect(restored.readingGoalInEffect, ReadingGoalPreset.quickScan);
+      expect(restored.readingGoalCustomized, isFalse);
     });
 
     test('the entitlement persists under premiumUnlocked', () async {

@@ -184,16 +184,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Text('Reading Goal', style: RunThruTypography.title),
                   const SizedBox(height: 4),
                   Text(
-                    'Choose a preset to adjust speed and room settings.',
+                    // The room is part of RunThru Unlock; presets only set it
+                    // for owners.
+                    config.hasPremium
+                        ? 'Choose a preset to set reading speed, word pacing '
+                              'and the 3D room.'
+                        : 'Choose a preset to set reading speed and word '
+                              'pacing.',
                     style: RunThruTypography.caption.copyWith(
                       color: RunThruTokens.shellTextSecondary,
                     ),
                   ),
                   const SizedBox(height: 12),
                   _ReadingGoalSelector(
-                    selected: config.readingGoalPreset,
-                    currentWpm: config.defaultWpm,
-                    currentParallax: config.parallaxIntensity,
+                    inEffect: config.readingGoalInEffect,
+                    customized: config.readingGoalCustomized,
                     onChanged: notifier.applyReadingGoalPreset,
                   ),
                 ],
@@ -838,18 +843,24 @@ class _ParallaxIntensitySelectorState
   }
 }
 
-/// Segmented selector for reading goal presets (3 presets + Custom indicator).
+/// Segmented selector for reading goal presets: the 3 goals, then Custom.
+///
+/// The goal in effect is pressed in. Custom is a status, not a button: it
+/// lights up by itself once a setting the chosen goal sets is changed by
+/// hand, and nothing is lit before a goal has been chosen.
 class _ReadingGoalSelector extends StatefulWidget {
   const _ReadingGoalSelector({
-    required this.selected,
-    required this.currentWpm,
-    required this.currentParallax,
+    required this.inEffect,
+    required this.customized,
     required this.onChanged,
   });
 
-  final ReadingGoalPreset? selected;
-  final int currentWpm;
-  final ParallaxIntensity currentParallax;
+  /// The chosen goal while every setting it sets is still its own.
+  final ReadingGoalPreset? inEffect;
+
+  /// A goal was chosen and one of its settings has been changed since.
+  final bool customized;
+
   final void Function(ReadingGoalConfig) onChanged;
 
   @override
@@ -860,38 +871,35 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
   int _focusedIndex = 0;
   final FocusNode _focusNode = FocusNode();
 
-  /// Whether user has manually changed WPM/parallax away from any preset.
-  bool get _isCustom {
-    if (widget.selected == null) return true;
-    final match = readingGoalConfigs.where(
-      (c) =>
-          c.preset == widget.selected &&
-          c.wpm == widget.currentWpm &&
-          c.parallaxIntensity == widget.currentParallax,
+  /// Keyboard focus starts on the goal in effect (the first goal if none).
+  int get _inEffectIndex {
+    final index = readingGoalConfigs.indexWhere(
+      (c) => c.preset == widget.inEffect,
     );
-    return match.isEmpty;
+    return index < 0 ? 0 : index;
   }
-
-  /// 3 presets + Custom = 4 segments.
-  static const _customIndex = 3;
-  int get _segmentCount => readingGoalConfigs.length + 1;
 
   @override
   void initState() {
     super.initState();
-    if (_isCustom) {
-      _focusedIndex = _customIndex;
-    } else {
-      _focusedIndex = readingGoalConfigs.indexWhere(
-        (c) => c.preset == widget.selected,
-      );
-      if (_focusedIndex < 0) _focusedIndex = _customIndex;
+    _focusedIndex = _inEffectIndex;
+  }
+
+  @override
+  void didUpdateWidget(_ReadingGoalSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.inEffect != null && widget.inEffect != oldWidget.inEffect) {
+      _focusedIndex = _inEffectIndex;
     }
   }
 
+  /// Moves between the goals only: Custom cannot be chosen.
   void _moveFocus(int delta) {
     setState(() {
-      _focusedIndex = (_focusedIndex + delta).clamp(0, _segmentCount - 1);
+      _focusedIndex = (_focusedIndex + delta).clamp(
+        0,
+        readingGoalConfigs.length - 1,
+      );
     });
   }
 
@@ -905,9 +913,7 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
       return KeyEventResult.handled;
     } else if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.space) {
-      if (_focusedIndex < readingGoalConfigs.length) {
-        widget.onChanged(readingGoalConfigs[_focusedIndex]);
-      }
+      widget.onChanged(readingGoalConfigs[_focusedIndex]);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -921,86 +927,118 @@ class _ReadingGoalSelectorState extends State<_ReadingGoalSelector> {
 
   @override
   Widget build(BuildContext context) {
-    final isCustom = _isCustom;
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _handleKey,
       child: Row(
-        children: List.generate(_segmentCount, (index) {
-          final bool isSelected;
-          final String label;
-          final String semanticsLabel;
-          final String hint;
-          final VoidCallback? onTap;
+        children: [
+          for (final goal in readingGoalConfigs)
+            _ReadingGoalSegment(
+              // Short labels for compact segments
+              label: switch (goal.preset) {
+                ReadingGoalPreset.deepRead => 'Deep',
+                ReadingGoalPreset.comfortable => 'Comfort',
+                ReadingGoalPreset.quickScan => 'Quick',
+              },
+              semanticsLabel: goal.name,
+              hint: goal.description,
+              selected: goal.preset == widget.inEffect,
+              onTap: () => widget.onChanged(goal),
+            ),
+          _ReadingGoalSegment(
+            label: 'Custom',
+            semanticsLabel: 'Custom',
+            hint: 'Lights up when you change a setting after choosing a goal',
+            selected: widget.customized,
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-          if (index < readingGoalConfigs.length) {
-            final goal = readingGoalConfigs[index];
-            isSelected = !isCustom && goal.preset == widget.selected;
-            // Short labels for compact segments
-            label = switch (goal.preset) {
-              ReadingGoalPreset.deepRead => 'Deep',
-              ReadingGoalPreset.comfortable => 'Comfort',
-              ReadingGoalPreset.quickScan => 'Quick',
-            };
-            semanticsLabel = goal.name;
-            hint = goal.description;
-            onTap = () => widget.onChanged(goal);
-          } else {
-            // Custom segment (read-only indicator)
-            isSelected = isCustom;
-            label = 'Custom';
-            semanticsLabel = 'Custom';
-            hint = 'Manual WPM or room settings';
-            onTap = null;
-          }
+/// One segment of [_ReadingGoalSelector]: raised, or pressed in while it is
+/// selected. Without [onTap] (Custom) it is a status and is drawn flat
+/// while off, so it never looks like a button that does nothing.
+class _ReadingGoalSegment extends StatelessWidget {
+  const _ReadingGoalSegment({
+    required this.label,
+    required this.semanticsLabel,
+    required this.hint,
+    required this.selected,
+    this.onTap,
+  });
 
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Semantics(
-                label: semanticsLabel,
-                hint: hint,
-                selected: isSelected,
-                inMutuallyExclusiveGroup: true,
-                child: GestureDetector(
-                  onTap: onTap,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: isSelected
-                        ? RunThruDecorations.insetDecoration(
-                            RunThruSurface.shell,
-                            size: RunThruShadowSize.small,
-                            borderRadius: 10,
-                          )
-                        : RunThruDecorations.raisedDecoration(
-                            RunThruSurface.shell,
-                            size: RunThruShadowSize.small,
-                            borderRadius: 10,
-                          ),
-                    alignment: Alignment.center,
-                    child: ExcludeSemantics(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          style: RunThruTypography.caption.copyWith(
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                            color: isSelected
-                                ? RunThruTokens.shellAccent
-                                : RunThruTokens.shellTextSecondary,
-                          ),
-                        ),
-                      ),
+  final String label;
+  final String semanticsLabel;
+  final String hint;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final BoxDecoration decoration;
+    if (selected) {
+      decoration = RunThruDecorations.insetDecoration(
+        RunThruSurface.shell,
+        size: RunThruShadowSize.small,
+        borderRadius: 10,
+      );
+    } else if (onTap != null) {
+      decoration = RunThruDecorations.raisedDecoration(
+        RunThruSurface.shell,
+        size: RunThruShadowSize.small,
+        borderRadius: 10,
+      );
+    } else {
+      decoration = BoxDecoration(
+        color: RunThruTokens.shellBase,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: RunThruTokens.shellDivider),
+      );
+    }
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Semantics(
+          label: semanticsLabel,
+          hint: hint,
+          button: onTap != null,
+          selected: selected,
+          inMutuallyExclusiveGroup: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: isReducedMotion(context)
+                  ? Duration.zero
+                  : RunThruAnimations.cardPressDuration,
+              curve: RunThruAnimations.cardPressCurve,
+              constraints: const BoxConstraints(
+                minHeight: RunThruA11y.minTapTarget,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              alignment: Alignment.center,
+              decoration: decoration,
+              child: ExcludeSemantics(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: RunThruTypography.caption.copyWith(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                      color: selected
+                          ? RunThruTokens.shellAccent
+                          : RunThruTokens.shellTextSecondary,
                     ),
                   ),
                 ),
               ),
             ),
-          );
-        }),
+          ),
+        ),
       ),
     );
   }

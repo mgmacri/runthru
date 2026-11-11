@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
+import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
 import 'package:runthru/widgets/reading_goal_presets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Fake [ConfigNotifier] that stores state in memory.
 class FakeConfigNotifier extends AsyncNotifier<AppConfig>
@@ -16,15 +20,11 @@ class FakeConfigNotifier extends AsyncNotifier<AppConfig>
   @override
   Future<AppConfig> build() async => _initial;
 
+  // The same rules as ConfigNotifier: this fake once gave free readers the
+  // goal's 3D room, which the real one never does, and so hid B-54.
   @override
   Future<void> applyReadingGoalPreset(ReadingGoalConfig goal) async {
-    state = AsyncData(
-      state.requireValue.copyWith(
-        defaultWpm: goal.wpm,
-        parallaxIntensity: goal.parallaxIntensity,
-        readingGoalPreset: goal.preset,
-      ),
-    );
+    state = AsyncData(state.requireValue.withReadingGoal(goal));
   }
 
   @override
@@ -128,7 +128,7 @@ void main() {
         tester.getSemantics(find.text('Custom')),
         matchesSemantics(
           label: 'Custom',
-          hint: 'Manual WPM or room settings',
+          hint: 'Lights up when you change a setting after choosing a goal',
           isSelected: true,
           hasSelectedState: true,
           isInMutuallyExclusiveGroup: true,
@@ -141,6 +141,7 @@ void main() {
         matchesSemantics(
           label: 'Comfortable',
           hint: 'Your everyday reading pace.',
+          isButton: true,
           isSelected: false,
           hasSelectedState: true,
           hasTapAction: true,
@@ -172,6 +173,7 @@ void main() {
         matchesSemantics(
           label: 'Deep Read',
           hint: 'Take your time with difficult material.',
+          isButton: true,
           isSelected: true,
           hasSelectedState: true,
           hasTapAction: true,
@@ -204,6 +206,180 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(config.state.requireValue.focusModeEnabled, isTrue);
+    });
+  });
+
+  // B-54. These run on the real ConfigNotifier and saved settings, not the
+  // fake above, so choosing a goal goes through the same rules as the app.
+  group('Reading Goal on saved settings', () {
+    Future<ProviderContainer> pumpSettings(
+      WidgetTester tester, {
+      bool premium = false,
+    }) async {
+      SharedPreferences.setMockInitialValues({
+        if (premium) 'runthru_config': jsonEncode({'premiumUnlocked': true}),
+      });
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: Scaffold(body: SettingsScreen())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return ProviderScope.containerOf(
+        tester.element(find.byType(SettingsScreen)),
+      );
+    }
+
+    /// Short segment labels in the order shown.
+    const segments = ['Deep', 'Comfort', 'Quick', 'Custom'];
+
+    /// Expects only [lit] (or nothing) to be selected.
+    void expectSelected(WidgetTester tester, String? lit) {
+      for (final label in segments) {
+        expect(
+          tester.getSemantics(find.text(label)),
+          isSemantics(isSelected: label == lit),
+          reason: '$label should ${label == lit ? '' : 'not '}be selected',
+        );
+      }
+    }
+
+    ReadingGoalConfig goalFor(ReadingGoalPreset preset) =>
+        readingGoalConfigs.firstWhere((g) => g.preset == preset);
+
+    testWidgets('nothing is lit before a goal is chosen', (tester) async {
+      await pumpSettings(tester);
+      expectSelected(tester, null);
+    });
+
+    testWidgets('a tapped goal stays pressed in, without RunThru Unlock', (
+      tester,
+    ) async {
+      final container = await pumpSettings(tester);
+
+      for (final (label, preset) in [
+        ('Deep', ReadingGoalPreset.deepRead),
+        ('Quick', ReadingGoalPreset.quickScan),
+        ('Comfort', ReadingGoalPreset.comfortable),
+      ]) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expectSelected(tester, label);
+
+        final goal = goalFor(preset);
+        final config = container.read(configProvider).requireValue;
+        expect(config.defaultWpm, goal.wpm);
+        expect(config.pacingConfig, goal.pacing);
+        expect(config.parallaxIntensity, ParallaxIntensity.none);
+      }
+    });
+
+    testWidgets('a goal moves the Word Pacing sliders too', (tester) async {
+      await pumpSettings(tester);
+      await tester.tap(find.text('Deep'));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Reset pacing'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      // Long words, complexity and punctuation all read 150%.
+      expect(find.text('150%'), findsNWidgets(3));
+      expect(find.textContaining('at 200 WPM'), findsOneWidget);
+    });
+
+    testWidgets('Custom lights up only after a setting is changed by hand', (
+      tester,
+    ) async {
+      final container = await pumpSettings(tester);
+      final notifier = container.read(configProvider.notifier);
+
+      await tester.tap(find.text('Comfort'));
+      await tester.pumpAndSettle();
+      expectSelected(tester, 'Comfort');
+
+      await notifier.setDefaultWpm(280);
+      await tester.pumpAndSettle();
+      expectSelected(tester, 'Custom');
+
+      // Choosing the goal again puts its settings back.
+      await tester.tap(find.text('Comfort'));
+      await tester.pumpAndSettle();
+      expectSelected(tester, 'Comfort');
+
+      await notifier.updatePacingConfig(
+        defaultPacingConfig.copyWith(punctuationScalePercent: 175),
+      );
+      await tester.pumpAndSettle();
+      expectSelected(tester, 'Custom');
+    });
+
+    testWidgets('Unlock owners: the goal sets the room, another room is '
+        'Custom', (tester) async {
+      final container = await pumpSettings(tester, premium: true);
+      expect(
+        find.text(
+          'Choose a preset to set reading speed, word pacing and the 3D room.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Quick'));
+      await tester.pumpAndSettle();
+      expectSelected(tester, 'Quick');
+      expect(
+        container.read(configProvider).requireValue.parallaxIntensity,
+        ParallaxIntensity.off,
+      );
+
+      await container
+          .read(configProvider.notifier)
+          .setParallaxIntensity(ParallaxIntensity.full);
+      await tester.pumpAndSettle();
+      expectSelected(tester, 'Custom');
+    });
+
+    testWidgets('free readers are not told a goal sets the room', (
+      tester,
+    ) async {
+      await pumpSettings(tester);
+      expect(
+        find.text('Choose a preset to set reading speed and word pacing.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('goals are 48dp buttons; Custom is a status, not a button', (
+      tester,
+    ) async {
+      await pumpSettings(tester);
+
+      for (final label in segments) {
+        final segment = find
+            .ancestor(
+              of: find.text(label),
+              matching: find.byType(GestureDetector),
+            )
+            .first;
+        expect(
+          tester.getSize(segment).height,
+          greaterThanOrEqualTo(48),
+          reason: label,
+        );
+      }
+      for (final label in ['Deep', 'Comfort', 'Quick']) {
+        expect(
+          tester.getSemantics(find.text(label)),
+          isSemantics(isButton: true, hasTapAction: true),
+          reason: label,
+        );
+      }
+      expect(
+        tester.getSemantics(find.text('Custom')),
+        isSemantics(isButton: false, hasTapAction: false),
+      );
     });
   });
 

@@ -231,20 +231,14 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
         await _persist(updated);
       });
 
-  /// Applies a reading goal preset: sets WPM, parallax intensity, and
-  /// persists the preset selection in a single synchronized write.
+  /// Applies a reading goal preset: its speed, word pacing and (for RunThru
+  /// Unlock owners) 3D room, and remembers the choice, in one synchronized
+  /// write. See [ReadingGoalSettings.withReadingGoal].
   // P8 Grade B — presets are reading intentions, not speed tiers
   Future<void> applyReadingGoalPreset(ReadingGoalConfig goal) =>
       _synchronized(() async {
         final config = state.valueOrNull ?? const AppConfig();
-        final updated = config.copyWith(
-          defaultWpm: goal.wpm,
-          // The 3D room is part of RunThru Unlock; free users stay flat.
-          parallaxIntensity: config.hasPremium
-              ? goal.parallaxIntensity
-              : ParallaxIntensity.none,
-          readingGoalPreset: goal.preset,
-        );
+        final updated = config.withReadingGoal(goal);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
       });
