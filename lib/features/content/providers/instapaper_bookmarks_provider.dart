@@ -1,13 +1,12 @@
-/// Riverpod provider for fetching Instapaper bookmarks.
-///
-/// Watches the auth provider and fetches bookmarks when authenticated.
-/// Auto-disposes when no longer listened to.
+/// Riverpod providers for Instapaper articles: the list, opening one, and
+/// the queue that sends reading positions and archives back.
 library;
 
 import 'dart:async' show unawaited;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/services/content_normaliser.dart';
@@ -16,6 +15,57 @@ import 'package:runthru/features/content/services/instapaper_sync_queue.dart';
 import 'package:runthru/services/models.dart';
 
 part 'instapaper_bookmarks_provider.g.dart';
+
+/// What to tell the reader when the article list could not be loaded.
+String instapaperListFailureMessage(Object error) {
+  final kind = error is InstapaperApiException
+      ? error.kind
+      : InstapaperFailureKind.unknown;
+  return switch (kind) {
+    InstapaperFailureKind.network =>
+      "Can't reach Instapaper. Check your connection.",
+    InstapaperFailureKind.rateLimited =>
+      'Instapaper is busy. Try again in a few minutes.',
+    InstapaperFailureKind.serviceUnavailable ||
+    InstapaperFailureKind.unexpectedResponse =>
+      'Instapaper is having trouble right now. Try again in a while.',
+    InstapaperFailureKind.clockSkew =>
+      "Check this device's date and time, then try again.",
+    InstapaperFailureKind.unauthorized =>
+      'Instapaper needs you to sign in again.',
+    InstapaperFailureKind.suspended =>
+      'Instapaper is not available to RunThru for this account right now.',
+    _ => 'Could not load your articles.',
+  };
+}
+
+/// What to tell the reader when an article could not be opened.
+String instapaperArticleFailureMessage(InstapaperFailureKind kind) {
+  return switch (kind) {
+    InstapaperFailureKind.network =>
+      "Can't reach Instapaper. Check your connection and try again.",
+    InstapaperFailureKind.textUnavailable =>
+      'Instapaper has no readable text for this article.',
+    InstapaperFailureKind.textAccessDenied =>
+      'Instapaper is not giving RunThru the text of articles right now.',
+    InstapaperFailureKind.premiumRequired =>
+      'This article needs Instapaper Premium.',
+    InstapaperFailureKind.bookmarkNotFound =>
+      'This article is no longer in your Instapaper account.',
+    InstapaperFailureKind.unauthorized =>
+      'Instapaper needs you to sign in again.',
+    InstapaperFailureKind.rateLimited =>
+      'Instapaper is busy. Try again in a few minutes.',
+    InstapaperFailureKind.serviceUnavailable ||
+    InstapaperFailureKind.unexpectedResponse =>
+      'Instapaper is having trouble right now. Try again in a while.',
+    InstapaperFailureKind.clockSkew =>
+      "Check this device's date and time, then try again.",
+    InstapaperFailureKind.suspended =>
+      'Instapaper is not available to RunThru for this account right now.',
+    _ => 'Could not open this article. Try again.',
+  };
+}
 
 /// Import state for tracking article fetch progress.
 ///
@@ -51,6 +101,7 @@ class ArticleImportDone extends ArticleImportState {
     required this.title,
     required this.document,
     this.initialProgress = 0.0,
+    this.progressTimestamp = 0,
   });
 
   /// The bookmark that was imported.
@@ -64,40 +115,62 @@ class ArticleImportDone extends ArticleImportState {
 
   /// Instapaper’s stored reading progress (0.0–1.0) at import time.
   final double initialProgress;
+
+  /// When [initialProgress] was recorded (Unix seconds), so the reader can
+  /// tell it from an older or newer position kept on this device.
+  final int progressTimestamp;
 }
 
 /// Article import failed.
 class ArticleImportError extends ArticleImportState {
   /// Creates an error state with a user-friendly message.
-  const ArticleImportError({required this.message});
+  const ArticleImportError({
+    required this.message,
+    this.kind = InstapaperFailureKind.unknown,
+  });
 
   /// Human-readable error message.
   final String message;
+
+  /// What went wrong, for callers that react to it.
+  final InstapaperFailureKind kind;
 }
 
 /// Manages article import lifecycle — fetch HTML, normalise, signal ready.
 @riverpod
 class InstapaperArticleImport extends _$InstapaperArticleImport {
+  bool _disposed = false;
+
   @override
-  ArticleImportState build() => const ArticleImportIdle();
+  ArticleImportState build() {
+    _disposed = false;
+    ref.onDispose(() => _disposed = true);
+    return const ArticleImportIdle();
+  }
 
   /// Fetch article HTML and normalise for paced reading.
   ///
   /// On success, transitions to [ArticleImportDone] with the
   /// [ExtractedDocument]. The caller should listen for this state
   /// and navigate to the reading screen.
+  ///
+  /// One article at a time: a call made while another article is loading
+  /// is ignored (a second tap on the row, say).
   Future<void> importArticle(InstapaperBookmark bookmark) async {
+    if (state is ArticleImportLoading) return;
+
     final authNotifier = ref.read(instapaperAuthProvider.notifier);
     final client = authNotifier.client;
     if (client == null) {
-      state = const ArticleImportError(message: 'Not signed in to Instapaper');
+      state = const ArticleImportError(
+        message: 'Connect Instapaper in Sources to read this article.',
+        kind: InstapaperFailureKind.unauthorized,
+      );
       return;
     }
 
-    state = ArticleImportLoading(
-      bookmarkId: bookmark.bookmarkId,
-      title: bookmark.title,
-    );
+    final title = bookmark.displayTitle;
+    state = ArticleImportLoading(bookmarkId: bookmark.bookmarkId, title: title);
 
     try {
       final html = await client.getBookmarkText(
@@ -107,23 +180,47 @@ class InstapaperArticleImport extends _$InstapaperArticleImport {
         html,
         ContentType.html,
       );
+      if (_disposed) return;
+      if (document.totalWords == 0) {
+        // A video, a PDF, a page Instapaper parsed to nothing: there is
+        // nothing to pace, and the reader would open blank.
+        _fail(InstapaperFailureKind.textUnavailable);
+        return;
+      }
       state = ArticleImportDone(
         bookmarkId: bookmark.bookmarkId,
-        title: bookmark.title,
+        title: title,
         document: document,
         initialProgress: bookmark.progress,
+        progressTimestamp: bookmark.progressTimestamp,
       );
     } on InstapaperApiException catch (e) {
-      state = ArticleImportError(
-        message: e.errorCode == 1041
-            ? 'This article requires Instapaper Premium'
-            : 'Could not load article. Please try again.',
+      appLog(
+        'instapaper',
+        'article text failed category=${e.kind.name} code=${e.errorCode}',
       );
-    } catch (_) {
-      state = const ArticleImportError(
-        message: 'Could not load article. Please try again.',
-      );
+      if (_disposed) return;
+      if (e.kind == InstapaperFailureKind.unauthorized) {
+        unawaited(authNotifier.checkSession());
+      }
+      if (e.kind == InstapaperFailureKind.bookmarkNotFound) {
+        ref
+            .read(instapaperBookmarksProvider.notifier)
+            .forget(bookmark.bookmarkId);
+      }
+      _fail(e.kind);
+    } on Object {
+      appLog('instapaper', 'article text failed category=unknown');
+      if (_disposed) return;
+      _fail(InstapaperFailureKind.unknown);
     }
+  }
+
+  void _fail(InstapaperFailureKind kind) {
+    state = ArticleImportError(
+      message: instapaperArticleFailureMessage(kind),
+      kind: kind,
+    );
   }
 
   /// Reset import state after navigation.
@@ -141,17 +238,27 @@ class InstapaperArticleImport extends _$InstapaperArticleImport {
 /// waiting for the queue to drain.
 ///
 /// Kept alive so optimistic updates from the reading screen survive
-/// navigation back to the library. Call [refresh] to force a re-fetch.
+/// navigation back to the library. Call [refresh] to force a re-fetch; a
+/// refresh that fails leaves the list that was there (`hasValue` stays true
+/// alongside the error).
 @Riverpod(keepAlive: true)
 class InstapaperBookmarks extends _$InstapaperBookmarks {
+  DateTime? _fetchedAt;
+
   @override
   Future<List<InstapaperBookmark>> build() async {
-    final authState = ref.watch(instapaperAuthProvider);
-    if (authState is! InstapaperAuthAuthenticated) {
+    // Only whether someone is connected: the account's name changing must
+    // not fetch the list again.
+    final connected = ref.watch(
+      instapaperAuthProvider.select((s) => s is InstapaperAuthAuthenticated),
+    );
+    if (!connected) {
+      _fetchedAt = null;
       return [];
     }
 
-    final client = ref.read(instapaperAuthProvider.notifier).client;
+    final auth = ref.read(instapaperAuthProvider.notifier);
+    final client = auth.client;
     if (client == null) return [];
 
     // Send what is waiting, in the background. An op that goes out while
@@ -161,17 +268,70 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
     final pendingBefore = await queue.pendingOps();
     unawaited(queue.drain());
 
-    final bookmarks = await client.getBookmarks();
-    return overlayPendingOps(bookmarks, [
+    final InstapaperBookmarkPage page;
+    try {
+      page = await client.fetchBookmarks();
+    } on InstapaperApiException catch (e) {
+      appLog(
+        'instapaper',
+        'list failed category=${e.kind.name} code=${e.errorCode}',
+      );
+      // The list is the plainest request there is: a refused token here is
+      // about the connection, not about the request.
+      if (e.kind == InstapaperFailureKind.unauthorized) {
+        unawaited(auth.sessionExpired());
+      }
+      rethrow;
+    }
+    _fetchedAt = DateTime.now();
+    if (page.skipped > 0) {
+      appLog('instapaper', 'list skipped ${page.skipped} unreadable entries');
+    }
+    final user = page.user;
+    if (user != null) {
+      // After this build, not during it.
+      unawaited(Future<void>.microtask(() => auth.updateUser(user)));
+    }
+
+    return overlayPendingOps(page.bookmarks, [
       ...pendingBefore,
       ...await queue.pendingOps(),
     ]);
   }
 
-  /// Force refresh the bookmarks list.
-  Future<void> refresh() async {
+  /// Fetch the list again. The list on screen stays until the new one
+  /// arrives, and stays for good if it does not.
+  ///
+  /// Returns null when the list was updated, or what to tell the reader.
+  Future<String?> refresh() async {
+    if (ref.read(instapaperAuthProvider) is! InstapaperAuthAuthenticated) {
+      return null;
+    }
     ref.invalidateSelf();
+    try {
+      await future;
+      return null;
+    } on Object catch (e) {
+      return instapaperListFailureMessage(e);
+    }
   }
+
+  /// [refresh], unless the list was fetched less than [maxAge] ago or is
+  /// being fetched now. For coming back to the app: an article saved from
+  /// the browser a moment ago should be there.
+  Future<void> refreshIfStale({
+    Duration maxAge = const Duration(seconds: 30),
+  }) async {
+    if (state.isLoading) return;
+    final fetchedAt = _fetchedAt;
+    if (fetchedAt != null && DateTime.now().difference(fetchedAt) < maxAge) {
+      return;
+    }
+    await refresh();
+  }
+
+  /// Drop a bookmark that turned out to be gone from the account.
+  void forget(int bookmarkId) => _applyOptimisticArchive(bookmarkId);
 
   /// Optimistically apply a reading-progress update locally and enqueue
   /// the change for delivery to Instapaper. Completes once the change is

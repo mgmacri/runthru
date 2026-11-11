@@ -87,21 +87,8 @@ class InstapaperAuthTile extends ConsumerWidget {
     };
   }
 
-  Future<void> _showLoginSheet(BuildContext context, WidgetRef ref) async {
-    // Taken now: the row may be gone by the time the sheet closes.
-    final auth = ref.read(instapaperAuthProvider.notifier);
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: RunThruTokens.shellBase,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (_) => const _InstapaperLoginSheet(),
-    );
-    // A sign-in that failed was reported in the sheet; the row goes back to
-    // "Not connected" instead of carrying the error around.
-    auth.dismissError();
-  }
+  Future<void> _showLoginSheet(BuildContext context, WidgetRef ref) =>
+      showInstapaperSignIn(context, ref);
 
   Future<void> _confirmDisconnect(BuildContext context, WidgetRef ref) async {
     final auth = ref.read(instapaperAuthProvider.notifier);
@@ -151,6 +138,24 @@ class InstapaperAuthTile extends ConsumerWidget {
     await queue.drain().timeout(const Duration(seconds: 4), onTimeout: () {});
     await auth.logout();
   }
+}
+
+/// Opens the Instapaper sign-in sheet. Completes when it closes, whether
+/// or not the reader signed in.
+Future<void> showInstapaperSignIn(BuildContext context, WidgetRef ref) async {
+  // Taken now: the caller may be gone by the time the sheet closes.
+  final auth = ref.read(instapaperAuthProvider.notifier);
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: RunThruTokens.shellBase,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (_) => const _InstapaperLoginSheet(),
+  );
+  // A sign-in that failed was reported in the sheet; the connection goes
+  // back to "Not connected" instead of carrying the error around.
+  auth.dismissError();
 }
 
 /// Sign-in form bottom sheet for Instapaper xAuth connection.

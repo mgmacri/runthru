@@ -29,7 +29,7 @@ final instapaperSyncQueueProvider = Provider<InstapaperSyncQueue>.internal(
 // ignore: unused_element
 typedef InstapaperSyncQueueRef = ProviderRef<InstapaperSyncQueue>;
 String _$instapaperArticleImportHash() =>
-    r'fb11506ab6acd4d69feaa1a4ab574a9578f8dabe';
+    r'55fc4c8330d61cf1408337714cc967be4f3d4e37';
 
 /// Manages article import lifecycle — fetch HTML, normalise, signal ready.
 ///
@@ -51,7 +51,7 @@ final instapaperArticleImportProvider =
 
 typedef _$InstapaperArticleImport = AutoDisposeNotifier<ArticleImportState>;
 String _$instapaperBookmarksHash() =>
-    r'a9c64be3b22fb39441b07d6333a901dce3a9424f';
+    r'8be7bb25d9ba86fe19c9cefa991ea18c0dbe9cbd';
 
 /// Fetches the user's Instapaper bookmarks when authenticated.
 ///
@@ -62,7 +62,9 @@ String _$instapaperBookmarksHash() =>
 /// waiting for the queue to drain.
 ///
 /// Kept alive so optimistic updates from the reading screen survive
-/// navigation back to the library. Call [refresh] to force a re-fetch.
+/// navigation back to the library. Call [refresh] to force a re-fetch; a
+/// refresh that fails leaves the list that was there (`hasValue` stays true
+/// alongside the error).
 ///
 /// Copied from [InstapaperBookmarks].
 @ProviderFor(InstapaperBookmarks)

@@ -142,6 +142,15 @@ final appRouter = GoRouter(
     // Instapaper article reading route; document + title via extra map
     GoRoute(
       path: '/read-instapaper',
+      // The article arrives in `extra`, which does not survive the app being
+      // restored to this location: without it there is nothing to read.
+      redirect: (context, state) {
+        final extra = state.extra;
+        final hasDocument =
+            extra is Map<String, Object?> &&
+            extra['document'] is ExtractedDocument;
+        return hasDocument ? null : '/';
+      },
       pageBuilder: (context, state) {
         final extra = state.extra as Map<String, Object?>?;
         final document = extra?['document'] as ExtractedDocument?;

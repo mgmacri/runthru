@@ -67,27 +67,9 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
         (isInstapaperConnected ? 1 : 0) +
         (isDriveConnected ? 1 : 0);
 
-    ref.listen<ArticleImportState>(instapaperArticleImportProvider, (
-      previous,
-      next,
-    ) {
-      if (next is ArticleImportDone) {
-        ref.read(instapaperArticleImportProvider.notifier).clear();
-        context.push(
-          '/read-instapaper',
-          extra: {
-            'document': next.document,
-            'title': next.title,
-            'bookmarkId': next.bookmarkId,
-            'initialProgress': next.initialProgress,
-          },
-        );
-      } else if (next is ArticleImportError) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(next.message)));
-      }
-    });
+    // Articles are opened from the Library, and only the Library listens
+    // for the import finishing. (This screen used to listen as well: with
+    // both tabs alive the reader was pushed twice.)
 
     ref.listen<GoogleDriveImportState>(googleDriveImportProvider, (
       previous,
@@ -338,21 +320,26 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     ref.invalidate(pdfListProvider);
   }
 
-  void _handleInstapaperAction(BuildContext ctx) {
-    final authState = ref.read(instapaperAuthProvider);
-    final isAuthenticated = authState is InstapaperAuthAuthenticated;
-
-    if (isAuthenticated) {
-      ref.invalidate(instapaperBookmarksProvider);
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(
-          content: Text('Syncing Instapaper...'),
-          duration: Duration(seconds: 2),
+  /// The add menu's Instapaper action: sign in when not connected (it used
+  /// to push a second Sources screen), otherwise fetch the article list
+  /// again and say how that went.
+  Future<void> _handleInstapaperAction(BuildContext ctx) async {
+    if (ref.read(instapaperAuthProvider) is! InstapaperAuthAuthenticated) {
+      await showInstapaperSignIn(ctx, ref);
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(ctx);
+    final problem = await ref
+        .read(instapaperBookmarksProvider.notifier)
+        .refresh();
+    if (!mounted) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(problem ?? 'Instapaper articles are up to date.'),
         ),
       );
-    } else {
-      ctx.push('/settings/sources');
-    }
   }
 
   Future<void> _handleGoogleDriveAction(BuildContext ctx) async {

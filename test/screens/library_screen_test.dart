@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/services/device_capability.dart';
 import 'package:runthru/features/content/providers/document_title_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
+import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
@@ -250,6 +251,113 @@ void main() {
       await _open(tester);
       await _search(tester, 'whale');
       expect(find.text('No articles match this search.'), findsOneWidget);
+    });
+  });
+
+  group('article rows (B-48)', () {
+    const bookmark = InstapaperBookmark(
+      bookmarkId: 1,
+      url: 'https://www.example.com/story',
+      title: 'Story',
+      // The time used to be made up from this.
+      description:
+          'A description of a dozen words or so, nothing like the article.',
+    );
+
+    ProgressRecord record({
+      int wordIndex = 600,
+      int totalWords = 2400,
+      DateTime? at,
+      bool finished = false,
+    }) => ProgressRecord(
+      contentId: 'instapaper://1',
+      source: 'instapaper',
+      title: 'Story',
+      wordIndex: wordIndex,
+      totalWords: totalWords,
+      lastReadAt: at ?? DateTime(2026, 11, 10),
+      finished: finished,
+    );
+
+    test('an unopened article shows its site and no reading time', () {
+      final details = articleRowDetails(bookmark, wpm: 300);
+
+      expect(details.source, 'example.com');
+      expect(details.time, isNull);
+      expect(details.unread, isTrue);
+    });
+
+    test('a private bookmark has no site: it is from Instapaper', () {
+      final details = articleRowDetails(
+        const InstapaperBookmark(
+          bookmarkId: 2,
+          url: 'instapaper://private-content/9',
+          title: 'Emailed in',
+          privateSource: 'email',
+        ),
+        wpm: 300,
+      );
+
+      expect(details.source, 'Instapaper');
+    });
+
+    test('once opened, the time is its real length at the reader\'s speed', () {
+      expect(
+        articleRowDetails(bookmark, record: record(), wpm: 300).time,
+        '8 min',
+      );
+      expect(
+        articleRowDetails(bookmark, record: record(), wpm: 150).time,
+        '16 min',
+      );
+    });
+
+    test('progress is this device\'s when it is the newer one', () {
+      final details = articleRowDetails(
+        bookmark.copyWith(progress: 0.1, progressTimestamp: 1000),
+        record: record(),
+        wpm: 300,
+      );
+
+      expect(details.progress, 0.25);
+      expect(details.unread, isFalse);
+    });
+
+    test(
+      'progress is Instapaper\'s when another device read further since',
+      () {
+        final later = DateTime(2026, 11, 11).millisecondsSinceEpoch ~/ 1000;
+        final details = articleRowDetails(
+          bookmark.copyWith(progress: 0.8, progressTimestamp: later),
+          record: record(),
+          wpm: 300,
+        );
+
+        expect(details.progress, 0.8);
+        // The length is known either way.
+        expect(details.time, '8 min');
+      },
+    );
+
+    test('with no record, progress is what Instapaper has', () {
+      final details = articleRowDetails(
+        bookmark.copyWith(progress: 0.4, progressTimestamp: 1000),
+        wpm: 300,
+      );
+
+      expect(details.progress, 0.4);
+      expect(details.unread, isFalse);
+    });
+
+    test('read to the end here: finished', () {
+      final details = articleRowDetails(
+        bookmark,
+        record: record(wordIndex: 2399, finished: true),
+        wpm: 300,
+      );
+
+      expect(details.finished, isTrue);
+      expect(details.unread, isFalse);
     });
   });
 

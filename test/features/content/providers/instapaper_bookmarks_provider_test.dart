@@ -41,14 +41,24 @@ class FakeInstapaperAuth extends Notifier<InstapaperAuthState>
   @override
   Future<void> connect() async {}
 
-  @override
-  Future<void> sessionExpired() async {}
+  int sessionExpiredCalls = 0;
+  int checkSessionCalls = 0;
+  final updatedUsers = <InstapaperUser>[];
 
   @override
-  Future<void> checkSession() async {}
+  Future<void> sessionExpired() async {
+    sessionExpiredCalls++;
+    state = const InstapaperAuthError(
+      kind: InstapaperFailureKind.unauthorized,
+      message: 'Instapaper needs you to sign in again.',
+    );
+  }
 
   @override
-  void updateUser(InstapaperUser user) {}
+  Future<void> checkSession() async => checkSessionCalls++;
+
+  @override
+  void updateUser(InstapaperUser user) => updatedUsers.add(user);
 
   @override
   void dismissError() {}
@@ -476,6 +486,181 @@ void main() {
     });
   });
 
+  group('list (B-48)', () {
+    late FakeInstapaperAuth auth;
+    late InstapaperClient client;
+    late String listBody;
+    late int listStatus;
+    late int listCalls;
+
+    ProviderContainer signedIn() {
+      client = InstapaperClient(httpClient: mockHttp, config: testConfig)
+        ..setTokens(token: 'tok', tokenSecret: 'sec');
+      auth = FakeInstapaperAuth(
+        initialState: const InstapaperAuthAuthenticated(
+          user: InstapaperUser(userId: 123, username: 'old-name'),
+        ),
+        testClient: client,
+      );
+      final container = ProviderContainer(
+        overrides: [instapaperAuthProvider.overrideWith(() => auth)],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    String listOf(List<int> ids) => jsonEncode([
+      {'type': 'user', 'user_id': 123, 'username': 'new-name'},
+      for (final id in ids)
+        {'type': 'bookmark', 'bookmark_id': id, 'title': 'Article $id'},
+    ]);
+
+    setUp(() {
+      listBody = listOf([1, 2]);
+      listStatus = 200;
+      listCalls = 0;
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((invocation) async {
+        final uri = invocation.positionalArguments.first as Uri;
+        if (uri.path == '/api/1/bookmarks/list') {
+          listCalls++;
+          return http.Response(listBody, listStatus);
+        }
+        return http.Response('[]', 200);
+      });
+    });
+
+    test('a refresh that fails keeps the list that was there', () async {
+      final container = signedIn();
+      await container.read(instapaperBookmarksProvider.future);
+      final notifier = container.read(instapaperBookmarksProvider.notifier);
+
+      listStatus = 503;
+      final problem = await notifier.refresh();
+
+      expect(
+        problem,
+        'Instapaper is having trouble right now. Try again in a while.',
+      );
+      final state = container.read(instapaperBookmarksProvider);
+      expect(state.hasError, isTrue);
+      expect(state.valueOrNull?.map((b) => b.bookmarkId), [1, 2]);
+    });
+
+    test('a refresh brings in what was saved since', () async {
+      final container = signedIn();
+      await container.read(instapaperBookmarksProvider.future);
+
+      listBody = listOf([3, 1, 2]);
+      final problem = await container
+          .read(instapaperBookmarksProvider.notifier)
+          .refresh();
+
+      expect(problem, isNull);
+      expect(
+        container
+            .read(instapaperBookmarksProvider)
+            .valueOrNull
+            ?.map((b) => b.bookmarkId),
+        [3, 1, 2],
+      );
+    });
+
+    test('refreshIfStale leaves a fresh list alone', () async {
+      final container = signedIn();
+      await container.read(instapaperBookmarksProvider.future);
+      final notifier = container.read(instapaperBookmarksProvider.notifier);
+
+      await notifier.refreshIfStale(maxAge: const Duration(minutes: 5));
+      expect(listCalls, 1);
+
+      await notifier.refreshIfStale(maxAge: Duration.zero);
+      expect(listCalls, 2);
+    });
+
+    test('refreshIfStale retries a list that never loaded', () async {
+      listStatus = 503;
+      final container = signedIn();
+      await expectLater(
+        container.read(instapaperBookmarksProvider.future),
+        throwsA(isA<InstapaperApiException>()),
+      );
+
+      listStatus = 200;
+      await container
+          .read(instapaperBookmarksProvider.notifier)
+          .refreshIfStale(maxAge: const Duration(minutes: 5));
+
+      expect(
+        container.read(instapaperBookmarksProvider).valueOrNull,
+        hasLength(2),
+      );
+    });
+
+    test('a refused token signs the reader out', () async {
+      listStatus = 403;
+      listBody = '';
+      final container = signedIn();
+      final sub = container.listen(instapaperBookmarksProvider, (_, __) {});
+      addTearDown(sub.close);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(auth.sessionExpiredCalls, 1);
+      // Signed out: an empty list, not an error left over.
+      expect(container.read(instapaperBookmarksProvider).valueOrNull, isEmpty);
+    });
+
+    test(
+      'trouble on Instapaper\'s side does not sign the reader out',
+      () async {
+        listStatus = 503;
+        final container = signedIn();
+        await expectLater(
+          container.read(instapaperBookmarksProvider.future),
+          throwsA(isA<InstapaperApiException>()),
+        );
+
+        expect(auth.sessionExpiredCalls, 0);
+      },
+    );
+
+    test('the account named by the list is passed on', () async {
+      final container = signedIn();
+      await container.read(instapaperBookmarksProvider.future);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(auth.updatedUsers.single.username, 'new-name');
+      // …without fetching the list a second time for it.
+      expect(listCalls, 1);
+    });
+
+    test('failure messages are written for readers', () {
+      const network = InstapaperApiException(
+        kind: InstapaperFailureKind.network,
+        errorCode: 0,
+        message: 'Network request failed',
+      );
+      expect(
+        instapaperListFailureMessage(network),
+        "Can't reach Instapaper. Check your connection.",
+      );
+      expect(
+        instapaperListFailureMessage(Exception('x')),
+        'Could not load your articles.',
+      );
+      for (final kind in InstapaperFailureKind.values) {
+        final message = instapaperArticleFailureMessage(kind);
+        expect(message, isNot(contains('Exception')), reason: kind.name);
+        expect(message, isNot(contains('kind:')), reason: kind.name);
+      }
+    });
+  });
+
   group('InstapaperArticleImport', () {
     test('starts in idle state', () {
       final container = ProviderContainer(
@@ -689,6 +874,254 @@ void main() {
       final done = state as ArticleImportDone;
       expect(done.document.sentences, isNotEmpty);
       expect(done.document.totalWords, greaterThan(5));
+    });
+
+    // ── B-48 ────────────────────────────────────────────────────────────
+
+    ProviderContainer signedInWith(FakeInstapaperAuth auth) {
+      final container = ProviderContainer(
+        overrides: [instapaperAuthProvider.overrideWith(() => auth)],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    FakeInstapaperAuth authFor(InstapaperClient client) => FakeInstapaperAuth(
+      initialState: const InstapaperAuthAuthenticated(
+        user: InstapaperUser(userId: 123, username: 'test'),
+      ),
+      testClient: client,
+    );
+
+    InstapaperClient newClient() =>
+        InstapaperClient(httpClient: mockHttp, config: testConfig)
+          ..setTokens(token: 'tok', tokenSecret: 'sec');
+
+    void stubText(Future<http.Response> Function() answer) {
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((_) => answer());
+    }
+
+    const article = InstapaperBookmark(
+      bookmarkId: 1001,
+      url: 'https://example.com/a',
+      title: 'An Article',
+    );
+
+    Future<ArticleImportError> failureFor(http.Response response) async {
+      stubText(() async => response);
+      final container = signedInWith(authFor(newClient()));
+      final sub = container.listen(instapaperArticleImportProvider, (_, __) {});
+      addTearDown(sub.close);
+
+      await container
+          .read(instapaperArticleImportProvider.notifier)
+          .importArticle(article);
+
+      return container.read(instapaperArticleImportProvider)
+          as ArticleImportError;
+    }
+
+    test('an article with no text is an error, not a blank reader', () async {
+      final failure = await failureFor(
+        http.Response(
+          '<html><head><title>T</title></head><body></body></html>',
+          200,
+        ),
+      );
+
+      expect(failure.kind, InstapaperFailureKind.textUnavailable);
+      expect(
+        failure.message,
+        'Instapaper has no readable text for this article.',
+      );
+    });
+
+    test('says when Instapaper has no text version (1550)', () async {
+      final failure = await failureFor(
+        http.Response(
+          '[{"type":"error","error_code":1550,"message":"x"}]',
+          400,
+        ),
+      );
+
+      expect(
+        failure.message,
+        'Instapaper has no readable text for this article.',
+      );
+    });
+
+    test(
+      'says when Instapaper will not hand the text to the app (1044)',
+      () async {
+        final failure = await failureFor(
+          http.Response(
+            '[{"type":"error","error_code":1044,"message":"x"}]',
+            400,
+          ),
+        );
+
+        expect(failure.kind, InstapaperFailureKind.textAccessDenied);
+        expect(
+          failure.message,
+          'Instapaper is not giving RunThru the text of articles right now.',
+        );
+      },
+    );
+
+    test('says when there is no connection', () async {
+      stubText(() async => throw http.ClientException('Failed host lookup'));
+      final container = signedInWith(authFor(newClient()));
+      final sub = container.listen(instapaperArticleImportProvider, (_, __) {});
+      addTearDown(sub.close);
+
+      await container
+          .read(instapaperArticleImportProvider.notifier)
+          .importArticle(article);
+
+      expect(
+        (container.read(instapaperArticleImportProvider) as ArticleImportError)
+            .message,
+        "Can't reach Instapaper. Check your connection and try again.",
+      );
+    });
+
+    test('a second request while one is loading is ignored', () async {
+      final gate = Completer<http.Response>();
+      var requests = 0;
+      stubText(() {
+        requests++;
+        return gate.future;
+      });
+      final container = signedInWith(authFor(newClient()));
+      final sub = container.listen(instapaperArticleImportProvider, (_, __) {});
+      addTearDown(sub.close);
+      final notifier = container.read(instapaperArticleImportProvider.notifier);
+
+      final first = notifier.importArticle(article);
+      await Future<void>.delayed(Duration.zero);
+      await notifier.importArticle(
+        const InstapaperBookmark(bookmarkId: 2002, url: '', title: 'Other'),
+      );
+
+      expect(requests, 1);
+      final loading = container.read(instapaperArticleImportProvider);
+      expect((loading as ArticleImportLoading).bookmarkId, 1001);
+
+      gate.complete(http.Response('<p>Some words to read here.</p>', 200));
+      await first;
+      final done = container.read(instapaperArticleImportProvider);
+      expect((done as ArticleImportDone).bookmarkId, 1001);
+    });
+
+    test(
+      'carries the position Instapaper has and when it was recorded',
+      () async {
+        stubText(() async => http.Response('<p>Some words to read.</p>', 200));
+        final container = signedInWith(authFor(newClient()));
+        final sub = container.listen(
+          instapaperArticleImportProvider,
+          (_, __) {},
+        );
+        addTearDown(sub.close);
+
+        await container
+            .read(instapaperArticleImportProvider.notifier)
+            .importArticle(
+              const InstapaperBookmark(
+                bookmarkId: 5,
+                url: '',
+                title: '',
+                progress: 0.4,
+                progressTimestamp: 1700000000,
+              ),
+            );
+
+        final done =
+            container.read(instapaperArticleImportProvider)
+                as ArticleImportDone;
+        expect(done.initialProgress, 0.4);
+        expect(done.progressTimestamp, 1700000000);
+        // No title from Instapaper: something to show all the same.
+        expect(done.title, 'Untitled article');
+      },
+    );
+
+    test('a bookmark that is gone leaves the list', () async {
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((invocation) async {
+        final uri = invocation.positionalArguments.first as Uri;
+        if (uri.path == '/api/1/bookmarks/list') {
+          return http.Response(
+            jsonEncode([
+              {'type': 'bookmark', 'bookmark_id': 1001, 'title': 'Gone'},
+              {'type': 'bookmark', 'bookmark_id': 1002, 'title': 'Here'},
+            ]),
+            200,
+          );
+        }
+        return http.Response(
+          '[{"type":"error","error_code":1241,"message":"x"}]',
+          400,
+        );
+      });
+      final container = signedInWith(authFor(newClient()));
+      await container.read(instapaperBookmarksProvider.future);
+      final sub = container.listen(instapaperArticleImportProvider, (_, __) {});
+      addTearDown(sub.close);
+
+      await container
+          .read(instapaperArticleImportProvider.notifier)
+          .importArticle(article);
+
+      expect(
+        (container.read(instapaperArticleImportProvider) as ArticleImportError)
+            .message,
+        'This article is no longer in your Instapaper account.',
+      );
+      expect(
+        container
+            .read(instapaperBookmarksProvider)
+            .valueOrNull
+            ?.map((b) => b.bookmarkId),
+        [1002],
+      );
+    });
+
+    test('signed out: says to connect, asks nothing of Instapaper', () async {
+      final container = signedInWith(
+        FakeInstapaperAuth(initialState: const InstapaperAuthUnauthenticated()),
+      );
+      final sub = container.listen(instapaperArticleImportProvider, (_, __) {});
+      addTearDown(sub.close);
+
+      await container
+          .read(instapaperArticleImportProvider.notifier)
+          .importArticle(article);
+
+      final failure =
+          container.read(instapaperArticleImportProvider) as ArticleImportError;
+      expect(
+        failure.message,
+        'Connect Instapaper in Sources to read this article.',
+      );
+      verifyNever(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      );
     });
   });
 }

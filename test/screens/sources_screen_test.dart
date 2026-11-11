@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:runthru/features/content/models/google_drive_file.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
+import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/services/google_drive_auth_service.dart';
 import 'package:runthru/features/content/services/drive_local_store.dart';
@@ -23,15 +25,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeInstapaperAuth extends Notifier<InstapaperAuthState>
     implements InstapaperAuth {
-  _FakeInstapaperAuth(this.initialState);
+  _FakeInstapaperAuth(this.initialState, {this.fakeClient});
 
   final InstapaperAuthState initialState;
+
+  /// Handed out while the state is "connected".
+  final InstapaperClient? fakeClient;
 
   @override
   InstapaperAuthState build() => initialState;
 
   @override
-  InstapaperClient? get client => null;
+  InstapaperClient? get client =>
+      state is InstapaperAuthAuthenticated ? fakeClient : null;
 
   @override
   Future<void> login({
@@ -52,7 +58,12 @@ class _FakeInstapaperAuth extends Notifier<InstapaperAuthState>
   }
 
   @override
-  Future<void> sessionExpired() async {}
+  Future<void> sessionExpired() async {
+    state = const InstapaperAuthError(
+      kind: InstapaperFailureKind.unauthorized,
+      message: 'Instapaper needs you to sign in again.',
+    );
+  }
 
   @override
   Future<void> checkSession() async {}
@@ -61,7 +72,73 @@ class _FakeInstapaperAuth extends Notifier<InstapaperAuthState>
   void updateUser(InstapaperUser user) {}
 
   @override
-  void dismissError() {}
+  void dismissError() {
+    if (state is InstapaperAuthError) {
+      state = const InstapaperAuthUnauthenticated();
+    }
+  }
+}
+
+/// An Instapaper account with two unread articles, scriptable to fail.
+class _FakeInstapaperClient extends InstapaperClient {
+  _FakeInstapaperClient()
+    : super(
+        config: const InstapaperClientConfig(
+          consumerKey: 'k',
+          consumerSecret: 's',
+        ),
+      );
+
+  List<InstapaperBookmark> bookmarks = [
+    const InstapaperBookmark(
+      bookmarkId: 1,
+      url: 'https://www.example.com/first',
+      title: 'First Article',
+      description: 'A short description of the first article.',
+    ),
+    const InstapaperBookmark(
+      bookmarkId: 2,
+      url: 'https://news.example.org/second',
+      title: 'Second Article',
+    ),
+  ];
+  Object? listError;
+  int listCalls = 0;
+
+  String text = '<p>Enough words here to make an article worth reading.</p>';
+  Object? textError;
+  Completer<void>? textGate;
+  final textCalls = <int>[];
+
+  @override
+  Future<InstapaperBookmarkPage> fetchBookmarks({
+    int limit = InstapaperClient.maxListLimit,
+    String folderId = 'unread',
+  }) async {
+    listCalls++;
+    final error = listError;
+    if (error != null) throw error;
+    return InstapaperBookmarkPage(bookmarks: List.of(bookmarks));
+  }
+
+  @override
+  Future<String> getBookmarkText({required int bookmarkId}) async {
+    textCalls.add(bookmarkId);
+    await textGate?.future;
+    final error = textError;
+    if (error != null) throw error;
+    return text;
+  }
+
+  @override
+  Future<void> updateReadProgress({
+    required int bookmarkId,
+    required double progress,
+    int? timestampSeconds,
+  }) async {}
+
+  @override
+  Future<void> archiveBookmark({required int bookmarkId}) async {}
 }
 
 class _FakeGoogleDriveAuth extends Notifier<GoogleDriveAuthState>
@@ -229,6 +306,9 @@ Widget _homeShellRouterHarness({
   _FakeGoogleDriveAuth? driveAuth,
   GoogleDriveClient? driveClient,
   Map<String, Object>? sharedPreferences = const {},
+  InstapaperAuthState instapaperState = const InstapaperAuthUnauthenticated(),
+  InstapaperClient? instapaperClient,
+  void Function(Map<String, Object?> extra)? onReadInstapaper,
 }) {
   SharedPreferences.setMockInitialValues(sharedPreferences ?? const {});
   final router = GoRouter(
@@ -246,13 +326,31 @@ Widget _homeShellRouterHarness({
           );
         },
       ),
+      GoRoute(
+        path: '/read-instapaper',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, Object?>;
+          return MaterialPage(
+            child: _ReadDriveProbe(
+              extra: extra,
+              onShown: onReadInstapaper ?? (_) {},
+              label: 'Instapaper Reader',
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/elsewhere',
+        builder: (context, state) => const Scaffold(body: Text('Elsewhere')),
+      ),
       GoRoute(path: '/sources', redirect: (_, __) => '/?tab=1'),
     ],
   );
   return ProviderScope(
     overrides: [
       instapaperAuthProvider.overrideWith(
-        () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
+        () =>
+            _FakeInstapaperAuth(instapaperState, fakeClient: instapaperClient),
       ),
       instapaperAvailableProvider.overrideWithValue(true),
       googleDriveAvailableProvider.overrideWithValue(true),
@@ -279,10 +377,15 @@ Widget _homeShellRouterHarness({
 }
 
 class _ReadDriveProbe extends StatefulWidget {
-  const _ReadDriveProbe({required this.extra, required this.onShown});
+  const _ReadDriveProbe({
+    required this.extra,
+    required this.onShown,
+    this.label = 'Drive Reader',
+  });
 
   final Map<String, Object?> extra;
   final void Function(Map<String, Object?> extra) onShown;
+  final String label;
 
   @override
   State<_ReadDriveProbe> createState() => _ReadDriveProbeState();
@@ -297,7 +400,7 @@ class _ReadDriveProbeState extends State<_ReadDriveProbe> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Text('Drive Reader'));
+    return Scaffold(body: Text(widget.label));
   }
 }
 
@@ -723,6 +826,360 @@ void main() {
       await tester.pump();
 
       expect(driveAuth.grantAccessCalls, 1);
+    });
+  });
+
+  // ── B-48: Instapaper articles in the Library ──────────────────────────────
+
+  group('Instapaper articles', () {
+    const connected = InstapaperAuthAuthenticated(
+      user: InstapaperUser(userId: 1, username: 'reader@example.com'),
+    );
+    const noConnection = InstapaperApiException(
+      kind: InstapaperFailureKind.network,
+      errorCode: 0,
+      message: 'Network request failed',
+    );
+
+    late _FakeInstapaperClient client;
+    late List<Map<String, Object?>> opened;
+
+    setUp(() {
+      client = _FakeInstapaperClient();
+      opened = [];
+    });
+
+    Future<void> pumpHome(
+      WidgetTester tester, {
+      InstapaperAuthState state = connected,
+      Map<String, Object> prefs = const {},
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(420, 1500));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _homeShellRouterHarness(
+          driveAuthState: const GoogleDriveAuthUnauthenticated(),
+          onReadDrive: (_) {},
+          sharedPreferences: prefs,
+          instapaperState: state,
+          instapaperClient: client,
+          onReadInstapaper: opened.add,
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('opens the reader exactly once after Sources was built', (
+      tester,
+    ) async {
+      // With both tabs alive, the Library and Sources each pushed the
+      // reader: Back from an article landed on the same article again.
+      await pumpHome(tester);
+      await tester.tap(find.bySemanticsLabel('Sources').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Library').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('First Article'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Instapaper Reader'), findsOneWidget);
+      expect(opened, hasLength(1));
+      expect(opened.single['bookmarkId'], 1);
+      expect(opened.single['title'], 'First Article');
+      expect(opened.single['document'], isA<ExtractedDocument>());
+
+      // One Back returns to the Library.
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('Instapaper Reader'), findsNothing);
+      expect(find.text('First Article'), findsOneWidget);
+    });
+
+    testWidgets('shows which article is opening and ignores further taps', (
+      tester,
+    ) async {
+      client.textGate = Completer<void>();
+      await pumpHome(tester);
+
+      await tester.tap(find.text('First Article'));
+      await tester.pump();
+      expect(find.text('Opening…'), findsOneWidget);
+
+      await tester.tap(find.text('Second Article'));
+      await tester.tap(find.text('First Article'));
+      await tester.pump();
+      expect(client.textCalls, [1]);
+
+      client.textGate!.complete();
+      await tester.pumpAndSettle();
+      expect(opened, hasLength(1));
+      expect(opened.single['bookmarkId'], 1);
+    });
+
+    testWidgets(
+      'an article that finishes loading after the reader moved on opens nothing',
+      (tester) async {
+        client.textGate = Completer<void>();
+        await pumpHome(tester);
+        await tester.tap(find.text('First Article'));
+        await tester.pump();
+
+        GoRouter.of(tester.element(find.byType(HomeShell))).push('/elsewhere');
+        await tester.pumpAndSettle();
+        client.textGate!.complete();
+        await tester.pumpAndSettle();
+
+        expect(opened, isEmpty);
+        expect(find.text('Elsewhere'), findsOneWidget);
+      },
+    );
+
+    testWidgets('says why an article could not be opened', (tester) async {
+      client.textError = const InstapaperApiException(
+        kind: InstapaperFailureKind.textAccessDenied,
+        errorCode: 1044,
+        message: 'Instapaper API error 1044',
+      );
+      await pumpHome(tester);
+
+      await tester.tap(find.text('First Article'));
+      await tester.pumpAndSettle();
+
+      expect(opened, isEmpty);
+      expect(
+        find.text(
+          'Instapaper is not giving RunThru the text of articles right now.',
+        ),
+        findsOneWidget,
+      );
+      // Once, not once per tab.
+      expect(find.byType(SnackBar), findsOneWidget);
+      // The row is usable again.
+      expect(find.text('Opening…'), findsNothing);
+    });
+
+    testWidgets('an article with no text does not open a blank reader', (
+      tester,
+    ) async {
+      client.text = '<html><body><div id="story"></div></body></html>';
+      await pumpHome(tester);
+
+      await tester.tap(find.text('First Article'));
+      await tester.pumpAndSettle();
+
+      expect(opened, isEmpty);
+      expect(
+        find.text('Instapaper has no readable text for this article.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('rows say where an article is from, not a made-up time', (
+      tester,
+    ) async {
+      await pumpHome(tester);
+
+      expect(find.text('example.com'), findsOneWidget);
+      expect(find.text('news.example.org'), findsOneWidget);
+      expect(find.text('2 articles'), findsOneWidget);
+      // Every row used to read "Instapaper · 6 min" (or "1 min").
+      expect(find.textContaining('6 min'), findsNothing);
+      expect(find.textContaining('1 min'), findsNothing);
+      expect(find.text('New'), findsNWidgets(2));
+    });
+
+    testWidgets('each row is one announcement and a button', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpHome(tester);
+
+      expect(
+        tester.getSemantics(
+          find.bySemanticsLabel('First Article, unread, example.com'),
+        ),
+        matchesSemantics(
+          label: 'First Article, unread, example.com',
+          isButton: true,
+          isEnabled: true,
+          hasEnabledState: true,
+          hasTapAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('a list that could not be loaded says why and can be retried', (
+      tester,
+    ) async {
+      client.listError = noConnection;
+      await pumpHome(tester);
+
+      expect(
+        find.text("Can't reach Instapaper. Check your connection."),
+        findsOneWidget,
+      );
+      // Not the exception's own text.
+      expect(find.textContaining('InstapaperApiException'), findsNothing);
+      expect(find.textContaining('Failed to load'), findsNothing);
+
+      client.listError = null;
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('First Article'), findsOneWidget);
+    });
+
+    testWidgets('a refresh that fails keeps the articles and says so', (
+      tester,
+    ) async {
+      await pumpHome(tester);
+      client.listError = noConnection;
+
+      await tester.tap(find.byTooltip('Refresh articles'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('First Article'), findsOneWidget);
+      expect(find.text('Second Article'), findsOneWidget);
+      expect(
+        find.text("Can't reach Instapaper. Check your connection."),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a refresh brings in an article saved elsewhere', (
+      tester,
+    ) async {
+      await pumpHome(tester);
+      client.bookmarks = [
+        const InstapaperBookmark(
+          bookmarkId: 3,
+          url: 'https://example.net/new',
+          title: 'Just Saved',
+        ),
+        ...client.bookmarks,
+      ];
+
+      await tester.tap(find.byTooltip('Refresh articles'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Just Saved'), findsOneWidget);
+      expect(find.text('3 articles'), findsOneWidget);
+      expect(tester.getSize(find.byTooltip('Refresh articles')).height, 48);
+    });
+
+    testWidgets('coming back to the app leaves a fresh list alone', (
+      tester,
+    ) async {
+      await pumpHome(tester);
+      expect(client.listCalls, 1);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      // Fetched a moment ago: not again. (A stale list is fetched again:
+      // see the provider tests.)
+      expect(client.listCalls, 1);
+    });
+
+    testWidgets('connected with nothing unread says so', (tester) async {
+      client.bookmarks = [];
+      await pumpHome(tester);
+
+      expect(
+        find.text(
+          'Nothing unread in Instapaper. Articles you save there show up here.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Connect Instapaper'), findsNothing);
+    });
+
+    testWidgets('a refused connection is reported and reconnects from there', (
+      tester,
+    ) async {
+      client.listError = const InstapaperApiException(
+        kind: InstapaperFailureKind.unauthorized,
+        errorCode: 403,
+        message: 'HTTP 403',
+      );
+      await pumpHome(tester);
+
+      final notice = find.text(
+        'Instapaper needs you to sign in again. Tap to reconnect.',
+      );
+      expect(notice, findsOneWidget);
+
+      await tester.tap(notice);
+      await tester.pumpAndSettle();
+      expect(find.text('Sign in to Instapaper'), findsOneWidget);
+    });
+
+    testWidgets('Continue Reading resumes an article that is not in the list', (
+      tester,
+    ) async {
+      // Archived on another device, or older than the newest 500: its text
+      // needs only its ID.
+      await pumpHome(
+        tester,
+        prefs: {
+          'runthru_reading_progress': jsonEncode([
+            {
+              'contentId': 'instapaper://77',
+              'source': 'instapaper',
+              'title': 'Older Article',
+              'wordIndex': 40,
+              'totalWords': 400,
+              'lastReadAt': DateTime(2026, 11, 1).toIso8601String(),
+              'finished': false,
+            },
+          ]),
+        },
+      );
+
+      await tester.tap(find.text('Older Article').first);
+      await tester.pumpAndSettle();
+
+      expect(client.textCalls, [77]);
+      expect(opened.single['bookmarkId'], 77);
+      expect(opened.single['title'], 'Older Article');
+      expect(find.text('Instapaper Reader'), findsOneWidget);
+    });
+
+    testWidgets('the add menu signs in when Instapaper is not connected', (
+      tester,
+    ) async {
+      await pumpHome(tester, state: const InstapaperAuthUnauthenticated());
+      await tester.tap(find.bySemanticsLabel('Sources').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Open reading sources'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Add from Instapaper'));
+      await tester.pumpAndSettle();
+
+      // The sheet, over the one Sources screen (a second one used to be
+      // pushed on top).
+      expect(find.text('Sign in to Instapaper'), findsOneWidget);
+      expect(find.byType(SourcesScreen), findsOneWidget);
+    });
+
+    testWidgets('the add menu refreshes the list when connected', (
+      tester,
+    ) async {
+      await pumpHome(tester);
+      await tester.tap(find.bySemanticsLabel('Sources').last);
+      await tester.pumpAndSettle();
+      final before = client.listCalls;
+
+      await tester.tap(find.bySemanticsLabel('Open reading sources'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Add from Instapaper'));
+      await tester.pumpAndSettle();
+
+      expect(client.listCalls, before + 1);
+      expect(find.text('Instapaper articles are up to date.'), findsOneWidget);
     });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +11,10 @@ import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/google_drive_auth_provider.dart';
 import 'package:runthru/features/content/providers/google_drive_files_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
+import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
+import 'package:runthru/features/content/services/instapaper_client.dart';
+import 'package:runthru/features/content/widgets/instapaper_auth_tile.dart';
 import 'package:runthru/features/content/services/google_drive_client.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/core/sample_document.dart';
@@ -40,7 +45,8 @@ class LibraryScreen extends ConsumerStatefulWidget {
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+class _LibraryScreenState extends ConsumerState<LibraryScreen>
+    with WidgetsBindingObserver {
   _LibraryFilter _filter = _LibraryFilter.all;
   bool _isSearchOpen = false;
   String _searchQuery = '';
@@ -49,9 +55,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _seedSampleIfNeeded();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from the browser, where an article may just have been saved to
+    // Instapaper: fetch the list again unless it is fresh.
+    if (state != AppLifecycleState.resumed) return;
+    if (!ref.read(instapaperAvailableProvider)) return;
+    if (ref.read(instapaperAuthProvider) is! InstapaperAuthAuthenticated) {
+      return;
+    }
+    unawaited(ref.read(instapaperBookmarksProvider.notifier).refreshIfStale());
   }
 
   void _seedSampleIfNeeded() {
@@ -124,13 +149,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               .toList()
         : shelf;
 
-    // Navigate to reader on successful Instapaper article import.
+    // Open the reader when an Instapaper article has loaded. This is the
+    // only listener: articles are opened from this screen alone.
     ref.listen<ArticleImportState>(instapaperArticleImportProvider, (
       previous,
       next,
     ) {
+      if (next is! ArticleImportDone && next is! ArticleImportError) return;
+      // The reader moved on while the article was loading (opened a book,
+      // say): nothing is pushed or shown over what is on screen now.
+      final stillHere = ModalRoute.of(context)?.isCurrent ?? true;
       if (next is ArticleImportDone) {
         ref.read(instapaperArticleImportProvider.notifier).clear();
+        if (!stillHere) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         context.push(
           '/read-instapaper',
           extra: {
@@ -138,12 +170,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             'title': next.title,
             'bookmarkId': next.bookmarkId,
             'initialProgress': next.initialProgress,
+            'progressTimestamp': next.progressTimestamp,
           },
         );
-      } else if (next is ArticleImportError) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(next.message)));
+      } else if (next is ArticleImportError && stillHere) {
+        final canConnect =
+            next.kind == InstapaperFailureKind.unauthorized &&
+            ref.read(instapaperAvailableProvider) &&
+            ref.read(instapaperAuthProvider) is! InstapaperAuthAuthenticated;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(next.message),
+              action: canConnect
+                  ? SnackBarAction(
+                      label: 'Connect',
+                      onPressed: () => showInstapaperSignIn(context, ref),
+                    )
+                  : null,
+            ),
+          );
       }
     });
 
@@ -312,25 +359,44 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   ///
   /// Re-imports the article (its text is not cached locally) and lets the
   /// import listener navigate to the reader. The on-device bookmark restores
-  /// the last word position. Shows a hint if the bookmark list isn't loaded.
+  /// the last word position.
+  ///
+  /// Fetching the text needs only the bookmark's ID, so an article that is
+  /// not in the list on hand (not fetched yet, archived on another device,
+  /// older than the newest 500) opens all the same.
   void _resumeInstapaperItem(ProgressRecord item) {
     final bookmarkId = int.tryParse(
       item.contentId.replaceFirst('instapaper://', ''),
     );
-    final bookmarks = ref.read(instapaperBookmarksProvider).valueOrNull;
-    final bookmark = bookmarks
-        ?.where((b) => b.bookmarkId == bookmarkId)
-        .firstOrNull;
-
-    if (bookmark == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Open this article from the Articles list to resume.'),
-        ),
+    final messenger = ScaffoldMessenger.of(context);
+    if (bookmarkId == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('This article can no longer be opened.')),
       );
       return;
     }
+    if (ref.read(instapaperArticleImportProvider) is ArticleImportLoading) {
+      return;
+    }
+    final listed = ref
+        .read(instapaperBookmarksProvider)
+        .valueOrNull
+        ?.where((b) => b.bookmarkId == bookmarkId)
+        .firstOrNull;
+    final bookmark =
+        listed ??
+        InstapaperBookmark(bookmarkId: bookmarkId, url: '', title: item.title);
 
+    // The card itself does not change while the article loads; say so.
+    // Replaced by the reader, or by the reason it could not be opened.
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Opening “${bookmark.displayTitle}”…'),
+          duration: const Duration(seconds: 45),
+        ),
+      );
     ref.read(instapaperArticleImportProvider.notifier).importArticle(bookmark);
   }
 
@@ -860,6 +926,8 @@ class _LibrarySection extends StatelessWidget {
     required this.itemCount,
     this.itemBuilder,
     this.empty,
+    this.headerAction,
+    this.liveCount = false,
   });
 
   final String title;
@@ -869,8 +937,17 @@ class _LibrarySection extends StatelessWidget {
   final IndexedWidgetBuilder? itemBuilder;
   final Widget? empty;
 
+  /// A control at the end of the header (a 48dp target). The header gives
+  /// up its own padding to it, so the title sits where it does without one.
+  final Widget? headerAction;
+
+  /// Whether the count changes while the section is on screen ("Loading",
+  /// "Updating…", "12 articles") and should be announced when it does.
+  final bool liveCount;
+
   @override
   Widget build(BuildContext context) {
+    final action = headerAction;
     return NeumorphicCard(
       surface: RunThruSurface.shell,
       size: RunThruShadowSize.standard,
@@ -880,7 +957,7 @@ class _LibrarySection extends StatelessWidget {
       // stands in for the bottom padding.
       padding: EdgeInsets.fromLTRB(
         15,
-        15,
+        action == null ? 15 : 1,
         15,
         itemBuilder != null && itemCount > _kTilesPerPage ? 0 : 14,
       ),
@@ -888,7 +965,7 @@ class _LibrarySection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(3, 0, 3, 11),
+            padding: EdgeInsets.fromLTRB(3, 0, 3, action == null ? 11 : 0),
             child: Row(
               children: [
                 ExcludeSemantics(
@@ -907,12 +984,16 @@ class _LibrarySection extends StatelessWidget {
                   child: Text(title, style: RunThruTypography.sectionLabel),
                 ),
                 const Spacer(),
-                Text(
-                  countLabel,
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellInkSoft,
+                Semantics(
+                  liveRegion: liveCount,
+                  child: Text(
+                    countLabel,
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellInkSoft,
+                    ),
                   ),
                 ),
+                if (action != null) action,
               ],
             ),
           ),
@@ -1179,42 +1260,112 @@ class _EmptyArticlesState extends StatelessWidget {
 }
 
 /// Shown in the Articles section when the Instapaper connection is in an
-/// error state (expired tokens, missing API config, secure-storage failure).
-/// Tapping opens Sources so the user can reconnect.
-class _ArticlesAuthErrorTile extends StatelessWidget {
+/// error state (the connection was refused, secure storage failed).
+/// Tapping opens the sign-in sheet.
+class _ArticlesAuthErrorTile extends ConsumerWidget {
   const _ArticlesAuthErrorTile({required this.message});
 
   final String message;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Semantics(
       liveRegion: true,
       button: true,
       child: InkWell(
-        onTap: () => context.push('/settings/sources'),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.error_outline_rounded,
-                size: 16,
-                color: RunThruTokens.shellError,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '$message Tap to reconnect.',
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellError,
+        onTap: () => showInstapaperSignIn(context, ref),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 16,
+                  color: RunThruTokens.shellError,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$message Tap to reconnect.',
+                    style: RunThruTypography.caption.copyWith(
+                      color: RunThruTokens.shellError,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The article list could not be loaded and there is none to fall back on.
+class _ArticlesLoadError extends StatelessWidget {
+  const _ArticlesLoadError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 8, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                message,
+                style: RunThruTypography.caption.copyWith(
+                  color: RunThruTokens.shellError,
+                ),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              foregroundColor: RunThruTokens.shellAccent,
+            ),
+            child: Text(
+              'Try again',
+              style: RunThruTypography.caption.copyWith(
+                color: RunThruTokens.shellAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fetches the Instapaper list again. A 48dp target at the end of the
+/// Articles header; its icon lines up with the header's right edge.
+class _RefreshArticlesButton extends StatelessWidget {
+  const _RefreshArticlesButton({required this.onRefresh});
+
+  /// Null while a fetch is already running.
+  final VoidCallback? onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onRefresh,
+      tooltip: 'Refresh articles',
+      padding: EdgeInsets.zero,
+      alignment: Alignment.centerRight,
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      icon: const Icon(Icons.refresh_rounded, size: 18),
+      color: RunThruTokens.shellInkSoft,
+      disabledColor: RunThruTokens.shellInkSoft.withValues(alpha: 0.4),
     );
   }
 }
@@ -1224,21 +1375,37 @@ class _ArticlesSliverList extends ConsumerWidget {
 
   final String query;
 
+  Widget _section({
+    required String countLabel,
+    Widget? empty,
+    int itemCount = 0,
+    IndexedWidgetBuilder? itemBuilder,
+    Widget? headerAction,
+  }) {
+    return SliverToBoxAdapter(
+      child: _LibrarySection(
+        title: 'Articles',
+        countLabel: countLabel,
+        dotColor: RunThruTokens.shellTealDeep,
+        itemCount: itemCount,
+        itemBuilder: itemBuilder,
+        empty: empty,
+        headerAction: headerAction,
+        liveCount: true,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // A build that cannot connect to Instapaper does not suggest it.
     if (!ref.watch(instapaperAvailableProvider)) {
-      return SliverToBoxAdapter(
-        child: _LibrarySection(
-          title: 'Articles',
-          countLabel: '0 articles',
-          dotColor: RunThruTokens.shellTealDeep,
-          itemCount: 0,
-          empty: _EmptyArticlesState(
-            message: query.isEmpty
-                ? 'No articles yet. Share a link to RunThru to read it.'
-                : 'No articles match this search.',
-          ),
+      return _section(
+        countLabel: '0 articles',
+        empty: _EmptyArticlesState(
+          message: query.isEmpty
+              ? 'No articles yet. Share a link to RunThru to read it.'
+              : 'No articles match this search.',
         ),
       );
     }
@@ -1250,148 +1417,238 @@ class _ArticlesSliverList extends ConsumerWidget {
     switch (authState) {
       case InstapaperAuthChecking():
       case InstapaperAuthLoading():
-        return const SliverToBoxAdapter(
-          child: _LibrarySection(
-            title: 'Articles',
-            countLabel: 'Loading',
-            dotColor: RunThruTokens.shellTealDeep,
-            itemCount: 0,
-            empty: _SectionLoading(),
-          ),
-        );
+        return _section(countLabel: 'Loading', empty: const _SectionLoading());
       case InstapaperAuthUnauthenticated():
       case InstapaperAuthLegacyFallbackRequired():
-        return SliverToBoxAdapter(
-          child: _LibrarySection(
-            title: 'Articles',
-            countLabel: '0 articles',
-            dotColor: RunThruTokens.shellTealDeep,
-            itemCount: 0,
-            empty: _EmptyArticlesState(
-              message: query.isEmpty ? null : 'No articles match this search.',
-            ),
+        return _section(
+          countLabel: '0 articles',
+          empty: _EmptyArticlesState(
+            message: query.isEmpty ? null : 'No articles match this search.',
           ),
         );
       case InstapaperAuthError(:final message):
-        return SliverToBoxAdapter(
-          child: _LibrarySection(
-            title: 'Articles',
-            countLabel: 'Issue',
-            dotColor: RunThruTokens.shellTealDeep,
-            itemCount: 0,
-            empty: _ArticlesAuthErrorTile(message: message),
-          ),
+        return _section(
+          countLabel: 'Issue',
+          empty: _ArticlesAuthErrorTile(message: message),
         );
       case InstapaperAuthAuthenticated():
         break;
     }
 
-    final bookmarksAsync = ref.watch(instapaperBookmarksProvider);
-    return bookmarksAsync.when(
-      data: (bookmarks) {
-        final visibleBookmarks = query.isEmpty
-            ? bookmarks
-            : bookmarks
-                  .where((bookmark) {
-                    final searchableText =
-                        '${bookmark.title} ${bookmark.domain} ${bookmark.description} ${bookmark.url}'
-                            .toLowerCase();
-                    return searchableText.contains(query);
-                  })
-                  .toList(growable: false);
+    final list = ref.watch(instapaperBookmarksProvider);
+    final bookmarks = list.valueOrNull ?? const <InstapaperBookmark>[];
 
-        if (visibleBookmarks.isEmpty) {
-          return SliverToBoxAdapter(
-            child: _LibrarySection(
-              title: 'Articles',
-              countLabel: '0 articles',
-              dotColor: RunThruTokens.shellTealDeep,
-              itemCount: 0,
-              empty: _EmptyArticlesState(
-                message: query.isEmpty
-                    ? null
-                    : 'No articles match this search.',
-              ),
-            ),
-          );
-        }
-        return SliverToBoxAdapter(
-          child: _LibrarySection(
-            title: 'Articles',
-            countLabel: _countLabel(visibleBookmarks.length, 'article'),
-            dotColor: RunThruTokens.shellTealDeep,
-            itemCount: visibleBookmarks.length,
-            itemBuilder: (context, index) {
-              final bookmark = visibleBookmarks[index];
-              return _ArticleRow(
-                title: bookmark.title.isNotEmpty
-                    ? bookmark.title
-                    : bookmark.domain,
-                source: 'instapaper',
-                detail:
-                    'Instapaper · ${_readingMinutes(bookmark.description)} min',
-                unread: !bookmark.hasProgress,
-                onTap: () => ref
-                    .read(instapaperArticleImportProvider.notifier)
-                    .importArticle(bookmark),
-              );
-            },
-          ),
-        );
-      },
-      loading: () => const SliverToBoxAdapter(
-        child: _LibrarySection(
-          title: 'Articles',
-          countLabel: 'Loading',
-          dotColor: RunThruTokens.shellTealDeep,
-          itemCount: 0,
-          empty: _SectionLoading(),
+    Future<void> refresh() async {
+      final messenger = ScaffoldMessenger.of(context);
+      final problem = await ref
+          .read(instapaperBookmarksProvider.notifier)
+          .refresh();
+      if (problem == null) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(problem)));
+    }
+
+    // The first fetch, or a fetch for a newly connected account: there is
+    // no list of this account's to show yet.
+    if (list.isLoading && !list.isRefreshing) {
+      return _section(countLabel: 'Loading', empty: const _SectionLoading());
+    }
+    // Nothing loaded and the last fetch failed. (A failed refresh of a
+    // list that is there leaves the list.)
+    if (list.hasError && bookmarks.isEmpty) {
+      return _section(
+        countLabel: 'Issue',
+        empty: _ArticlesLoadError(
+          message: instapaperListFailureMessage(list.error!),
+          onRetry: refresh,
         ),
-      ),
-      error: (error, _) => SliverToBoxAdapter(
-        child: _LibrarySection(
-          title: 'Articles',
-          countLabel: 'Issue',
-          dotColor: RunThruTokens.shellTealDeep,
-          itemCount: 0,
-          empty: _SectionError(message: error.toString()),
+      );
+    }
+
+    final refreshButton = _RefreshArticlesButton(
+      onRefresh: list.isLoading ? null : refresh,
+    );
+    final visible = query.isEmpty
+        ? bookmarks
+        : bookmarks
+              .where(
+                (b) => '${b.title} ${b.domain} ${b.description} ${b.url}'
+                    .toLowerCase()
+                    .contains(query),
+              )
+              .toList(growable: false);
+    final countLabel = list.isLoading
+        ? 'Updating…'
+        : _countLabel(visible.length, 'article');
+
+    if (visible.isEmpty) {
+      return _section(
+        countLabel: countLabel,
+        headerAction: refreshButton,
+        empty: _EmptyArticlesState(
+          message: query.isEmpty
+              ? 'Nothing unread in Instapaper. Articles you save there show up here.'
+              : 'No articles match this search.',
         ),
+      );
+    }
+
+    // Rebuild when a position is saved; times are at the reader's speed.
+    ref.watch(readingProgressProvider);
+    final progressStore = ref.read(readingProgressProvider.notifier);
+    final wpm =
+        ref.watch(configProvider.select((c) => c.valueOrNull?.defaultWpm)) ??
+        const AppConfig().defaultWpm;
+    final opening = ref.watch(
+      instapaperArticleImportProvider.select(
+        (s) => s is ArticleImportLoading ? s.bookmarkId : null,
       ),
     );
-  }
 
-  static int _readingMinutes(String text) {
-    final words = text.trim().isEmpty ? 1200 : text.trim().split(' ').length;
-    return (words / 238).ceil().clamp(1, 99);
+    return _section(
+      countLabel: countLabel,
+      headerAction: refreshButton,
+      itemCount: visible.length,
+      itemBuilder: (context, index) {
+        final bookmark = visible[index];
+        final details = articleRowDetails(
+          bookmark,
+          record: progressStore.getRecord(
+            'instapaper://${bookmark.bookmarkId}',
+          ),
+          wpm: wpm,
+        );
+        return _ArticleRow(
+          title: bookmark.displayTitle,
+          details: details,
+          opening: opening == bookmark.bookmarkId,
+          // One article at a time.
+          onTap: opening != null
+              ? null
+              : () => ref
+                    .read(instapaperArticleImportProvider.notifier)
+                    .importArticle(bookmark),
+        );
+      },
+    );
   }
+}
+
+/// What an article's row says besides its title.
+@immutable
+class ArticleRowDetails {
+  /// Creates row details.
+  const ArticleRowDetails({
+    required this.source,
+    required this.progress,
+    this.time,
+    this.finished = false,
+  });
+
+  /// Where the article is from: its site, or "Instapaper" when it has none.
+  final String source;
+
+  /// How long the article takes at the reader's speed, once its length is
+  /// known (after it has been opened on this device).
+  final String? time;
+
+  /// How far it has been read, 0 to 1.
+  final double progress;
+
+  /// Whether it was read to the end on this device.
+  final bool finished;
+
+  /// Whether nobody has started it.
+  bool get unread => progress <= 0 && !finished;
+}
+
+/// Works out an article row from what is actually known: the bookmark from
+/// Instapaper and, once the article has been opened here, this device's
+/// record of it. (The row used to show a reading time made up from the
+/// bookmark's description: "6 min" for almost everything.)
+@visibleForTesting
+ArticleRowDetails articleRowDetails(
+  InstapaperBookmark bookmark, {
+  ProgressRecord? record,
+  required int wpm,
+}) {
+  final words = record?.totalWords ?? 0;
+  // Whichever position is newer: this device's, or the one Instapaper has
+  // from another.
+  final localIsNewer =
+      record != null &&
+      words > 0 &&
+      record.lastReadAt.millisecondsSinceEpoch ~/ 1000 >=
+          bookmark.progressTimestamp;
+  return ArticleRowDetails(
+    source: bookmark.domain.isEmpty ? 'Instapaper' : bookmark.domain,
+    time: words > 0 && wpm > 0 ? formatMinutes((words / wpm).ceil()) : null,
+    progress: (localIsNewer ? record.percent : bookmark.progress).clamp(
+      0.0,
+      1.0,
+    ),
+    finished: localIsNewer && record.finished,
+  );
 }
 
 class _ArticleRow extends StatelessWidget {
   const _ArticleRow({
     required this.title,
-    required this.source,
-    required this.detail,
-    required this.unread,
+    required this.details,
+    required this.opening,
     required this.onTap,
   });
 
   final String title;
-  final String source;
-  final String detail;
-  final bool unread;
-  final VoidCallback onTap;
+  final ArticleRowDetails details;
+
+  /// Whether this article is being fetched right now.
+  final bool opening;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return RunThruShellRow(
-      title: title,
-      metadata: detail,
-      icon: _iconForSource(source),
-      semanticLabel: unread ? '$title, unread, $detail' : '$title, $detail',
+    final time = details.time;
+    final spoken = [
+      title,
+      if (opening) 'opening' else if (details.unread) 'unread',
+      details.source,
+      if (time != null) time,
+      if (!opening && !details.unread && !details.finished)
+        '${(details.progress * 100).round()} percent read',
+    ].join(', ');
+    // One announcement for the row, as for books: its own text is excluded
+    // so the title is not read twice.
+    return Semantics(
+      label: spoken,
+      button: true,
+      enabled: onTap != null,
+      liveRegion: opening,
+      excludeSemantics: true,
       onTap: onTap,
-      trailing: unread
-          ? const RunThruStatusPill(label: 'New', tone: RunThruStatusTone.ready)
-          : null,
+      child: RunThruShellRow(
+        title: title,
+        metadata: details.source,
+        metadataSuffix: time,
+        icon: _iconForSource('instapaper'),
+        onTap: onTap,
+        trailing: opening
+            ? const RunThruStatusPill(
+                label: 'Opening…',
+                tone: RunThruStatusTone.warning,
+              )
+            : details.unread
+            ? const RunThruStatusPill(
+                label: 'New',
+                tone: RunThruStatusTone.ready,
+              )
+            : RunThruProgressRing(
+                value: details.progress,
+                finished: details.finished,
+                size: 42,
+              ),
+      ),
     );
   }
 }
