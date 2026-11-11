@@ -249,6 +249,18 @@ class InstapaperAuth extends _$InstapaperAuth {
         'Instapaper rate-limited this connection. Try again later.',
       InstapaperFailureKind.suspended =>
         'This Instapaper API connection is unavailable. Contact support if it continues.',
+      InstapaperFailureKind.clockSkew =>
+        "Instapaper refused the request because this device's date and time look wrong. Set them to automatic, then try again.",
+      InstapaperFailureKind.premiumRequired =>
+        'This needs an Instapaper Premium account.',
+      InstapaperFailureKind.textUnavailable =>
+        'Instapaper could not make a text version of this article.',
+      InstapaperFailureKind.textAccessDenied =>
+        'Instapaper is not providing article text to RunThru right now.',
+      InstapaperFailureKind.bookmarkNotFound =>
+        'This article is no longer in your Instapaper account.',
+      InstapaperFailureKind.invalidRequest =>
+        'Instapaper did not accept the request. Try again.',
       InstapaperFailureKind.unknown =>
         'Could not connect Instapaper. Try again.',
     };

@@ -1,7 +1,31 @@
+/// An integer from an Instapaper JSON value, which may arrive as a number
+/// (whole or with a fraction) or as a numeric string. Null when it is neither.
+int? instapaperInt(Object? value) => switch (value) {
+  final int v => v,
+  final double v when v.isFinite => v.toInt(),
+  final String v =>
+    int.tryParse(v.trim()) ?? double.tryParse(v.trim())?.toInt(),
+  _ => null,
+};
+
+/// A number from an Instapaper JSON value (number or numeric string).
+double? instapaperDouble(Object? value) => switch (value) {
+  final num v when v.isFinite => v.toDouble(),
+  final String v => double.tryParse(v.trim()),
+  _ => null,
+};
+
+/// A string from an Instapaper JSON value; empty when it is absent or null.
+String instapaperString(Object? value) => switch (value) {
+  final String v => v,
+  null => '',
+  _ => value.toString(),
+};
+
 /// An Instapaper saved article (bookmark).
 ///
 /// Mirrors the bookmark object from the Instapaper Full API.
-/// See: https://www.instapaper.com/api/full
+/// See: https://www.instapaper.com/developers/v1/full-api/responses
 class InstapaperBookmark {
   /// Creates an [InstapaperBookmark] with the given fields.
   const InstapaperBookmark({
@@ -18,25 +42,40 @@ class InstapaperBookmark {
   });
 
   /// Parse from Instapaper API JSON response.
+  ///
+  /// Throws a [FormatException] when the object has no usable `bookmark_id`.
   factory InstapaperBookmark.fromJson(Map<String, Object?> json) {
+    final bookmark = tryFromJson(json);
+    if (bookmark == null) throw const FormatException('Missing bookmark_id');
+    return bookmark;
+  }
+
+  /// Parse from Instapaper API JSON, or null when the object has no usable
+  /// `bookmark_id`. Every other field is optional and tolerant of the type
+  /// it arrives in, so one odd entry cannot fail a whole list.
+  static InstapaperBookmark? tryFromJson(Map<String, Object?> json) {
+    final id = instapaperInt(json['bookmark_id']);
+    if (id == null) return null;
+    final starred = json['starred'];
     return InstapaperBookmark(
-      bookmarkId: (json['bookmark_id'] as num).toInt(),
-      url: json['url'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      hash: json['hash'] as String? ?? '',
-      progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
-      progressTimestamp: json['progress_timestamp'] as int? ?? 0,
-      time: json['time'] as int? ?? 0,
-      starred: json['starred'] == '1' || json['starred'] == true,
-      privateSource: json['private_source'] as String? ?? '',
+      bookmarkId: id,
+      url: instapaperString(json['url']),
+      title: instapaperString(json['title']),
+      description: instapaperString(json['description']),
+      hash: instapaperString(json['hash']),
+      progress: (instapaperDouble(json['progress']) ?? 0.0).clamp(0.0, 1.0),
+      progressTimestamp: instapaperInt(json['progress_timestamp']) ?? 0,
+      time: instapaperInt(json['time']) ?? 0,
+      starred: starred == true || starred == 1 || starred == '1',
+      privateSource: instapaperString(json['private_source']),
     );
   }
 
   /// Unique bookmark identifier.
   final int bookmarkId;
 
-  /// Original article URL.
+  /// Original article URL. Private bookmarks (saved by email, for example)
+  /// carry a non-functioning `instapaper://private-content/…` value.
   final String url;
 
   /// Article title.
@@ -63,13 +102,30 @@ class InstapaperBookmark {
   /// Empty for public bookmarks; source label for private ones.
   final String privateSource;
 
-  /// The domain portion of the URL for display.
+  /// Whether the bookmark has a web address a browser could open.
+  bool get hasWebUrl {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
+  /// The site the article came from, for display ("example.com"). Empty for
+  /// private bookmarks, which have no site.
   String get domain {
-    try {
-      return Uri.parse(url).host;
-    } catch (_) {
-      return url;
-    }
+    if (!hasWebUrl) return '';
+    final host = Uri.parse(url).host.toLowerCase();
+    return host.startsWith('www.') ? host.substring(4) : host;
+  }
+
+  /// The title to show: the article's own, or where it came from when the
+  /// title is missing.
+  String get displayTitle {
+    final trimmed = title.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    if (domain.isNotEmpty) return domain;
+    if (privateSource.trim().isNotEmpty) return privateSource.trim();
+    return 'Untitled article';
   }
 
   /// Reading progress as a percentage string (e.g. "50%").
