@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -254,6 +255,212 @@ void main() {
       expect(pending, hasLength(1));
       expect(pending.single, isA<ProgressOp>());
       expect((pending.single as ProgressOp).progress, equals(0.37));
+    });
+  });
+
+  group('sync (B-46)', () {
+    InstapaperBookmark bookmark(
+      int id, {
+      double progress = 0,
+      int progressTimestamp = 0,
+    }) => InstapaperBookmark(
+      bookmarkId: id,
+      url: 'https://example.com/$id',
+      title: 'Article $id',
+      progress: progress,
+      progressTimestamp: progressTimestamp,
+    );
+
+    ProviderContainer signedIn(InstapaperClient client) {
+      final container = ProviderContainer(
+        overrides: [
+          instapaperAuthProvider.overrideWith(
+            () => FakeInstapaperAuth(
+              initialState: const InstapaperAuthAuthenticated(
+                user: InstapaperUser(userId: 123, username: 'test'),
+              ),
+              testClient: client,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('an article waiting to be archived is left out of the list', () {
+      final result = InstapaperBookmarks.overlayPendingOps(
+        [bookmark(1), bookmark(2)],
+        const [ArchiveOp(bookmarkId: 1)],
+      );
+
+      expect(result.map((b) => b.bookmarkId), [2]);
+    });
+
+    test('a pending position replaces an older one from the server', () {
+      final result = InstapaperBookmarks.overlayPendingOps(
+        [bookmark(1, progress: 0.2, progressTimestamp: 100)],
+        const [ProgressOp(bookmarkId: 1, progress: 0.6, timestamp: 200)],
+      );
+
+      expect(result.single.progress, 0.6);
+      expect(result.single.progressTimestamp, 200);
+    });
+
+    test('a newer position from another device is not overwritten', () {
+      final result = InstapaperBookmarks.overlayPendingOps(
+        [bookmark(1, progress: 0.9, progressTimestamp: 300)],
+        const [ProgressOp(bookmarkId: 1, progress: 0.3, timestamp: 200)],
+      );
+
+      expect(result.single.progress, 0.9);
+      expect(result.single.progressTimestamp, 300);
+    });
+
+    test('of two pending positions for an article the later one counts', () {
+      final result = InstapaperBookmarks.overlayPendingOps(
+        [bookmark(1)],
+        const [
+          ProgressOp(bookmarkId: 1, progress: 0.7, timestamp: 20),
+          ProgressOp(bookmarkId: 1, progress: 0.4, timestamp: 10),
+        ],
+      );
+
+      expect(result.single.progress, 0.7);
+    });
+
+    test(
+      'an archive that goes out during a refresh does not bring the article back',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'instapaper_sync_queue_v1': jsonEncode([
+            {'type': 'archive', 'bookmark_id': 1001},
+          ]),
+        });
+        final client = InstapaperClient(
+          httpClient: mockHttp,
+          config: testConfig,
+        )..setTokens(token: 'tok', tokenSecret: 'sec');
+        final archived = Completer<void>();
+
+        when(
+          () => mockHttp.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer((invocation) async {
+          final uri = invocation.positionalArguments.first as Uri;
+          if (uri.path == '/api/1/bookmarks/archive') {
+            archived.complete();
+            return http.Response('[]', 200);
+          }
+          // The list was built before the archive arrived, and is delivered
+          // after the archive has left the queue.
+          await archived.future;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return http.Response(
+            jsonEncode([
+              {'type': 'bookmark', 'bookmark_id': 1001, 'title': 'Finished'},
+              {'type': 'bookmark', 'bookmark_id': 1002, 'title': 'Unread'},
+            ]),
+            200,
+          );
+        });
+
+        final container = signedIn(client);
+        final bookmarks = await container.read(
+          instapaperBookmarksProvider.future,
+        );
+
+        expect(bookmarks.map((b) => b.bookmarkId), [1002]);
+        expect(
+          await container.read(instapaperSyncQueueProvider).pendingOps(),
+          isEmpty,
+        );
+      },
+    );
+
+    test('saving a position does not wait for the network', () async {
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig)
+        ..setTokens(token: 'tok', tokenSecret: 'sec');
+      final neverAnswered = Completer<http.Response>();
+      addTearDown(() => neverAnswered.complete(http.Response('[]', 200)));
+
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((invocation) {
+        final uri = invocation.positionalArguments.first as Uri;
+        if (uri.path == '/api/1/bookmarks/list') {
+          return Future.value(
+            http.Response(
+              jsonEncode([
+                {'type': 'bookmark', 'bookmark_id': 1001, 'title': 'A'},
+              ]),
+              200,
+            ),
+          );
+        }
+        return neverAnswered.future;
+      });
+
+      final container = signedIn(client);
+      await container.read(instapaperBookmarksProvider.future);
+      final notifier = container.read(instapaperBookmarksProvider.notifier);
+
+      await notifier
+          .syncProgress(bookmarkId: 1001, progress: 0.5)
+          .timeout(const Duration(seconds: 2));
+      await notifier
+          .archive(bookmarkId: 1001)
+          .timeout(const Duration(seconds: 2));
+
+      expect(container.read(instapaperBookmarksProvider).value, isEmpty);
+      final pending = await container
+          .read(instapaperSyncQueueProvider)
+          .pendingOps();
+      expect(pending.single, isA<ArchiveOp>());
+    });
+
+    test('a position that could not be sent offline is kept', () async {
+      final client = InstapaperClient(httpClient: mockHttp, config: testConfig)
+        ..setTokens(token: 'tok', tokenSecret: 'sec');
+
+      when(
+        () => mockHttp.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer((invocation) async {
+        final uri = invocation.positionalArguments.first as Uri;
+        if (uri.path == '/api/1/bookmarks/list') {
+          return http.Response(
+            jsonEncode([
+              {'type': 'bookmark', 'bookmark_id': 1001, 'title': 'A'},
+            ]),
+            200,
+          );
+        }
+        // What the device reports with no connection.
+        throw http.ClientException('Failed host lookup');
+      });
+
+      final container = signedIn(client);
+      await container.read(instapaperBookmarksProvider.future);
+      await container
+          .read(instapaperBookmarksProvider.notifier)
+          .syncProgress(bookmarkId: 1001, progress: 0.37);
+      final queue = container.read(instapaperSyncQueueProvider);
+      await queue.drain();
+
+      final pending = await queue.pendingOps();
+      expect(pending.single, isA<ProgressOp>());
+      expect((pending.single as ProgressOp).progress, 0.37);
     });
   });
 

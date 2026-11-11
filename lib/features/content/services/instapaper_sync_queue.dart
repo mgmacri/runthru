@@ -1,10 +1,14 @@
 /// Offline-first sync queue for Instapaper write operations.
 ///
-/// Reading progress updates and archive operations are durable: they are
-/// persisted to [SharedPreferences] on enqueue and drained against the
-/// Instapaper API when a client is available. Failed sends remain in the
-/// queue and are retried on the next drain (next enqueue, auth change, or
-/// app resume).
+/// Reading progress updates and archive operations are durable: an op is
+/// written to [SharedPreferences] before [InstapaperSyncQueue.enqueueProgress]
+/// or [InstapaperSyncQueue.enqueueArchive] returns, and sending happens
+/// afterwards, on its own. Nothing a caller awaits ever waits on the network.
+///
+/// An op leaves the queue only when Instapaper accepted it, or when it can
+/// never succeed (the bookmark is gone). A send that failed for any other
+/// reason stays queued and is tried again: after a pause, on the next
+/// enqueue, on the next list refresh, and on sign-in.
 ///
 /// Progress updates for the same bookmark coalesce: only the most recent
 /// progress value is kept. An archive op for a bookmark supersedes any
@@ -15,6 +19,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:runthru/core/logger.dart';
+import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,27 +29,43 @@ const String _kQueueKey = 'instapaper_sync_queue_v1';
 /// A single pending sync operation.
 sealed class InstapaperSyncOp {
   /// Base constructor.
-  const InstapaperSyncOp({required this.bookmarkId});
+  const InstapaperSyncOp({required this.bookmarkId, this.attempts = 0});
 
   /// The bookmark this op targets.
   final int bookmarkId;
 
+  /// How many sends Instapaper has refused for a reason the queue does not
+  /// know. Sends that never reached Instapaper are not counted.
+  final int attempts;
+
   /// Serialise to a JSON-safe map.
   Map<String, Object?> toJson();
 
-  /// Parse from a JSON map.
+  /// The same op with a different [attempts] count.
+  InstapaperSyncOp withAttempts(int attempts);
+
+  /// Whether [other] is this very op (ignoring [attempts]): the same kind,
+  /// bookmark and, for progress, the same position and time.
+  bool sameAs(InstapaperSyncOp other);
+
+  /// Parse from a JSON map. Null for an entry that is not a known op.
   static InstapaperSyncOp? fromJson(Map<String, Object?> json) {
-    final type = json['type'] as String?;
-    final id = (json['bookmark_id'] as num?)?.toInt();
+    final id = instapaperInt(json['bookmark_id']);
     if (id == null) return null;
-    switch (type) {
+    final attempts = instapaperInt(json['attempts']) ?? 0;
+    switch (json['type']) {
       case 'progress':
-        final p = (json['progress'] as num?)?.toDouble();
-        final ts = (json['timestamp'] as num?)?.toInt();
+        final p = instapaperDouble(json['progress']);
+        final ts = instapaperInt(json['timestamp']);
         if (p == null || ts == null) return null;
-        return ProgressOp(bookmarkId: id, progress: p, timestamp: ts);
+        return ProgressOp(
+          bookmarkId: id,
+          progress: p.clamp(0.0, 1.0),
+          timestamp: ts,
+          attempts: attempts,
+        );
       case 'archive':
-        return ArchiveOp(bookmarkId: id);
+        return ArchiveOp(bookmarkId: id, attempts: attempts);
       default:
         return null;
     }
@@ -58,6 +79,7 @@ class ProgressOp extends InstapaperSyncOp {
     required super.bookmarkId,
     required this.progress,
     required this.timestamp,
+    super.attempts,
   });
 
   /// Reading progress in the range 0.0–1.0.
@@ -72,169 +94,388 @@ class ProgressOp extends InstapaperSyncOp {
     'bookmark_id': bookmarkId,
     'progress': progress,
     'timestamp': timestamp,
+    if (attempts > 0) 'attempts': attempts,
   };
+
+  @override
+  ProgressOp withAttempts(int attempts) => ProgressOp(
+    bookmarkId: bookmarkId,
+    progress: progress,
+    timestamp: timestamp,
+    attempts: attempts,
+  );
+
+  @override
+  bool sameAs(InstapaperSyncOp other) =>
+      other is ProgressOp &&
+      other.bookmarkId == bookmarkId &&
+      other.progress == progress &&
+      other.timestamp == timestamp;
 }
 
 /// Pending archive (mark-as-read) op.
 class ArchiveOp extends InstapaperSyncOp {
   /// Creates an archive sync op.
-  const ArchiveOp({required super.bookmarkId});
+  const ArchiveOp({required super.bookmarkId, super.attempts});
 
   @override
   Map<String, Object?> toJson() => {
     'type': 'archive',
     'bookmark_id': bookmarkId,
+    if (attempts > 0) 'attempts': attempts,
   };
+
+  @override
+  ArchiveOp withAttempts(int attempts) =>
+      ArchiveOp(bookmarkId: bookmarkId, attempts: attempts);
+
+  @override
+  bool sameAs(InstapaperSyncOp other) =>
+      other is ArchiveOp && other.bookmarkId == bookmarkId;
 }
 
 /// Resolves the active Instapaper client, or null when unauthenticated.
 typedef InstapaperClientResolver = InstapaperClient? Function();
 
+/// What one send came to.
+enum _Outcome {
+  /// Instapaper accepted the op.
+  sent,
+
+  /// The op can never succeed; it leaves the queue.
+  dropped,
+
+  /// Refused for an unknown reason; counted, and the next op gets its turn.
+  failed,
+
+  /// Nothing will get through right now (no connection, rate limit, server
+  /// trouble): stop, keep everything, try again after a pause.
+  retryLater,
+
+  /// Nothing will get through until the reader signs in again: stop, keep
+  /// everything.
+  needsSignIn,
+}
+
+/// How one pass over the queue ended.
+enum _Pass {
+  /// Every queued op had its turn.
+  workedThrough,
+
+  /// Nobody is signed in. Worth another look if a drain was asked for
+  /// meanwhile (sign-in may just have finished).
+  noClient,
+
+  /// Stopped early; another pass now would meet the same wall.
+  blocked,
+}
+
 /// Persistent, coalescing sync queue for Instapaper write ops.
 ///
-/// Thread-safety: all public mutators are serialised through a single
-/// [Future] chain to avoid concurrent SharedPreferences writes or duplicate
-/// in-flight drains.
+/// Storage updates are serialised among themselves and never wait on a
+/// request. One drain runs at a time; a drain asked for while one is running
+/// makes that one take another pass.
 class InstapaperSyncQueue {
   /// Creates a queue with the given client resolver.
-  InstapaperSyncQueue({required InstapaperClientResolver clientResolver})
-    : _clientResolver = clientResolver;
+  ///
+  /// [onAuthFailure] is told when Instapaper refuses the saved connection.
+  /// [retryDelays] are the pauses before a failed drain is tried again (the
+  /// last one repeats); an empty list means no timed retry. An op refused
+  /// [maxAttempts] times for an unknown reason is given up on.
+  InstapaperSyncQueue({
+    required InstapaperClientResolver clientResolver,
+    void Function(InstapaperApiException error)? onAuthFailure,
+    List<Duration> retryDelays = const [
+      Duration(seconds: 30),
+      Duration(minutes: 2),
+      Duration(minutes: 5),
+      Duration(minutes: 15),
+    ],
+    int maxAttempts = 5,
+  }) : _clientResolver = clientResolver,
+       _onAuthFailure = onAuthFailure,
+       _retryDelays = retryDelays,
+       _maxAttempts = maxAttempts;
 
   final InstapaperClientResolver _clientResolver;
-  Future<void> _chain = Future<void>.value();
-  bool _draining = false;
+  final void Function(InstapaperApiException error)? _onAuthFailure;
+  final List<Duration> _retryDelays;
+  final int _maxAttempts;
+
+  SharedPreferences? _prefs;
+  Future<void> _storeChain = Future<void>.value();
+
+  Future<void>? _drainFuture;
+  bool _drainAgain = false;
+
+  /// Bumped by [clear]: a drain that started before it stops touching ops.
+  int _generation = 0;
+
+  Timer? _retryTimer;
+  int _retryStep = 0;
+  bool _disposed = false;
 
   /// Snapshot of pending ops (read-only view used by callers to overlay
   /// optimistic state on freshly fetched bookmark lists).
-  Future<List<InstapaperSyncOp>> pendingOps() async {
-    final prefs = await SharedPreferences.getInstance();
-    return _decode(prefs.getString(_kQueueKey));
-  }
+  Future<List<InstapaperSyncOp>> pendingOps() => _read();
 
-  /// Enqueue a progress update and try to drain immediately.
+  /// Save a progress update, then send it in the background.
+  ///
+  /// Completes when the op is saved.
   Future<void> enqueueProgress({
     required int bookmarkId,
     required double progress,
     int? timestampSeconds,
-  }) {
+  }) async {
     final ts =
         timestampSeconds ?? (DateTime.now().millisecondsSinceEpoch ~/ 1000);
-    return _serialise(() async {
-      await _mutate((ops) {
-        // Drop any existing progress op for this bookmark — keep latest only.
-        ops.removeWhere((o) => o is ProgressOp && o.bookmarkId == bookmarkId);
-        // If an archive is already queued, the progress is moot.
-        final archived = ops.any(
-          (o) => o is ArchiveOp && o.bookmarkId == bookmarkId,
+    await _mutate((ops) {
+      // Drop any existing progress op for this bookmark — keep latest only.
+      ops.removeWhere((o) => o is ProgressOp && o.bookmarkId == bookmarkId);
+      // If an archive is already queued, the progress is moot.
+      final archived = ops.any(
+        (o) => o is ArchiveOp && o.bookmarkId == bookmarkId,
+      );
+      if (!archived) {
+        ops.add(
+          ProgressOp(
+            bookmarkId: bookmarkId,
+            progress: progress.clamp(0.0, 1.0),
+            timestamp: ts,
+          ),
         );
-        if (!archived) {
-          ops.add(
-            ProgressOp(
-              bookmarkId: bookmarkId,
-              progress: progress.clamp(0.0, 1.0),
-              timestamp: ts,
-            ),
-          );
-        }
-      });
-      await _drainLocked();
+      }
     });
+    unawaited(drain());
   }
 
-  /// Enqueue an archive op and try to drain immediately.
-  Future<void> enqueueArchive({required int bookmarkId}) {
-    return _serialise(() async {
-      await _mutate((ops) {
-        // An archive supersedes any pending progress for this bookmark.
-        ops.removeWhere((o) => o.bookmarkId == bookmarkId);
-        ops.add(ArchiveOp(bookmarkId: bookmarkId));
-      });
-      await _drainLocked();
+  /// Save an archive op, then send it in the background.
+  ///
+  /// Completes when the op is saved.
+  Future<void> enqueueArchive({required int bookmarkId}) async {
+    await _mutate((ops) {
+      // An archive supersedes any pending progress for this bookmark.
+      ops.removeWhere((o) => o.bookmarkId == bookmarkId);
+      ops.add(ArchiveOp(bookmarkId: bookmarkId));
     });
+    unawaited(drain());
   }
 
-  /// Drain the queue. Safe to call on auth change or app resume.
-  Future<void> drain() => _serialise(_drainLocked);
+  /// Send what is queued. Safe to call at any time (sign-in, list refresh,
+  /// app resume); completes when this round of sending is over.
+  Future<void> drain() {
+    final running = _drainFuture;
+    if (running != null) {
+      _drainAgain = true;
+      return running;
+    }
+    final future = _drainLoop();
+    _drainFuture = future;
+    return future;
+  }
 
   /// Clear all pending Instapaper write operations.
-  Future<void> clear() => _serialise(() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kQueueKey);
+  Future<void> clear() {
+    _generation++;
+    _cancelRetry();
+    _retryStep = 0;
+    return _locked((prefs) => prefs.remove(_kQueueKey));
+  }
+
+  /// Stop timed retries. Queued ops stay saved for the next launch.
+  void dispose() {
+    _disposed = true;
+    _cancelRetry();
+  }
+
+  // ── Draining ──────────────────────────────────────────────────────────────
+
+  Future<void> _drainLoop() async {
+    // Ops refused during this drain: a further pass leaves them for the
+    // next drain instead of sending them again straight away.
+    final refused = <InstapaperSyncOp>[];
+    try {
+      do {
+        _drainAgain = false;
+        if (await _drainOnce(refused) == _Pass.blocked) break;
+      } while (_drainAgain && !_disposed);
+    } finally {
+      // Cleared in the same step as the loop's last check, so a drain asked
+      // for from now on starts a new one instead of joining a finished one.
+      _drainFuture = null;
+    }
+  }
+
+  /// One pass over the queue.
+  Future<_Pass> _drainOnce(List<InstapaperSyncOp> refused) async {
+    final generation = _generation;
+    final client = _resolveClient();
+    if (client == null) {
+      appLog('instapaper-queue', 'drain skipped: no client');
+      return _Pass.noClient;
+    }
+
+    final ops = await _read();
+    if (ops.isEmpty) {
+      _cancelRetry();
+      return _Pass.workedThrough;
+    }
+    appLog('instapaper-queue', 'draining ${ops.length} op(s)');
+
+    for (final op in ops) {
+      if (_disposed || generation != _generation) return _Pass.workedThrough;
+      if (refused.any(op.sameAs)) continue;
+      // Replaced or cleared since the snapshot was taken.
+      if (!await _contains(op)) continue;
+
+      final outcome = await _send(client, op);
+      // Cleared during the send: nothing queued belongs to this pass now.
+      if (generation != _generation) return _Pass.workedThrough;
+
+      switch (outcome) {
+        case _Outcome.sent:
+          _retryStep = 0;
+          await _remove(op);
+        case _Outcome.dropped:
+          await _remove(op);
+        case _Outcome.failed:
+          refused.add(op);
+          await _countFailure(op);
+        case _Outcome.retryLater:
+          _scheduleRetry();
+          return _Pass.blocked;
+        case _Outcome.needsSignIn:
+          return _Pass.blocked;
+      }
+    }
+    return _Pass.workedThrough;
+  }
+
+  Future<_Outcome> _send(InstapaperClient client, InstapaperSyncOp op) async {
+    final label = '${op.runtimeType} bookmark=${op.bookmarkId}';
+    try {
+      switch (op) {
+        case ProgressOp():
+          await client.updateReadProgress(
+            bookmarkId: op.bookmarkId,
+            progress: op.progress,
+            timestampSeconds: op.timestamp,
+          );
+        case ArchiveOp():
+          await client.archiveBookmark(bookmarkId: op.bookmarkId);
+      }
+      appLog('instapaper-queue', 'sent $label');
+      return _Outcome.sent;
+    } on InstapaperApiException catch (e) {
+      final why = 'category=${e.kind.name} code=${e.errorCode}';
+      if (e.isPermanent) {
+        appLog('instapaper-queue', 'dropping $label: $why');
+        return _Outcome.dropped;
+      }
+      if (e.kind == InstapaperFailureKind.unauthorized ||
+          e.kind == InstapaperFailureKind.suspended) {
+        appLog('instapaper-queue', 'keeping ops until sign-in: $why');
+        if (e.kind == InstapaperFailureKind.unauthorized) {
+          _onAuthFailure?.call(e);
+        }
+        return _Outcome.needsSignIn;
+      }
+      if (e.isTransient) {
+        appLog('instapaper-queue', 'keeping ops, will retry: $why');
+        return _Outcome.retryLater;
+      }
+      appLog('instapaper-queue', 'send refused for $label: $why');
+      return _Outcome.failed;
+    } on InstapaperAuthException catch (e) {
+      // The build has no consumer key: nothing can be sent.
+      appLog('instapaper-queue', 'keeping ops: category=${e.kind.name}');
+      return _Outcome.needsSignIn;
+    } on Object catch (e) {
+      appLog(
+        'instapaper-queue',
+        'keeping ops, will retry: ${InstapaperRedactor.redact('$e')}',
+      );
+      return _Outcome.retryLater;
+    }
+  }
+
+  InstapaperClient? _resolveClient() {
+    try {
+      return _clientResolver();
+    } on Object {
+      // The owner (a provider container) is gone.
+      return null;
+    }
+  }
+
+  void _scheduleRetry() {
+    if (_disposed || _retryDelays.isEmpty) return;
+    _retryTimer?.cancel();
+    final step = _retryStep < _retryDelays.length
+        ? _retryStep
+        : _retryDelays.length - 1;
+    _retryStep++;
+    _retryTimer = Timer(_retryDelays[step], () {
+      _retryTimer = null;
+      if (!_disposed) unawaited(drain());
+    });
+  }
+
+  void _cancelRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+  }
+
+  // ── Storage ───────────────────────────────────────────────────────────────
+
+  Future<SharedPreferences> _preferences() async =>
+      _prefs ??= await SharedPreferences.getInstance();
+
+  Future<List<InstapaperSyncOp>> _read() async =>
+      _decode((await _preferences()).getString(_kQueueKey));
+
+  Future<bool> _contains(InstapaperSyncOp op) async =>
+      (await _read()).any(op.sameAs);
+
+  /// Removes [op] if it is still queued as it was sent. A newer op for the
+  /// same bookmark, queued while this one was on its way, stays.
+  Future<void> _remove(InstapaperSyncOp op) => _mutate((ops) {
+    final index = ops.indexWhere(op.sameAs);
+    if (index >= 0) ops.removeAt(index);
   });
 
-  Future<void> _drainLocked() async {
-    if (_draining) return;
-    final client = _clientResolver();
-    if (client == null) {
-      appLog('instapaper-queue', 'drain skipped — no client');
-      return;
+  Future<void> _countFailure(InstapaperSyncOp op) => _mutate((ops) {
+    final index = ops.indexWhere(op.sameAs);
+    if (index < 0) return;
+    final attempts = ops[index].attempts + 1;
+    if (attempts >= _maxAttempts) {
+      ops.removeAt(index);
+      appLog(
+        'instapaper-queue',
+        'giving up on ${op.runtimeType} bookmark=${op.bookmarkId} '
+            'after $attempts refusals',
+      );
+    } else {
+      ops[index] = ops[index].withAttempts(attempts);
     }
-    _draining = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      var ops = _decode(prefs.getString(_kQueueKey));
-      if (ops.isEmpty) return;
-      appLog('instapaper-queue', 'draining ${ops.length} op(s)');
+  });
 
-      final remaining = <InstapaperSyncOp>[];
-      for (final op in ops) {
-        try {
-          switch (op) {
-            case ProgressOp():
-              await client.updateReadProgress(
-                bookmarkId: op.bookmarkId,
-                progress: op.progress,
-              );
-            case ArchiveOp():
-              await client.archiveBookmark(bookmarkId: op.bookmarkId);
-          }
-          appLog(
-            'instapaper-queue',
-            'sent ${op.runtimeType} bookmark=${op.bookmarkId}',
-          );
-        } on InstapaperApiException catch (e) {
-          // 4xx (except auth/transient) are unrecoverable — drop.
-          // For safety, retain on auth errors so re-login can flush.
-          if (e.errorCode == 401 || e.errorCode == 403) {
-            remaining.add(op);
-            appLog(
-              'instapaper-queue',
-              'auth error (${e.errorCode}) — keeping op',
-            );
-          } else {
-            appLog(
-              'instapaper-queue',
-              'dropping op category=${e.kind.name} code=${e.errorCode}',
-            );
-          }
-        } on Object catch (e) {
-          // Network / IO error — keep op for retry.
-          remaining.add(op);
-          appLog(
-            'instapaper-queue',
-            'transient error — keeping op: ${InstapaperRedactor.redact('$e')}',
-          );
-        }
-      }
+  Future<void> _mutate(void Function(List<InstapaperSyncOp> ops) update) =>
+      _locked((prefs) {
+        final ops = _decode(prefs.getString(_kQueueKey));
+        update(ops);
+        return prefs.setString(_kQueueKey, _encode(ops));
+      });
 
-      // Persist whatever remains.
-      ops = remaining;
-      await prefs.setString(_kQueueKey, _encode(ops));
-    } finally {
-      _draining = false;
-    }
-  }
-
-  Future<void> _mutate(void Function(List<InstapaperSyncOp> ops) update) async {
-    final prefs = await SharedPreferences.getInstance();
-    final ops = _decode(prefs.getString(_kQueueKey));
-    update(ops);
-    await prefs.setString(_kQueueKey, _encode(ops));
-  }
-
-  Future<void> _serialise(Future<void> Function() action) {
-    final next = _chain.then((_) => action());
-    _chain = next.catchError((Object _) {});
+  /// Runs [action] after every storage update asked for before it. No
+  /// request is ever made inside, so this never waits on the network.
+  Future<void> _locked(
+    Future<Object?> Function(SharedPreferences prefs) action,
+  ) {
+    final next = _storeChain.then((_) async {
+      await action(await _preferences());
+    });
+    _storeChain = next.catchError((Object _) {});
     return next;
   }
 

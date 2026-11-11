@@ -154,13 +154,18 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
     final client = ref.read(instapaperAuthProvider.notifier).client;
     if (client == null) return [];
 
-    // Kick off a drain in the background (fire-and-forget). The queue
-    // provider also drains on auth change, so this is non-blocking.
+    // Send what is waiting, in the background. An op that goes out while
+    // the list is on its way may or may not be reflected in it, so the ops
+    // pending before the request count as much as those pending after.
     final queue = ref.read(instapaperSyncQueueProvider);
+    final pendingBefore = await queue.pendingOps();
     unawaited(queue.drain());
 
     final bookmarks = await client.getBookmarks();
-    return _overlayPendingOps(bookmarks, await queue.pendingOps());
+    return overlayPendingOps(bookmarks, [
+      ...pendingBefore,
+      ...await queue.pendingOps(),
+    ]);
   }
 
   /// Force refresh the bookmarks list.
@@ -169,8 +174,9 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
   }
 
   /// Optimistically apply a reading-progress update locally and enqueue
-  /// the change for delivery to Instapaper. Eventual consistency: the
-  /// queue retries on failure until the op is sent or auth is revoked.
+  /// the change for delivery to Instapaper. Completes once the change is
+  /// saved on the device; sending happens afterwards and is retried until
+  /// Instapaper has it.
   Future<void> syncProgress({
     required int bookmarkId,
     required double progress,
@@ -225,8 +231,11 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
     ]);
   }
 
-  /// Overlay pending queue ops on a freshly-fetched bookmark list.
-  static List<InstapaperBookmark> _overlayPendingOps(
+  /// Overlay pending queue ops on a freshly-fetched bookmark list: an
+  /// article waiting to be archived is left out, and a position waiting to
+  /// be sent replaces the server's unless the server's is newer (read
+  /// further on another device since).
+  static List<InstapaperBookmark> overlayPendingOps(
     List<InstapaperBookmark> bookmarks,
     List<InstapaperSyncOp> ops,
   ) {
@@ -235,14 +244,19 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
       for (final o in ops)
         if (o is ArchiveOp) o.bookmarkId,
     };
-    final pendingProgress = <int, ProgressOp>{
-      for (final o in ops)
-        if (o is ProgressOp) o.bookmarkId: o,
-    };
+    final pendingProgress = <int, ProgressOp>{};
+    for (final o in ops) {
+      if (o is! ProgressOp) continue;
+      final known = pendingProgress[o.bookmarkId];
+      if (known == null || o.timestamp >= known.timestamp) {
+        pendingProgress[o.bookmarkId] = o;
+      }
+    }
     return [
       for (final b in bookmarks)
         if (!archivedIds.contains(b.bookmarkId))
-          if (pendingProgress[b.bookmarkId] case final ProgressOp p)
+          if (pendingProgress[b.bookmarkId] case final ProgressOp p
+              when p.timestamp >= b.progressTimestamp)
             b.copyWith(progress: p.progress, progressTimestamp: p.timestamp)
           else
             b,
@@ -258,6 +272,7 @@ InstapaperSyncQueue instapaperSyncQueue(Ref ref) {
   final queue = InstapaperSyncQueue(
     clientResolver: () => ref.read(instapaperAuthProvider.notifier).client,
   );
+  ref.onDispose(queue.dispose);
   // Drain whenever auth becomes authenticated (e.g. login, app resume).
   ref.listen<InstapaperAuthState>(instapaperAuthProvider, (prev, next) {
     if (next is InstapaperAuthAuthenticated) {
