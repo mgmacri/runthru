@@ -29,6 +29,7 @@ import 'package:runthru/design/design.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/reading_progress_sync.dart';
 import 'package:runthru/features/reading/chapter_flow.dart';
+import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
 import 'package:runthru/features/reading/widgets/chapter_title_card.dart';
@@ -941,6 +942,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _sectionIndex.value = _structure.sectionAt(startIndex).index;
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
+    timer.setPacingConfig(config.pacingConfig);
     _startTimerAfterFirstRunGate();
     appLog(
       'ParallaxReadingScreen',
@@ -1034,6 +1036,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
             .index;
         timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
         timer.setWpm(config.defaultWpm);
+        timer.setPacingConfig(config.pacingConfig);
 
         if (_isRangeComplete) {
           timer.pause();
@@ -1072,6 +1075,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _sectionIndex.value = _structure.sectionAt(startIndex).index;
     timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
     timer.setWpm(config.defaultWpm);
+    timer.setPacingConfig(config.pacingConfig);
     _startTimerAfterFirstRunGate();
     appLog('ParallaxReadingScreen', 'timer loaded wpm=${config.defaultWpm}');
   }
@@ -2184,6 +2188,22 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           ref.watch(documentTitleProvider(widget.filePath)).valueOrNull ??
           _resolvedTitle;
     }
+    // Speed and word pacing changed in Settings (opened over the reader with
+    // "Aa") apply when the reader comes back. Loading a document sets both.
+    ref.listen<int?>(configProvider.select((c) => c.valueOrNull?.defaultWpm), (
+      prev,
+      next,
+    ) {
+      if (prev == null || next == null || prev == next) return;
+      _selectPausedWpm(next);
+    });
+    ref.listen<PacingConfig?>(
+      configProvider.select((c) => c.valueOrNull?.pacingConfig),
+      (prev, next) {
+        if (next == null) return;
+        ref.read(wordTimerProvider.notifier).setPacingConfig(next);
+      },
+    );
     ref.listen<ReadingMode>(readingModeNotifierProvider, (prev, next) {
       if (prev == next) return;
       unawaited(

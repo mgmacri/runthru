@@ -12,6 +12,7 @@ import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
 import 'package:runthru/features/content/providers/instapaper_bookmarks_provider.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
+import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
 import 'package:runthru/screens/parallax_reading_screen.dart';
@@ -931,6 +932,64 @@ void main() {
       );
     });
   });
+
+  // B-55: nothing handed the Word Pacing settings to the timer, so reading
+  // always used the default pacing whatever the sliders said; and speed
+  // changed in Settings opened over the reader ("Aa") was ignored until the
+  // next book.
+  group('speed and word pacing from Settings (B-55)', () {
+    const pacing = PacingConfig(
+      longWordScalePercent: 175,
+      punctuationScalePercent: 50,
+    );
+
+    testWidgets('the reader paces with the saved Word Pacing', (tester) async {
+      final config = _FakeConfigNotifier(
+        const AppConfig(
+          hasSeenReadingGoalOnboarding: true,
+          pacingConfig: pacing,
+        ),
+      );
+      await tester.pumpWidget(_readingHarness(config));
+      await tester.pump();
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      expect(container.read(wordTimerProvider).pacingConfig, pacing);
+    });
+
+    testWidgets('changes made in Settings over the reader apply on return', (
+      tester,
+    ) async {
+      final config = _FakeConfigNotifier(
+        const AppConfig(hasSeenReadingGoalOnboarding: true),
+      );
+      await tester.pumpWidget(_readingHarness(config));
+      await tester.pump();
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      container.read(wordTimerProvider.notifier).pause();
+      await tester.pump();
+      expect(container.read(wordTimerProvider).wpm, 300);
+      expect(
+        container.read(wordTimerProvider).pacingConfig,
+        defaultPacingConfig,
+      );
+
+      // What the Reading Speed and Word Pacing controls write.
+      await config.setDefaultWpm(420);
+      await config.updatePacingConfig(pacing);
+      await tester.pump();
+
+      expect(container.read(wordTimerProvider).wpm, 420);
+      expect(container.read(wordTimerProvider).pacingConfig, pacing);
+    });
+  });
 }
 
 final _openedAt = DateTime(2026, 5, 24);
@@ -1067,6 +1126,16 @@ class _FakeConfigNotifier extends AsyncNotifier<AppConfig>
   @override
   Future<void> setFocusModeEnabled(bool enabled) async {
     state = AsyncData(state.requireValue.copyWith(focusModeEnabled: enabled));
+  }
+
+  @override
+  Future<void> setDefaultWpm(int wpm) async {
+    state = AsyncData(state.requireValue.copyWith(defaultWpm: wpm));
+  }
+
+  @override
+  Future<void> updatePacingConfig(PacingConfig pacingConfig) async {
+    state = AsyncData(state.requireValue.copyWith(pacingConfig: pacingConfig));
   }
 
   @override

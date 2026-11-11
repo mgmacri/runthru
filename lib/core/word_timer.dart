@@ -181,6 +181,14 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     }
   }
 
+  /// Sets the extra time long words, complex words and punctuation get (the
+  /// reader's Word Pacing settings). The word on screen keeps its time; the
+  /// next one uses [config].
+  void setPacingConfig(PacingConfig config) {
+    if (config == state.pacingConfig) return;
+    state = state.copyWith(pacingConfig: config);
+  }
+
   void seekTo(int index) {
     if (state.totalWords == 0) return;
     final clamped = index.clamp(0, state.totalWords - 1);
