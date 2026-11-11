@@ -584,6 +584,9 @@ class _ContinueReadingShelf extends StatelessWidget {
   /// The reader's speed, for the time left on each item.
   final int wpm;
 
+  /// Rows shown under the latest book's card.
+  static const int maxRowsAfterLatest = 3;
+
   /// Whether the library already holds something to read.
   final bool hasTitles;
   final void Function(ProgressRecord) onItemTap;
@@ -592,9 +595,12 @@ class _ContinueReadingShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final leading = items.isEmpty ? null : items.first;
+    // The latest book and a few more. Listing everything in progress turned
+    // this into a second copy of the library and pushed the shelves off the
+    // first screen; the rest are on their shelves, with their rings.
     final rest = items.length <= 1
         ? const <ProgressRecord>[]
-        : items.skip(1).toList(growable: false);
+        : items.skip(1).take(maxRowsAfterLatest).toList(growable: false);
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Column(

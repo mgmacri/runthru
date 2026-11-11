@@ -250,6 +250,38 @@ void main() {
     });
   });
 
+  _libraryTest('Continue Reading shows the latest book and three more', (
+    tester,
+  ) async {
+    final paths = [for (var i = 0; i < 7; i++) '/books/book$i.epub'];
+    final container = await _open(tester, entries: _entries(paths));
+    final progress = container.read(readingProgressProvider.notifier);
+    for (var i = 0; i < 7; i++) {
+      await progress.record(
+        contentId: paths[i],
+        source: 'local',
+        title: 'In Progress $i',
+        wordIndex: 100,
+        totalWords: 10000,
+        // Book 6 was read last.
+        lastReadAt: DateTime(2026, 11, 10, 8, i),
+      );
+    }
+    await tester.pump();
+
+    // The four most recent, newest first; the older three only on shelves.
+    for (final i in [6, 5, 4, 3]) {
+      expect(find.text('In Progress $i'), findsOneWidget, reason: '$i');
+    }
+    for (final i in [2, 1, 0]) {
+      expect(find.text('In Progress $i'), findsNothing, reason: '$i');
+    }
+    expect(
+      tester.getTopLeft(find.text('In Progress 6')).dy,
+      lessThan(tester.getTopLeft(find.text('In Progress 5')).dy),
+    );
+  });
+
   group('nothing in progress', () {
     _libraryTest('with books: points at them, not at Sources', (tester) async {
       await _open(tester);
