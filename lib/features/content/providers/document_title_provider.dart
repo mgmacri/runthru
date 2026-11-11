@@ -55,12 +55,14 @@ final documentWordCountProvider = FutureProvider.family<int?, String>((
   ref,
   filePath,
 ) async {
-  // Looked up again when the file's processing state changes (the count
-  // exists once extraction has finished).
-  final status = ref.watch(
-    preprocessingQueueProvider.select((entries) => entries[filePath]?.status),
+  // Looked up again whenever the queue touches the file's entry (entries
+  // are replaced, never changed in place): the count exists once extraction
+  // has finished, and changes when a book is extracted again by a newer
+  // build while the app is open.
+  final entry = ref.watch(
+    preprocessingQueueProvider.select((entries) => entries[filePath]),
   );
-  if (status != PdfStatus.ready) return null;
+  if (entry?.status != PdfStatus.ready) return null;
   final hash = ref
       .read(preprocessingQueueProvider.notifier)
       .contentHashOf(filePath);

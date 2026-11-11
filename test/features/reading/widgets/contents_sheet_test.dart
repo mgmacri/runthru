@@ -245,6 +245,46 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('text before the first heading is called the beginning', (
+    tester,
+  ) async {
+    // A paper: title block and abstract, then numbered sections.
+    final structure = BookStructure(
+      totalWords: 900,
+      sections: const [
+        BookSection(
+          index: 0,
+          kind: SectionKind.body,
+          role: SectionRole.other,
+          start: 0,
+          end: 300,
+        ),
+        BookSection(
+          index: 1,
+          kind: SectionKind.body,
+          role: SectionRole.chapter,
+          start: 300,
+          end: 600,
+          title: 'Introduction',
+          headingWords: 2,
+        ),
+        BookSection(
+          index: 2,
+          kind: SectionKind.body,
+          role: SectionRole.chapter,
+          start: 600,
+          end: 900,
+          title: 'Background',
+          headingWords: 2,
+        ),
+      ],
+    );
+    await _open(tester, structure, currentWord: 10)();
+    expect(find.text('Beginning'), findsOneWidget);
+    expect(find.text('Untitled section'), findsNothing);
+    expect(find.text('Introduction'), findsOneWidget);
+  });
+
   testWidgets('a document with one untitled body still opens cleanly', (
     tester,
   ) async {

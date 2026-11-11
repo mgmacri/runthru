@@ -273,6 +273,10 @@ class _ContentsSheetState extends State<ContentsSheet> {
           ? 'Closing pages'
           : _structure.chapters.length <= 1
           ? widget.bookTitle
+          // What comes before the first heading of the text itself (a
+          // paper's title, authors and abstract): not "Untitled section".
+          : identical(section, _structure.chapters.first)
+          ? 'Beginning'
           : 'Untitled section',
       onTap: () => Navigator.of(context).pop(section),
     );
