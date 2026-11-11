@@ -7,9 +7,11 @@ library;
 /// an older build are re-extracted instead of being read with missing data.
 ///
 /// * 1: sentences and page boundaries only.
-/// * 2: heading levels, the source's own outline (table of contents), and
-///   layout-aware PDF text (running headers removed, hyphenation rejoined).
-const int kExtractionVersion = 2;
+/// * 2: heading levels and the source's own outline (table of contents).
+/// * 3: layout-aware PDF text (page furniture removed, hyphenation
+///   rejoined, paragraphs, headings and bookmarks). Separate from 2 because
+///   builds existed that wrote version 2 with the old page-by-page PDF text.
+const int kExtractionVersion = 3;
 
 class Sentence {
   const Sentence({

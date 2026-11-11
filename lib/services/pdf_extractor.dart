@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -339,6 +340,33 @@ Future<ExtractedDocument> extractPdfDocumentFrom(
   return document;
 }
 
+/// Rebuilds the text of a window of pages on a background isolate.
+///
+/// pdfium has to be read on the main isolate, but the analysis of what it
+/// returned is pure Dart over plain data: tens of milliseconds for a
+/// 25-page range on a desktop, several times that on a phone. Run where
+/// the pages are read, that is a dropped-frame hitch in whatever is on
+/// screen (the reader, if a range was in flight when reading started).
+///
+/// Its own function so the closure sent to the isolate can only capture
+/// these arguments, never the pdfium document of the caller's scope.
+Future<PdfLayoutResult> _analyzeOffTheUiIsolate(
+  List<PdfRawPage> window,
+  int firstPage,
+  int lastPage,
+  List<PdfOutlineTarget> outline,
+) {
+  return Isolate.run(
+    () => analyzePdfLayout(
+      window,
+      firstPage: firstPage,
+      lastPage: lastPage,
+      outline: outline,
+    ),
+    debugName: 'pdf-layout',
+  );
+}
+
 /// The one implementation every entry point shares: reads pages
 /// [start]..[end] plus [_evidencePages] either side, and rebuilds the text
 /// of [start]..[end] from their layout.
@@ -381,15 +409,13 @@ Future<ExtractedDocument?> _extractRange(
   }
   if (cancelToken?.cancelled ?? false) return null;
 
-  final layout = analyzePdfLayout(
-    window,
-    firstPage: start,
-    lastPage: end,
-    outline: <PdfOutlineTarget>[
-      for (final target in outline)
-        if (target.pageIndex >= start && target.pageIndex <= end) target,
-    ],
-  );
+  final layout =
+      await _analyzeOffTheUiIsolate(window, start, end, <PdfOutlineTarget>[
+        for (final target in outline)
+          if (target.pageIndex >= start && target.pageIndex <= end) target,
+      ]);
+  // The timeout may have fired while the pages were being analysed.
+  if (cancelToken?.cancelled ?? false) return null;
   return ExtractedDocument(
     sentences: layout.sentences,
     pageBoundaries: <PageBoundary>[

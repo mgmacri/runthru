@@ -1088,20 +1088,32 @@ class _LayoutAnalysis {
             _bodyCap > 0 && line.capHeight >= _headingRatio * _bodyCap;
         final group = groups['${c.top ? 't' : 'b'}|${c.key}']!;
         final pagesSeen = <int>{pageIndex};
+        // Pages on which the line has text to stand clear of. On a page
+        // where it is all there is, "clear of the text" holds with nothing
+        // to be clear of: a title alone on three slides, or a refrain alone
+        // at the foot of sparse pages, is the page's text and not its
+        // furniture. A running head on a blank page still goes, on the
+        // evidence of the pages that do have text.
+        var besideText = c.gapToText.isFinite ? 1 : 0;
         // Seen again a leaf or two away, at the same height on the page.
         var nearby = false;
         for (final other in group) {
           final otherPage = other.line.page.pageIndex;
           if (otherPage == pageIndex) continue;
           if (_sameFurniture(c, pageIndex, other, otherPage, exact: large)) {
-            pagesSeen.add(otherPage);
+            if (pagesSeen.add(otherPage) && other.gapToText.isFinite) {
+              besideText++;
+            }
             nearby |=
                 (otherPage - pageIndex).abs() <= 4 &&
                 (other.line.baseline - line.baseline).abs() <=
                     math.max(2.0, 0.5 * _bodyCap);
           }
         }
-        c.removed = pagesSeen.length >= 3 || (nearby && !large);
+        c.removed =
+            besideText * 2 >= pagesSeen.length &&
+            besideText > 0 &&
+            (pagesSeen.length >= 3 || (nearby && !large));
       }
     }
 
@@ -2192,10 +2204,14 @@ bool _isSpace(int c) =>
     c == 0x3000;
 
 /// Control characters (pdfium's line and hyphenation marks, a page-number
-/// placeholder), zero-width characters and the replacement character.
+/// placeholder), zero-width characters, the replacement character, and the
+/// private-use characters this app reserves for its own extraction marks
+/// ([kReservedMarkChars]): a PDF that happened to contain one at the start
+/// of a paragraph would have that paragraph read as a marked heading.
 bool _isIgnorable(int c) =>
     c < 0x20 ||
     (c >= 0x7F && c <= 0x9F) ||
+    (c >= 0xE000 && c <= 0xE00F) ||
     c == 0x200B ||
     c == 0x200E ||
     c == 0x200F ||

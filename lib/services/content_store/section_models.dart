@@ -10,7 +10,9 @@ import 'package:runthru/services/models.dart';
 /// * 2: heading levels on sentences, the source outline in the manifest,
 ///   and text from extraction version 2. Older books are re-extracted and
 ///   rewritten on their next open; nothing else depends on the old text.
-const int kContentStoreSchemaVersion = 2;
+/// * 3: text from extraction version 3 (layout-aware PDF text). A book
+///   stored under 2 may hold PDF text with page furniture in it.
+const int kContentStoreSchemaVersion = 3;
 
 /// Target words per section. Sections are sentence-aligned, so real sizes
 /// vary around this; it keeps any single load bounded (~1500 words ≈ a few

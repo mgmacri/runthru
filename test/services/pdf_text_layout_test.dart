@@ -60,6 +60,27 @@ void main() {
       );
     });
 
+    test('the app\'s own marker characters never come in from a PDF', () {
+      // U+E000 opens a heading paragraph in text prepared for the shared
+      // segmenter; U+E002 and U+E003 bracket EPUB anchors.
+      final page = PageBuilder(0)
+        ..line(
+          '${ch(0xE000)}2 lanterns hung over the quay, and ${ch(0xE002)}7'
+          '${ch(0xE003)} more in the yard.',
+          y: 500,
+        );
+      final result = analyze([page.build()]);
+      expect(
+        textOf(result),
+        '2 lanterns hung over the quay, and 7 more in the yard.',
+      );
+      // Not taken for a marked heading, and its digit is still there.
+      expect(headingsOf(result), isEmpty);
+      for (final word in wordsOf(result)) {
+        expect(word.runes.any((r) => r >= 0xE000 && r <= 0xE00F), isFalse);
+      }
+    });
+
     test('carriage returns and repeated spaces never reach a word', () {
       final page = PageBuilder(0)
         ..line('Two  spaces   and a${ch(0xA0)}hard space.', y: 500);
@@ -311,6 +332,46 @@ void main() {
         expect(start.firstWords, isNot(contains('Example Press')));
         expect(start.firstWords, isNot(contains('A Long Road')));
       }
+    });
+
+    test('a line that is all there is on its pages is text, not furniture', () {
+      // Three slides, each nothing but the same line near the top.
+      final pages = [
+        for (var i = 0; i < 3; i++)
+          (PageBuilder(i)..line('Plans for the harbour', y: 560)).build(),
+      ];
+      final result = analyze(pages);
+      expect(
+        textOf(result),
+        'Plans for the harbour Plans for the harbour Plans for the harbour',
+      );
+    });
+
+    test('a running head on a page without text goes with the others', () {
+      // Pages 0, 1 and 3 have text under the head; page 2 has only the head
+      // (a blank page before a new chapter).
+      final pages = <PdfRawPage>[];
+      for (var i = 0; i < 4; i++) {
+        final page = PageBuilder(i)..line('THE LONG ROAD', y: 570, size: 8);
+        if (i != 2) block(page, kFiller);
+        pages.add(page.build());
+      }
+      final result = analyze(pages);
+      expect(textOf(result), isNot(contains('LONG ROAD')));
+      expect(textOf(result), '$kFillerText $kFillerText $kFillerText');
+    });
+
+    test('a head found beside text on too few of its pages stays', () {
+      // The same line on four pages, with text under it on only one: it is
+      // mostly a title standing alone.
+      final pages = <PdfRawPage>[];
+      for (var i = 0; i < 4; i++) {
+        final page = PageBuilder(i)..line('Plans for the harbour', y: 570);
+        if (i == 0) block(page, kFiller);
+        pages.add(page.build());
+      }
+      final result = analyze(pages);
+      expect('Plans for the harbour'.allMatches(textOf(result)), hasLength(4));
     });
 
     test('a short range relies on the pages around it as evidence', () {

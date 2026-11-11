@@ -227,13 +227,7 @@ class _RangePickerScreenState extends ConsumerState<RangePickerScreen>
 
     final pageStart = boundary.startWordIndex;
     final pageEnd = _pageEndWordIndex[page] ?? _allWords.length;
-
-    for (var i = pageStart; i < pageEnd; i++) {
-      if (i < _allWords.length && _allWords[i] == targetWord) {
-        return i - pageStart;
-      }
-    }
-    return 0;
+    return wordIndexOnPage(_allWords, pageStart, pageEnd, targetWord);
   }
 
   /// Animate the action button only when it first appears (not on every drag).
@@ -867,3 +861,66 @@ class _ClearRangeDialog extends StatelessWidget {
     );
   }
 }
+
+/// Position within words [pageStart]..[pageEnd] of the first word that is
+/// [selected], a word picked on the PDF page itself; 0 when none is.
+///
+/// The page shows the file's raw text, the reader the text rebuilt from it:
+/// ligatures are spelled out there ("ﬁrst" is "first"), and a word the page
+/// breaks with a hyphen ("fa-" at a line end) is whole ("father"). So the
+/// two are compared by their letters and digits, and a selection that is
+/// the first half of a broken word finds the whole word.
+@visibleForTesting
+int wordIndexOnPage(
+  List<String> words,
+  int pageStart,
+  int pageEnd,
+  String selected,
+) {
+  final target = _matchKey(selected);
+  if (target.isEmpty) return 0;
+  final end = pageEnd < words.length ? pageEnd : words.length;
+  int? asPrefix;
+  for (var i = pageStart < 0 ? 0 : pageStart; i < end; i++) {
+    final key = _matchKey(words[i]);
+    if (key == target) return i - pageStart;
+    if (asPrefix == null &&
+        target.length >= 2 &&
+        key.length > target.length &&
+        key.startsWith(target)) {
+      asPrefix = i - pageStart;
+    }
+  }
+  // Only a selection that ends at a break can be half a word.
+  final broken = RegExp(
+    '[-\u00AD\u0002\u2010\u2011]\$',
+  ).hasMatch(selected.trim());
+  return broken ? asPrefix ?? 0 : 0;
+}
+
+/// [word] as its letters and digits only, lower-cased, ligatures spelled
+/// out: what a word on the PDF page and its extracted form have in common.
+String _matchKey(String word) {
+  final out = StringBuffer();
+  for (final rune in word.toLowerCase().runes) {
+    final ligature = _ligatureLetters[rune];
+    if (ligature != null) {
+      out.write(ligature);
+    } else if (_letterOrDigit.hasMatch(String.fromCharCode(rune))) {
+      out.writeCharCode(rune);
+    }
+  }
+  return out.toString();
+}
+
+const Map<int, String> _ligatureLetters = <int, String>{
+  0xFB00: 'ff',
+  0xFB01: 'fi',
+  0xFB02: 'fl',
+  0xFB03: 'ffi',
+  0xFB04: 'ffl',
+  0xFB05: 'st',
+  0xFB06: 'st',
+};
+
+final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);
