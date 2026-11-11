@@ -90,6 +90,12 @@ class ParallaxReadingScreen extends ConsumerStatefulWidget {
     this.instapaperInitialProgress = 0.0,
   });
 
+  /// Key of the "Skipped the front matter" note shown over the text when
+  /// chapter moments are off.
+  static const ValueKey<String> skippedNoticeKey = ValueKey<String>(
+    'reader-skipped-front-matter',
+  );
+
   final String filePath;
 
   /// Optional clipboard document (Rule 28 — ephemeral, session-only).
@@ -167,6 +173,15 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
 
   /// Lets the last word of a book stand before the finish screen.
   Timer? _bookEndTimer;
+
+  /// "Skipped the front matter · N min", shown for a few seconds over the
+  /// text when a new book opens past its front matter and there is no title
+  /// card to say so (chapter moments are off).
+  String? _skippedNotice;
+  Timer? _skippedNoticeTimer;
+
+  /// How long [_skippedNotice] stays up.
+  static const Duration _skippedNoticeHold = Duration(seconds: 7);
 
   /// Index of the section being read, for the header and contents sheet.
   final ValueNotifier<int> _sectionIndex = ValueNotifier(0);
@@ -502,6 +517,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _onboardingCompleteTimer?.cancel();
     _sentenceGapTimer?.cancel();
     _bookEndTimer?.cancel();
+    _skippedNoticeTimer?.cancel();
     _sectionIndex.dispose();
     _wordNotifier.dispose();
     _focusNode.dispose();
@@ -1074,9 +1090,32 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         return;
       }
     }
+    // Without chapter moments there is no title card to carry the note: say
+    // it over the text for a few seconds, with the way back. (The book used
+    // to start at chapter one without a word about what it had skipped.)
+    final skipped = _pendingSkippedNote;
     _pendingSkippedNote = null;
+    if (skipped != null) _showSkippedNotice(skipped);
     _beginSession();
     timer.play();
+  }
+
+  void _showSkippedNotice(String note) {
+    if (!mounted) return;
+    _skippedNoticeTimer?.cancel();
+    // A screen reader needs longer to reach and hear it.
+    final hold = MediaQuery.maybeOf(context)?.accessibleNavigation ?? false
+        ? _skippedNoticeHold * 3
+        : _skippedNoticeHold;
+    _skippedNoticeTimer = Timer(hold, _dismissSkippedNotice);
+    setState(() => _skippedNotice = note);
+  }
+
+  void _dismissSkippedNotice() {
+    _skippedNoticeTimer?.cancel();
+    _skippedNoticeTimer = null;
+    if (!mounted || _skippedNotice == null) return;
+    setState(() => _skippedNotice = null);
   }
 
   void _beginSession() {
@@ -1191,7 +1230,11 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// The reader asked for the front matter after all.
   void _restartFromBeginning() {
     if (_words.isEmpty) return;
-    setState(() => _interlude = null);
+    _skippedNoticeTimer?.cancel();
+    setState(() {
+      _interlude = null;
+      _skippedNotice = null;
+    });
     final local = _localIndex(0);
     ref.read(wordTimerProvider.notifier).seekTo(local);
     _cacheTimerPosition(local);
@@ -2696,6 +2739,34 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                 config.readingFontFamily,
                                             onDone: () => _endInterludeAndRead(
                                               interlude.resumeAt,
+                                            ),
+                                          ),
+                                        ),
+                                      // ── Skipped front matter (no title
+                                      // card to say it: moments off) ──
+                                      if (_skippedNotice != null &&
+                                          interlude == null)
+                                        Positioned(
+                                          left: 0,
+                                          right: 0,
+                                          bottom:
+                                              MediaQuery.paddingOf(
+                                                context,
+                                              ).bottom +
+                                              (config.focusModeEnabled
+                                                  ? 16
+                                                  : _kReaderTrayExtent + 12),
+                                          child: Center(
+                                            child: Semantics(
+                                              liveRegion: true,
+                                              container: true,
+                                              child: SkippedFrontMatterNote(
+                                                key: ParallaxReadingScreen
+                                                    .skippedNoticeKey,
+                                                note: _skippedNotice!,
+                                                onReadFromStart:
+                                                    _restartFromBeginning,
+                                              ),
                                             ),
                                           ),
                                         ),

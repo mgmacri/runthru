@@ -564,6 +564,71 @@ void main() {
     });
   });
 
+  group('with chapter moments off, a new book', () {
+    testWidgets('still says the front matter was skipped, with the way back', (
+      tester,
+    ) async {
+      final c = await _open(tester, chapterMoments: false);
+      await _run(tester, 0.5);
+      // Reading has started at chapter one, not at the copyright page.
+      expect(_timer(c).isPlaying, isTrue);
+      expect(_timer(c).currentIndex, greaterThanOrEqualTo(13));
+      expect(find.byType(ChapterTitleCard), findsNothing);
+      final note = find.byKey(ParallaxReadingScreen.skippedNoticeKey);
+      expect(note, findsOneWidget);
+      expect(find.text('Skipped the front matter · < 1 min'), findsOneWidget);
+      expect(
+        tester.getSize(note).height,
+        greaterThanOrEqualTo(RunThruA11y.minTapTarget),
+      );
+
+      await tester.tap(find.text('Read from the start'));
+      await _run(tester, 0.3);
+      // Back at the very beginning, reading, and the note is gone.
+      expect(_timer(c).currentIndex, lessThan(13));
+      expect(_timer(c).isPlaying, isTrue);
+      expect(note, findsNothing);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 1);
+    });
+
+    testWidgets('the note leaves by itself and is not shown again', (
+      tester,
+    ) async {
+      final c = await _open(tester, chapterMoments: false);
+      await _run(tester, 0.5);
+      final note = find.byKey(ParallaxReadingScreen.skippedNoticeKey);
+      expect(note, findsOneWidget);
+      await _run(tester, 8);
+      expect(note, findsNothing);
+
+      // Pause and play again: nothing was skipped this time.
+      final notifier = c.read(wordTimerProvider.notifier);
+      notifier.pause();
+      await _run(tester, 0.3);
+      await tester.tap(find.bySemanticsLabel('Resume reading'));
+      await _run(tester, 0.5);
+      expect(note, findsNothing);
+      notifier.pause();
+      await _run(tester, 1);
+    });
+
+    testWidgets('with moments on, the title card carries it instead', (
+      tester,
+    ) async {
+      final c = await _open(tester);
+      expect(find.byType(ChapterTitleCard), findsOneWidget);
+      expect(find.byKey(ParallaxReadingScreen.skippedNoticeKey), findsNothing);
+      await _runUntil(
+        tester,
+        () => find.byType(ChapterTitleCard).evaluate().isEmpty,
+      );
+      expect(find.byKey(ParallaxReadingScreen.skippedNoticeKey), findsNothing);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 6);
+    });
+  });
+
   test('a chapter counts as read from 150 words', () {
     // The fixtures above rely on it: 160 words celebrates, 40 does not.
     expect(RunThruTiming.celebrationMinWords, 150);

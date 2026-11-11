@@ -483,7 +483,7 @@ class _ChapterTitleCardState extends State<ChapterTitleCard>
                           widget.onReadFromStart != null)
                         FadeTransition(
                           opacity: meta,
-                          child: _SkippedNote(
+                          child: SkippedFrontMatterNote(
                             key: ChapterTitleCard.readFromStartKey,
                             note: a.skippedNote!,
                             onReadFromStart: () {
@@ -638,9 +638,13 @@ class _MetaRow extends StatelessWidget {
   }
 }
 
-/// "Skipped the front matter · Read from the start".
-class _SkippedNote extends StatelessWidget {
-  const _SkippedNote({
+/// "Skipped the front matter · Read from the start": a pill that says a new
+/// book was opened past its front matter and takes the reader back to it.
+/// Shown on the first title card, or by the reader itself when chapter
+/// moments are off.
+class SkippedFrontMatterNote extends StatelessWidget {
+  /// Creates the note.
+  const SkippedFrontMatterNote({
     super.key,
     required this.note,
     required this.onReadFromStart,
