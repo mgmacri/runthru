@@ -271,6 +271,9 @@ class InstapaperBookmarks extends _$InstapaperBookmarks {
 InstapaperSyncQueue instapaperSyncQueue(Ref ref) {
   final queue = InstapaperSyncQueue(
     clientResolver: () => ref.read(instapaperAuthProvider.notifier).client,
+    // A refused write may mean the connection was revoked: ask Instapaper.
+    onAuthFailure: (_) =>
+        unawaited(ref.read(instapaperAuthProvider.notifier).checkSession()),
   );
   ref.onDispose(queue.dispose);
   // Drain whenever auth becomes authenticated (e.g. login, app resume).

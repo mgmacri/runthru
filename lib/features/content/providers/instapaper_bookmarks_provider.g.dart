@@ -7,7 +7,7 @@ part of 'instapaper_bookmarks_provider.dart';
 // **************************************************************************
 
 String _$instapaperSyncQueueHash() =>
-    r'a92754ec0a4c7516d9be19cd75cb1d1a3e72b176';
+    r'b64f3f20ec00cadc1284513e94df4e243ed4b437';
 
 /// Singleton sync queue for Instapaper write operations. Kept alive so
 /// pending ops survive widget tree disposal (e.g. leaving the library

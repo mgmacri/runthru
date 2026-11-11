@@ -41,6 +41,18 @@ class FakeInstapaperAuth extends Notifier<InstapaperAuthState>
       message: 'Use legacy sign-in instead.',
     );
   }
+
+  @override
+  Future<void> sessionExpired() async {}
+
+  @override
+  Future<void> checkSession() async {}
+
+  @override
+  void updateUser(InstapaperUser user) {}
+
+  @override
+  void dismissError() {}
 }
 
 void main() {

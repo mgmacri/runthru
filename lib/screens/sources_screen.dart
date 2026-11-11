@@ -49,8 +49,12 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     final fileSources = userVisibleSources
         .where((s) => s.kind == LibrarySourceKind.file)
         .toList();
+    // A build without the Instapaper consumer key cannot connect: it shows
+    // no Instapaper entry point at all, like Drive without OAuth (R-04).
+    final instapaperAvailable = ref.watch(instapaperAvailableProvider);
     final authState = ref.watch(instapaperAuthProvider);
-    final isInstapaperConnected = authState is InstapaperAuthAuthenticated;
+    final isInstapaperConnected =
+        instapaperAvailable && authState is InstapaperAuthAuthenticated;
     // R-04: builds without OAuth dart-defines hide Drive entirely.
     final driveAvailable = ref.watch(googleDriveAvailableProvider);
     final driveAuthState = ref.watch(googleDriveAuthProvider);
@@ -182,8 +186,9 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   if (driveAvailable)
                     const SliverToBoxAdapter(child: GoogleDriveSourcePanel()),
                 ],
-                if (_filter == _SourcesFilter.all ||
-                    _filter == _SourcesFilter.articles) ...[
+                if (instapaperAvailable &&
+                    (_filter == _SourcesFilter.all ||
+                        _filter == _SourcesFilter.articles)) ...[
                   const SliverToBoxAdapter(
                     child: _SourceSectionHeader(title: 'Articles'),
                   ),
@@ -191,7 +196,12 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                     child: InstapaperAuthTile(showDivider: true),
                   ),
                 ],
-                SliverToBoxAdapter(child: _EmptyFilterHint(filter: _filter)),
+                SliverToBoxAdapter(
+                  child: _EmptyFilterHint(
+                    filter: _filter,
+                    instapaperAvailable: instapaperAvailable,
+                  ),
+                ),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 96)),
               ],
             ),
@@ -215,13 +225,14 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   semanticsLabel: 'Import a folder into library',
                   onTap: _handleImportFolder,
                 ),
-                LibrarySourceAction(
-                  icon: Icons.bookmark_outline,
-                  iconWidget: const InstapaperBrandIcon(size: 20),
-                  label: 'Instapaper',
-                  semanticsLabel: 'Add from Instapaper',
-                  onTap: () => _handleInstapaperAction(context),
-                ),
+                if (instapaperAvailable)
+                  LibrarySourceAction(
+                    icon: Icons.bookmark_outline,
+                    iconWidget: const InstapaperBrandIcon(size: 20),
+                    label: 'Instapaper',
+                    semanticsLabel: 'Add from Instapaper',
+                    onTap: () => _handleInstapaperAction(context),
+                  ),
                 if (driveAvailable)
                   LibrarySourceAction(
                     icon: Icons.cloud_outlined,
@@ -670,9 +681,13 @@ class _SourceRow extends StatelessWidget {
 }
 
 class _EmptyFilterHint extends StatelessWidget {
-  const _EmptyFilterHint({required this.filter});
+  const _EmptyFilterHint({
+    required this.filter,
+    required this.instapaperAvailable,
+  });
 
   final _SourcesFilter filter;
+  final bool instapaperAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -681,7 +696,9 @@ class _EmptyFilterHint extends StatelessWidget {
       _SourcesFilter.folders => 'Use the + menu to add a folder source.',
       _SourcesFilter.files => 'Use the + menu to add files or paste text.',
       _SourcesFilter.articles =>
-        'Connect Instapaper, or share a web link to RunThru.',
+        instapaperAvailable
+            ? 'Connect Instapaper, or share a web link to RunThru.'
+            : 'Share a web link to RunThru to read it.',
     };
 
     if (message == null) return const SizedBox.shrink();

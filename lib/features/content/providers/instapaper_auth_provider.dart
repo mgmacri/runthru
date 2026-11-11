@@ -5,6 +5,8 @@
 /// are not retained in provider state.
 library;
 
+import 'dart:async' show unawaited;
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/services/instapaper_auth_service.dart';
@@ -72,8 +74,18 @@ final instapaperAuthServiceProvider = Provider<InstapaperAuthService>((ref) {
   return InstapaperAuthService(
     client: client,
     tokenStore: const SecureInstapaperTokenStore(),
+    accountStore: const SecureInstapaperAccountStore(),
   );
 });
+
+/// Whether this build can connect to Instapaper at all: the consumer key and
+/// secret arrive as dart-defines, and a build made without them cannot sign
+/// anyone in. Every Instapaper entry point (the Sources row, the add menu,
+/// the Library's hints) checks this, so readers never see a source that
+/// cannot connect.
+final instapaperAvailableProvider = Provider<bool>(
+  (ref) => ref.watch(instapaperAuthServiceProvider).isConfigured,
+);
 
 /// Manages Instapaper authentication lifecycle.
 ///
@@ -94,8 +106,10 @@ class InstapaperAuth extends _$InstapaperAuth {
 
   @override
   InstapaperAuthState build() {
-    _restoreSession(++_epoch);
     appLog('instapaper-auth', 'config ${_service.configurationDiagnostics}');
+    // Nothing to restore in a build that cannot talk to Instapaper.
+    if (!_service.isConfigured) return const InstapaperAuthUnauthenticated();
+    _restoreSession(++_epoch);
     return const InstapaperAuthChecking();
   }
 
@@ -220,6 +234,62 @@ class InstapaperAuth extends _$InstapaperAuth {
     state = const InstapaperAuthUnauthenticated();
   }
 
+  /// Instapaper refused the saved connection (access was revoked, or the
+  /// account's password changed). The tokens are dropped and the reader is
+  /// told to connect again; changes waiting in the sync queue are kept for
+  /// when they do.
+  Future<void> sessionExpired() async {
+    if (state is! InstapaperAuthAuthenticated) return;
+    _epoch++;
+    appLog('instapaper-auth', 'saved connection refused; signing out');
+    try {
+      await _service.logout();
+    } on InstapaperSecureStorageException catch (_) {
+      // The tokens are useless either way.
+    }
+    state = InstapaperAuthError(
+      kind: InstapaperFailureKind.unauthorized,
+      message: _messageFor(InstapaperFailureKind.unauthorized),
+    );
+  }
+
+  /// Ask Instapaper whether the saved connection still stands. For when a
+  /// background request was refused: the reader is signed out only if
+  /// Instapaper refuses this plain "who am I" as well.
+  Future<void> checkSession() async {
+    if (state is! InstapaperAuthAuthenticated) return;
+    final epoch = _epoch;
+    try {
+      final user = await _service.client.verifyCredentials();
+      if (epoch == _epoch) updateUser(user);
+    } on InstapaperApiException catch (e) {
+      if (epoch != _epoch) return;
+      if (e.kind == InstapaperFailureKind.unauthorized) await sessionExpired();
+    } on Object {
+      // No answer either way: the connection is left alone.
+    }
+  }
+
+  /// Record the account a response named. The username can change on
+  /// Instapaper's side, and a connection restored offline starts without one.
+  void updateUser(InstapaperUser user) {
+    final current = state;
+    if (current is! InstapaperAuthAuthenticated || user.userId == 0) return;
+    if (current.user.userId == user.userId &&
+        current.user.username == user.username) {
+      return;
+    }
+    state = InstapaperAuthAuthenticated(user: user);
+    unawaited(_service.rememberUser(user));
+  }
+
+  /// Leave a failed sign-in behind: back to "not connected".
+  void dismissError() {
+    if (state is InstapaperAuthError) {
+      state = const InstapaperAuthUnauthenticated();
+    }
+  }
+
   /// Access the authenticated client for Instapaper data providers.
   InstapaperClient? get client =>
       _service.client.isAuthenticated ? _service.client : null;
@@ -234,7 +304,7 @@ class InstapaperAuth extends _$InstapaperAuth {
       InstapaperFailureKind.missingConfiguration =>
         'Instapaper API credentials are not configured. Rebuild with --dart-define=INSTAPAPER_CONSUMER_KEY=... and --dart-define=INSTAPAPER_CONSUMER_SECRET=....',
       InstapaperFailureKind.invalidCredentials =>
-        'Instapaper rejected these credentials. Check the email or username and password, if this account has one.',
+        'Instapaper did not accept that email or username and password. Check them and try again.',
       InstapaperFailureKind.network =>
         'Network connection failed. Check your connection and try again.',
       InstapaperFailureKind.serviceUnavailable =>
@@ -244,11 +314,11 @@ class InstapaperAuth extends _$InstapaperAuth {
       InstapaperFailureKind.secureStorage =>
         'RunThru could not use secure storage for this Instapaper connection.',
       InstapaperFailureKind.unauthorized =>
-        'The saved Instapaper connection is no longer valid. Connect again.',
+        'Instapaper needs you to sign in again.',
       InstapaperFailureKind.rateLimited =>
-        'Instapaper rate-limited this connection. Try again later.',
+        'Instapaper is receiving too many requests. Try again in a few minutes.',
       InstapaperFailureKind.suspended =>
-        'This Instapaper API connection is unavailable. Contact support if it continues.',
+        'Instapaper is not accepting sign-ins from RunThru for this account right now.',
       InstapaperFailureKind.clockSkew =>
         "Instapaper refused the request because this device's date and time look wrong. Set them to automatic, then try again.",
       InstapaperFailureKind.premiumRequired =>

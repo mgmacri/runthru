@@ -1226,6 +1226,23 @@ class _ArticlesSliverList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A build that cannot connect to Instapaper does not suggest it.
+    if (!ref.watch(instapaperAvailableProvider)) {
+      return SliverToBoxAdapter(
+        child: _LibrarySection(
+          title: 'Articles',
+          countLabel: '0 articles',
+          dotColor: RunThruTokens.shellTealDeep,
+          itemCount: 0,
+          empty: _EmptyArticlesState(
+            message: query.isEmpty
+                ? 'No articles yet. Share a link to RunThru to read it.'
+                : 'No articles match this search.',
+          ),
+        ),
+      );
+    }
+
     final authState = ref.watch(instapaperAuthProvider);
 
     // Surface the real connection state instead of masking errors as an empty

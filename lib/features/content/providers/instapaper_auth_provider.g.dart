@@ -6,7 +6,7 @@ part of 'instapaper_auth_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$instapaperAuthHash() => r'8b8f2912731828888297b6e8a9edff9022df4fb1';
+String _$instapaperAuthHash() => r'a9d56123487e6eb4b8bdf80efa83c08a4c4e78b7';
 
 /// Manages Instapaper authentication lifecycle.
 ///

@@ -50,6 +50,18 @@ class _FakeInstapaperAuth extends Notifier<InstapaperAuthState>
       message: 'Use legacy sign-in instead.',
     );
   }
+
+  @override
+  Future<void> sessionExpired() async {}
+
+  @override
+  Future<void> checkSession() async {}
+
+  @override
+  void updateUser(InstapaperUser user) {}
+
+  @override
+  void dismissError() {}
 }
 
 class _FakeGoogleDriveAuth extends Notifier<GoogleDriveAuthState>
@@ -143,12 +155,17 @@ class _FakeGoogleDriveClient extends GoogleDriveClient {
   }
 }
 
-Widget _harness(Widget child, {bool driveAvailable = true}) {
+Widget _harness(
+  Widget child, {
+  bool driveAvailable = true,
+  bool instapaperAvailable = true,
+}) {
   SharedPreferences.setMockInitialValues({});
   return ProviderScope(
     overrides: [
       // Tests run without OAuth dart-defines; opt in explicitly (R-04).
       googleDriveAvailableProvider.overrideWithValue(driveAvailable),
+      instapaperAvailableProvider.overrideWithValue(instapaperAvailable),
       instapaperAuthProvider.overrideWith(
         () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
       ),
@@ -180,6 +197,7 @@ Widget _harnessWithSources(List<LibrarySource> sources) {
     overrides: [
       librarySourcesProvider.overrideWith(() => _FakeLibrarySources(sources)),
       googleDriveAvailableProvider.overrideWithValue(true),
+      instapaperAvailableProvider.overrideWithValue(true),
       instapaperAuthProvider.overrideWith(
         () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
       ),
@@ -236,6 +254,7 @@ Widget _homeShellRouterHarness({
       instapaperAuthProvider.overrideWith(
         () => _FakeInstapaperAuth(const InstapaperAuthUnauthenticated()),
       ),
+      instapaperAvailableProvider.overrideWithValue(true),
       googleDriveAvailableProvider.overrideWithValue(true),
       googleDriveAuthProvider.overrideWith(
         () => driveAuth ?? _FakeGoogleDriveAuth(driveAuthState),
@@ -352,6 +371,35 @@ void main() {
         expect(find.text('Paste'), findsOneWidget);
         expect(find.text('Drive'), findsNothing);
         expect(find.bySemanticsLabel('Add from Google Drive'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'hides every Instapaper entry point when the build has no consumer key',
+      (tester) async {
+        // Seen on a release build made without the dart-defines: the reader
+        // was told to "Rebuild with --dart-define=INSTAPAPER_CONSUMER_KEY".
+        await tester.pumpWidget(
+          _harness(const SourcesScreen(), instapaperAvailable: false),
+        );
+        await tester.pump();
+
+        expect(find.text('Instapaper'), findsNothing);
+        expect(find.bySemanticsLabel('Connect Instapaper'), findsNothing);
+
+        await tester.tap(find.text('Articles').first);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Instapaper'), findsNothing);
+        expect(
+          find.text('Share a web link to RunThru to read it.'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.bySemanticsLabel('Open reading sources'));
+        await tester.pumpAndSettle();
+        expect(find.text('Paste'), findsOneWidget);
+        expect(find.text('Instapaper'), findsNothing);
+        expect(find.bySemanticsLabel('Add from Instapaper'), findsNothing);
       },
     );
 

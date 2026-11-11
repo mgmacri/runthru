@@ -66,6 +66,7 @@ List<PdfEntry> _entries([Iterable<String>? paths]) => [
 Future<ProviderContainer> _open(
   WidgetTester tester, {
   List<PdfEntry>? entries,
+  bool instapaperAvailable = true,
 }) async {
   SharedPreferences.setMockInitialValues({});
   await tester.binding.setSurfaceSize(const Size(420, 1400));
@@ -83,6 +84,8 @@ Future<ProviderContainer> _open(
       ),
       pdfListProvider.overrideWith((ref) async => books),
       googleDriveAvailableProvider.overrideWithValue(false),
+      // Tests run without dart-defines; a store build has the Instapaper key.
+      instapaperAvailableProvider.overrideWithValue(instapaperAvailable),
       instapaperAuthProvider.overrideWith(_NoInstapaper.new),
       documentInfoProvider.overrideWith(
         (ref, path) async => DocumentInfo(
@@ -247,6 +250,29 @@ void main() {
       await _open(tester);
       await _search(tester, 'whale');
       expect(find.text('No articles match this search.'), findsOneWidget);
+    });
+  });
+
+  group('Articles with Instapaper not connected', () {
+    _libraryTest('points at Sources to connect it', (tester) async {
+      await _open(tester);
+      expect(
+        find.text(
+          'No articles yet. Connect Instapaper in Sources, or share a link to RunThru.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    _libraryTest('a build without the Instapaper key does not suggest it', (
+      tester,
+    ) async {
+      await _open(tester, instapaperAvailable: false);
+      expect(find.textContaining('Instapaper'), findsNothing);
+      expect(
+        find.text('No articles yet. Share a link to RunThru to read it.'),
+        findsOneWidget,
+      );
     });
   });
 
