@@ -1147,6 +1147,44 @@ void main() {
       expect(find.text('Instapaper Reader'), findsOneWidget);
     });
 
+    testWidgets(
+      'Continue Reading says the article is opening, and stops saying so',
+      (tester) async {
+        client.textGate = Completer<void>();
+        await pumpHome(
+          tester,
+          prefs: {
+            'runthru_reading_progress': jsonEncode([
+              {
+                'contentId': 'instapaper://77',
+                'source': 'instapaper',
+                'title': 'Older Article',
+                'wordIndex': 40,
+                'totalWords': 400,
+                'lastReadAt': DateTime(2026, 11, 1).toIso8601String(),
+                'finished': false,
+              },
+            ]),
+          },
+        );
+
+        await tester.tap(find.text('Older Article').first);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 800));
+        expect(find.text('Opening “Older Article”…'), findsOneWidget);
+
+        // The reader goes elsewhere before the article arrives: the notice
+        // must not follow them there once it has.
+        GoRouter.of(tester.element(find.byType(HomeShell))).push('/elsewhere');
+        await tester.pumpAndSettle();
+        client.textGate!.complete();
+        await tester.pumpAndSettle();
+
+        expect(opened, isEmpty);
+        expect(find.textContaining('Opening'), findsNothing);
+      },
+    );
+
     testWidgets('the add menu signs in when Instapaper is not connected', (
       tester,
     ) async {

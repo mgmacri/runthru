@@ -159,10 +159,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       // The reader moved on while the article was loading (opened a book,
       // say): nothing is pushed or shown over what is on screen now.
       final stillHere = ModalRoute.of(context)?.isCurrent ?? true;
+      // "Opening…" has had its say either way. (Snack bars follow the
+      // reader from screen to screen.)
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       if (next is ArticleImportDone) {
         ref.read(instapaperArticleImportProvider.notifier).clear();
         if (!stillHere) return;
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         context.push(
           '/read-instapaper',
           extra: {
@@ -178,19 +180,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             next.kind == InstapaperFailureKind.unauthorized &&
             ref.read(instapaperAvailableProvider) &&
             ref.read(instapaperAuthProvider) is! InstapaperAuthAuthenticated;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(next.message),
-              action: canConnect
-                  ? SnackBarAction(
-                      label: 'Connect',
-                      onPressed: () => showInstapaperSignIn(context, ref),
-                    )
-                  : null,
-            ),
-          );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.message),
+            action: canConnect
+                ? SnackBarAction(
+                    label: 'Connect',
+                    onPressed: () => showInstapaperSignIn(context, ref),
+                  )
+                : null,
+          ),
+        );
       }
     });
 
