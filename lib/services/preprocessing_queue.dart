@@ -222,7 +222,10 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       final hash = contentHashOf(filePath);
       if (hash == null || !mounted) return;
       final store = _ref.read(contentStoreProvider);
-      if (await store.hasBook(hash)) return;
+      if (await store.hasBook(hash)) {
+        _touch(filePath);
+        return;
+      }
       final fileName = filePath.split(RegExp(r'[/\\]')).last;
       await store.putDocument(
         BookIdentity(
@@ -232,6 +235,7 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
         ),
         doc,
       );
+      _touch(filePath);
       // Enforce the shared budget, at most once a minute — eviction scans
       // directories and shouldn't run per book during a bulk extraction.
       final now = DateTime.now();
@@ -249,6 +253,22 @@ class PreprocessingQueue extends StateNotifier<Map<String, PdfEntry>> {
       appLog('preprocessing', 'store ingest failed file=$filePath: $e');
     }
   }
+
+  /// Replaces [filePath]'s entry with a copy of itself, so that whatever
+  /// watches the entry looks again. The book was marked ready before its
+  /// hash was known and its text stored; what is read from the store by
+  /// hash (a library row's word count) can only be found from here on.
+  void _touch(String filePath) {
+    if (!mounted) return;
+    final entry = state[filePath];
+    if (entry != null) _update(filePath, entry.copyWith());
+  }
+
+  /// Test-only: writes [doc] through to the content store as a finished
+  /// extraction of [filePath] does.
+  @visibleForTesting
+  Future<void> debugIngest(String filePath, ExtractedDocument doc) =>
+      _ingestToStore(filePath, doc);
 
   /// Returns the resolved content hash for [filePath], if known.
   String? contentHashOf(String filePath) =>

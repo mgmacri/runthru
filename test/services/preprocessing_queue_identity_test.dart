@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:runthru/features/content/providers/document_title_provider.dart';
 import 'package:runthru/services/content_identity.dart';
+import 'package:runthru/services/content_store/content_store.dart';
 import 'package:runthru/services/device_capability.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/services/models.dart';
@@ -54,9 +56,52 @@ void main() {
         ),
         pdfListProvider.overrideWith((ref) async => const <PdfEntry>[]),
         contentIdentityProvider.overrideWithValue(identity),
+        contentStoreProvider.overrideWithValue(
+          ContentStore(rootResolver: () async => '${tempDir.path}/store'),
+        ),
       ],
     );
   }
+
+  group('a library row\'s word count', () {
+    test('is there once the book\'s text has been stored', () async {
+      // The row asks for the count when the queue marks the book ready.
+      // The text is written to the store, by content hash, only after
+      // that, and nothing told the row to ask again: a book extracted
+      // while the app was open showed no word count or reading time until
+      // the next launch.
+      final container = createContainer();
+      addTearDown(container.dispose);
+      final queue = container.read(preprocessingQueueProvider.notifier);
+      queue.pauseBackground();
+      final file = File('${tempDir.path}/book.pdf')
+        ..writeAsStringSync('the bytes of a book');
+      queue.debugSetEntry(
+        PdfEntry(
+          filePath: file.path,
+          fileName: 'book.pdf',
+          status: PdfStatus.ready,
+        ),
+      );
+      final count = documentWordCountProvider(file.path);
+      final sub = container.listen(count, (_, __) {});
+      addTearDown(sub.close);
+      expect(await container.read(count.future), isNull);
+
+      await queue.debugIngest(
+        file.path,
+        const ExtractedDocument(
+          sentences: [
+            Sentence(words: ['one', 'two', 'three']),
+            Sentence(words: ['four', 'five']),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(await container.read(count.future), 5);
+    });
+  });
 
   group('queue identity', () {
     test('two different books both named book.pdf coexist', () async {
