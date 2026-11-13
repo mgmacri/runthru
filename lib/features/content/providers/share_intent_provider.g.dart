@@ -6,7 +6,7 @@ part of 'share_intent_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$shareIntentHash() => r'f727b11c5f86dd3858f2bdcd9b133d41c9e9e78e';
+String _$shareIntentHash() => r'919fc9f3578df2f7ca5c3c85dcb631b3a2f06316';
 
 /// Manages incoming share intents from Android and iOS.
 ///
