@@ -114,6 +114,49 @@ void main() {
       expect(doc.words.join(' '), isNot(contains('#')));
     });
 
+    test('a list straight after a heading is not part of the heading', () {
+      // The list pattern's indent reached back over the blank line the
+      // heading leaves behind, so heading and list became one paragraph:
+      // one long heading, never split into sentences.
+      for (final text in [
+        '## Key points\n- Fast. Very fast.\n- Cheap',
+        '## Key points\n\n- Fast. Very fast.\n- Cheap',
+        '### Key points\n1. Fast. Very fast.\n2. Cheap',
+      ]) {
+        final sentences = ClipboardDocument.fromClipboardText(
+          text,
+        ).document.sentences;
+        expect(
+          [
+            for (final s in sentences)
+              if (s.isHeading) s.words.join(' '),
+          ],
+          ['Key points'],
+          reason: text,
+        );
+        expect(
+          [
+            for (final s in sentences)
+              if (!s.isHeading) s.words.join(' '),
+          ],
+          ['Fast.', 'Very fast.', 'Cheap'],
+          reason: text,
+        );
+      }
+    });
+
+    test('a heading that ends in a hash keeps it', () {
+      // "C#" lost its hash to the pattern for a closing run of hashes,
+      // which needs a space before it.
+      final headings = [
+        for (final s in ClipboardDocument.fromClipboardText(
+          '## Learning C#\n\nBody text here.\n\n# Notes on F# #\n\nMore.',
+        ).document.sentences)
+          if (s.isHeading) s.words.join(' '),
+      ];
+      expect(headings, ['Learning C#', 'Notes on F#']);
+    });
+
     test('markdown links converted to text', () {
       final doc = ClipboardDocument.fromClipboardText(
         'Click [this link](https://example.com) for more info.',

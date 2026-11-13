@@ -81,13 +81,16 @@ class ClipboardDocument {
     // Headings: "### Title" becomes a heading paragraph of that level, so
     // it stays whole and the reader can announce it.
     result = result.replaceAllMapped(
-      RegExp(r'^(#{1,6})\s+(.+?)\s*#*\s*$', multiLine: true),
+      // Spaces and tabs only, never a line break: `\s` would run on into
+      // the next line. A closing run of hashes needs a space before it,
+      // so "## Learning C#" keeps its last character.
+      RegExp(r'^(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$', multiLine: true),
       (m) => '\n\n${headingMark(m.group(1)!.length)}${m.group(2)!}\n\n',
     );
 
     // Remove horizontal rules (---, ***, ___)
     result = result.replaceAll(
-      RegExp(r'^[\s]*[-*_]{3,}[\s]*$', multiLine: true),
+      RegExp(r'^[ \t]*[-*_]{3,}[ \t]*$', multiLine: true),
       '',
     );
 
@@ -138,13 +141,16 @@ class ClipboardDocument {
 
     // Remove unordered list markers: - item, * item, + item
     result = result.replaceAllMapped(
-      RegExp(r'^[\s]*[-*+]\s+(.+)$', multiLine: true),
+      // `[ \t]`, not `\s`: a marker's indent must not reach back over the
+      // blank line above it, which would join the list to the paragraph
+      // (or heading) before it.
+      RegExp(r'^[ \t]*[-*+][ \t]+(.+)$', multiLine: true),
       (m) => m.group(1)!,
     );
 
     // Remove ordered list markers: 1. item, 2. item
     result = result.replaceAllMapped(
-      RegExp(r'^[\s]*\d+\.\s+(.+)$', multiLine: true),
+      RegExp(r'^[ \t]*\d+\.[ \t]+(.+)$', multiLine: true),
       (m) => m.group(1)!,
     );
 

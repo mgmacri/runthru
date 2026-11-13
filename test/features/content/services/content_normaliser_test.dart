@@ -172,6 +172,49 @@ void main() {
     });
   });
 
+  group('ContentNormaliser — Markdown lines', () {
+    Future<List<Sentence>> sentencesOf(String markdown) async =>
+        (await ContentNormaliser.normalise(
+          markdown,
+          ContentType.markdown,
+        )).sentences;
+
+    test(
+      'a list straight after a heading is not part of the heading',
+      () async {
+        for (final MapEntry(key: text, value: heading) in {
+          '## Key points\n- Fast. Very fast.\n- Cheap': 'Key points',
+          '### Steps\n\n1. Open the app. Tap Settings.\n2. Pick a voice.':
+              'Steps',
+        }.entries) {
+          final sentences = await sentencesOf(text);
+          expect(
+            [
+              for (final s in sentences)
+                if (s.isHeading) s.words.join(' '),
+            ],
+            [heading],
+            reason: text,
+          );
+          expect(sentences.where((s) => !s.isHeading).length, 3, reason: text);
+        }
+      },
+    );
+
+    test('a heading that ends in a hash keeps it', () async {
+      final sentences = await sentencesOf(
+        '## Learning C#\n\nBody text here.\n\n# Closed #\n\nMore.',
+      );
+      expect(
+        [
+          for (final s in sentences)
+            if (s.isHeading) s.words.join(' '),
+        ],
+        ['Learning C#', 'Closed'],
+      );
+    });
+  });
+
   group('ContentNormaliser — HTML', () {
     test('strips basic HTML tags', () async {
       const input = '<p>Hello <b>world</b></p>';
