@@ -678,6 +678,29 @@ void main() {
       expect(find.text('Grant access'), findsNothing);
     });
 
+    testWidgets('Connect signs in when the full Drive browser is turned on', (
+      tester,
+    ) async {
+      // The button only knew the "files you choose" way of connecting.
+      // With the full browser chosen in Settings and nobody signed in
+      // (after disconnecting, say) it did nothing at all.
+      final auth = _FakeGoogleDriveAuth(const GoogleDriveAuthUnauthenticated());
+      await tester.pumpWidget(
+        _harness(authState: auth.initialState, auth: auth),
+      );
+      await tester.pump();
+      expect(find.text('Drive Doc'), findsNothing);
+
+      await tester.tap(find.text('Connect'));
+      await tester.pump();
+      await tester.pump();
+
+      // Signed in with the mode saved in Settings, and the browser is here.
+      expect(auth.connectCalls, 1);
+      expect(auth.connectAccessModes, [null]);
+      expect(find.text('Drive Doc'), findsOneWidget);
+    });
+
     testWidgets('Grant access is hidden when signed out', (tester) async {
       await tester.pumpWidget(
         _harness(authState: const GoogleDriveAuthUnauthenticated()),

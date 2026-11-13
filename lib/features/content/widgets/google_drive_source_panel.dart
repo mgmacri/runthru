@@ -48,6 +48,7 @@ class GoogleDriveSourcePanel extends ConsumerWidget {
           authState: authState,
           accessMode: accessMode,
           onChooseFiles: () => chooseGoogleDriveFilesForReading(context, ref),
+          onConnect: () => ref.read(googleDriveAuthProvider.notifier).connect(),
           onOpenBrowserSetting:
               onOpenBrowserSetting ??
               () => context.go(
@@ -266,6 +267,7 @@ class _ConnectionRow extends StatelessWidget {
     required this.authState,
     required this.accessMode,
     required this.onChooseFiles,
+    required this.onConnect,
     required this.onOpenBrowserSetting,
     required this.onDisconnect,
     this.showDivider = false,
@@ -274,6 +276,9 @@ class _ConnectionRow extends StatelessWidget {
   final GoogleDriveAuthState authState;
   final GoogleDriveAccessMode accessMode;
   final Future<void> Function() onChooseFiles;
+
+  /// Signs in with the access mode saved in Settings.
+  final Future<void> Function() onConnect;
   final VoidCallback onOpenBrowserSetting;
   final VoidCallback onDisconnect;
   final bool showDivider;
@@ -344,9 +349,16 @@ class _ConnectionRow extends StatelessWidget {
               onTap: isLoading
                   ? null
                   : () {
+                      // With "files you choose", connecting goes through
+                      // the file picker. With the full Drive browser turned
+                      // on in Settings there is nothing to pick first: sign
+                      // in, and the browser appears in this panel. (This
+                      // branch was missing, and the button did nothing.)
                       if (accessMode ==
                           GoogleDriveAccessMode.selectedFilesOnly) {
                         onChooseFiles();
+                      } else {
+                        onConnect();
                       }
                     },
               child: Container(
