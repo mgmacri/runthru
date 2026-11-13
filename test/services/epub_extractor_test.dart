@@ -342,6 +342,30 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('epubInfo reads a large book through its zip directory', () async {
+      // The title and author are two small entries. The whole file used to
+      // be loaded for them, once per library row.
+      final tempDir = await Directory.systemTemp.createTemp('epub_test_');
+      final epubPath = '${tempDir.path}/large.epub';
+      await File(epubPath).writeAsBytes(
+        _createTestEpub(
+          chapterContents: [
+            '<html><body><p>${'word ' * 300000}</p></body></html>',
+            '<html><body><p>The end.</p></body></html>',
+          ],
+          extraMetadata: '    <dc:creator>A Writer</dc:creator>\n',
+        ),
+      );
+
+      final info = await epubInfo(epubPath);
+      expect(info!.title, 'Test EPUB');
+      expect(info.author, 'A Writer');
+      // The file is closed again: it can be read, and removed, straight
+      // after.
+      expect((await epubInfo(epubPath))!.title, 'Test EPUB');
+      await tempDir.delete(recursive: true);
+    });
+
     test('epubTitle reads the package title', () async {
       final tempDir = await Directory.systemTemp.createTemp('epub_test_');
       final epubPath = '${tempDir.path}/file_name.epub';

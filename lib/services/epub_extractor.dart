@@ -1165,36 +1165,45 @@ Future<EpubInfo?> epubInfo(String filePath) async {
     return await Isolate.run(() {
       final file = File(filePath);
       if (!file.existsSync()) return null;
-      final archive = ZipDecoder().decodeBytes(file.readAsBytesSync());
-      String? read(String path) {
-        final want = path.replaceAll('\\', '/').toLowerCase();
-        for (final f in archive.files) {
-          if (f.name.replaceAll('\\', '/').toLowerCase() == want) {
-            return utf8.decode(f.content as List<int>, allowMalformed: true);
+      // The file is read where its zip directory points, not whole: the
+      // package metadata is two small entries, and every library row asks
+      // for it. Reading whole books (tens of megabytes with their images)
+      // for a title made opening a large library slow and memory-hungry.
+      final input = InputFileStream(filePath);
+      try {
+        final archive = ZipDecoder().decodeStream(input);
+        String? read(String path) {
+          final want = path.replaceAll('\\', '/').toLowerCase();
+          for (final f in archive.files) {
+            if (f.name.replaceAll('\\', '/').toLowerCase() == want) {
+              return utf8.decode(f.content as List<int>, allowMalformed: true);
+            }
           }
+          return null;
         }
-        return null;
-      }
 
-      final container = read('META-INF/container.xml');
-      if (container == null) return null;
-      final opfPath = XmlDocument.parse(
-        container,
-      ).findAllElements('rootfile').firstOrNull?.getAttribute('full-path');
-      if (opfPath == null) return null;
-      final opf = read(opfPath);
-      if (opf == null) return null;
-      final package = XmlDocument.parse(opf);
-      String? first(String name) {
-        final value = package
-            .findAllElements('*')
-            .where((e) => e.name.local == name)
-            .map((e) => e.innerText.replaceAll(RegExp(r'\s+'), ' ').trim())
-            .firstWhere((t) => t.isNotEmpty, orElse: () => '');
-        return value.isEmpty ? null : value;
-      }
+        final container = read('META-INF/container.xml');
+        if (container == null) return null;
+        final opfPath = XmlDocument.parse(
+          container,
+        ).findAllElements('rootfile').firstOrNull?.getAttribute('full-path');
+        if (opfPath == null) return null;
+        final opf = read(opfPath);
+        if (opf == null) return null;
+        final package = XmlDocument.parse(opf);
+        String? first(String name) {
+          final value = package
+              .findAllElements('*')
+              .where((e) => e.name.local == name)
+              .map((e) => e.innerText.replaceAll(RegExp(r'\s+'), ' ').trim())
+              .firstWhere((t) => t.isNotEmpty, orElse: () => '');
+          return value.isEmpty ? null : value;
+        }
 
-      return EpubInfo(title: first('title'), author: first('creator'));
+        return EpubInfo(title: first('title'), author: first('creator'));
+      } finally {
+        input.closeSync();
+      }
     }).timeout(const Duration(seconds: 5));
   } on Object {
     return null;
