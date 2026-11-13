@@ -113,9 +113,11 @@ class LibraryImport {
         await sources.addFolder(result, ownsFiles: false);
       }
     } on Object catch (e) {
-      appLog('import', 'Folder pick failed: $e');
+      // A sentence for the reader; what it was goes to the log. (The
+      // error's own text used to be shown: "PlatformException(…)".)
+      appLog('import', 'Folder pick failed: ${e.runtimeType}');
       if (!context.mounted) return;
-      _showError(context, 'Could not open file picker: $e');
+      _showError(context, 'RunThru could not add that folder. Try again.');
     }
   }
 
@@ -156,9 +158,9 @@ class LibraryImport {
         await _copyFilesIntoOwnedSource(context, sources, result.files);
       }
     } on Object catch (e) {
-      appLog('import', 'pickFiles failed: $e');
+      appLog('import', 'pickFiles failed: ${e.runtimeType}');
       if (!context.mounted) return;
-      _showError(context, 'Could not open file picker: $e');
+      _showError(context, 'RunThru could not add those files. Try again.');
     }
   }
 
@@ -299,19 +301,11 @@ class LibraryImport {
     List<PlatformFile> files,
   ) async {
     final dir = await _freshSourceDir();
-    var copied = 0;
-    for (final picked in files) {
-      final sourcePath = picked.path;
-      if (sourcePath == null) continue;
-      try {
-        if (!isSupportedBookPath(picked.name)) continue;
-        final destination = uniqueDestinationFile(dir, picked.name);
-        await File(sourcePath).copy(destination.path);
-        copied++;
-      } on Object catch (e) {
-        appLog('import', 'failed to copy "${picked.name}": $e');
-      }
-    }
+    final copied = await copyPickedFiles(
+      files,
+      dir,
+      temp: await getTemporaryDirectory(),
+    );
 
     if (copied == 0) {
       await _deleteDirQuietly(dir);
@@ -327,6 +321,53 @@ class LibraryImport {
     );
     if (!context.mounted) return;
     _showSnack(context, booksAddedMessage(copied));
+  }
+
+  /// Copies the supported books among [files] into [dir] and returns how
+  /// many were copied.
+  ///
+  /// On a phone the picker does not hand over the reader's files but copies
+  /// of them, in the app's temporary folder ([temp]: `tmp` on iOS, the
+  /// cache on Android). Each of those is removed once it has been dealt
+  /// with: they used to stay, so every imported book was stored twice until
+  /// the system got round to clearing them. A file that is not inside
+  /// [temp] is the reader's own and is never touched.
+  @visibleForTesting
+  static Future<int> copyPickedFiles(
+    List<PlatformFile> files,
+    Directory dir, {
+    required Directory temp,
+  }) async {
+    var copied = 0;
+    for (final picked in files) {
+      final sourcePath = picked.path;
+      if (sourcePath == null) continue;
+      try {
+        if (isSupportedBookPath(picked.name)) {
+          final destination = uniqueDestinationFile(dir, picked.name);
+          await File(sourcePath).copy(destination.path);
+          copied++;
+        }
+      } on Object catch (e) {
+        appLog('import', 'failed to copy "${picked.name}": ${e.runtimeType}');
+      }
+      await _removePickerCopy(sourcePath, temp);
+    }
+    return copied;
+  }
+
+  static Future<void> _removePickerCopy(String path, Directory temp) async {
+    // On iOS one folder can be spelled with or without a leading "/private".
+    String plain(String p) =>
+        p.startsWith('/private/') ? p.substring('/private'.length) : p;
+    try {
+      final file = File(path).absolute;
+      final folder = plain(temp.absolute.path);
+      if (!plain(file.path).startsWith('$folder/')) return;
+      if (await file.exists()) await file.delete();
+    } on Object catch (e) {
+      appLog('import', 'could not remove a picker copy: ${e.runtimeType}');
+    }
   }
 
   /// Creates a unique app-managed directory under `<appDocs>/library/`.
