@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:runthru/core/book_structure.dart';
 import 'package:runthru/core/time_left.dart';
 import 'package:runthru/design/design.dart';
+import 'package:runthru/features/reading/chapter_flow.dart';
 
 /// Book mode: a calm, paged view the reader turns themselves, like an
 /// e-reader. No timer runs.
@@ -237,7 +238,10 @@ class BookModeViewState extends State<BookModeView> {
             ? 0
             : ((globalEnd + 1) / total * 100).clamp(0, 100).round();
         final wordsLeft = (total - globalEnd - 1).clamp(0, total);
-        final minutesLeft = (wordsLeft / widget.wpm.clamp(60, 1500)).ceil();
+        // The same sum as the Library, the contents and the title cards
+        // (this one used to stop at 60 words a minute where the speed
+        // setting goes down to 30, and showed half the time below that).
+        final minutesLeft = minutesFor(wordsLeft, widget.wpm);
 
         return Padding(
           padding: EdgeInsets.only(

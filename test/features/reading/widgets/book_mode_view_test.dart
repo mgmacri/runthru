@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:runthru/core/time_left.dart';
 import 'package:runthru/features/reading/widgets/book_mode_view.dart';
 
 /// A small book: a heading, then numbered prose paragraphs so every word is
@@ -24,10 +25,11 @@ final Set<int> _paragraphs = {
 };
 
 class _Harness extends StatefulWidget {
-  const _Harness({this.onTurnLog, this.onEnd});
+  const _Harness({this.onTurnLog, this.onEnd, this.wpm = 250});
 
   final List<int>? onTurnLog;
   final VoidCallback? onEnd;
+  final int wpm;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -57,7 +59,7 @@ class _HarnessState extends State<_Harness> {
             fontSize: 20,
             letterSpacing: 0,
             wordSpacing: 0,
-            wpm: 250,
+            wpm: widget.wpm,
             onFontSizeChanged: (_) {},
             paragraphStarts: _paragraphs,
             chapterStarts: const {_chapterTwo},
@@ -167,6 +169,25 @@ void main() {
       expect(size.width, greaterThanOrEqualTo(48));
       expect(size.height, greaterThanOrEqualTo(48));
     }
+  });
+
+  testWidgets('the time left is worked out at the reader\'s speed, however '
+      'slow', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    // 30 words a minute is the slowest the speed setting goes. The footer
+    // used to reckon with 60 at least, and showed half the time.
+    await tester.pumpWidget(const _Harness(wpm: 30));
+    final shown = _pageText(tester).split(' ').length;
+    final minutes = ((_words.length - shown) / 30).ceil();
+
+    expect(
+      find.textContaining(formatTimeLeft(minutes)),
+      findsOneWidget,
+      reason: '${_words.length - shown} words left at 30 a minute',
+    );
   });
 
   testWidgets('on the last page the footer button finishes the book', (
