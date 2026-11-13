@@ -311,6 +311,144 @@ void main() {
     });
   });
 
+  group('trouble on Instapaper\'s side', () {
+    Future<List<int>> attempts(InstapaperSyncQueue queue) async => [
+      for (final op in await queue.pendingOps()) op.attempts,
+    ];
+
+    test(
+      'an op answered with a server error does not hold up those behind it',
+      () async {
+        // It used to stop the pass every time, so one op Instapaper could
+        // not take kept everything queued after it from ever being sent.
+        resolved = null;
+        final queue = newQueue();
+        await queue.enqueueArchive(bookmarkId: 1);
+        await queue.enqueueArchive(bookmarkId: 2);
+        await queue.enqueueArchive(bookmarkId: 3);
+
+        resolved = client;
+        client.script.add(_serverError);
+        await queue.drain();
+
+        expect(client.calls, ['archive:1', 'archive:2', 'archive:3']);
+        expect(await pending(queue), ['archive:1']);
+      },
+    );
+
+    test(
+      'an op refused while others are accepted is given up on in the end',
+      () async {
+        resolved = null;
+        final queue = newQueue(maxAttempts: 2);
+        await queue.enqueueArchive(bookmarkId: 1);
+        await queue.enqueueArchive(bookmarkId: 2);
+
+        resolved = client;
+        client.script.add(_serverError);
+        await queue.drain();
+        expect(await pending(queue), ['archive:1']);
+        expect(await attempts(queue), [1]);
+
+        // Next time it goes last: what was queued since is sent first.
+        resolved = null;
+        await queue.enqueueArchive(bookmarkId: 3);
+        resolved = client;
+        client.calls.clear();
+        client.script.addAll([null, _serverError]);
+        await queue.drain();
+
+        expect(client.calls, ['archive:3', 'archive:1']);
+        expect(await pending(queue), isEmpty);
+      },
+    );
+
+    test('while Instapaper is down nothing is counted or lost', () async {
+      resolved = null;
+      final queue = newQueue(maxAttempts: 2);
+      await queue.enqueueArchive(bookmarkId: 1);
+      await queue.enqueueArchive(bookmarkId: 2);
+      await queue.enqueueArchive(bookmarkId: 3);
+
+      resolved = client;
+      for (var i = 0; i < 4; i++) {
+        client.script.addAll([_serverError, _serverError]);
+        await queue.drain();
+      }
+
+      // Two tries a pass, however much is queued.
+      expect(client.calls, hasLength(8));
+      expect(await pending(queue), ['archive:1', 'archive:2', 'archive:3']);
+      expect(await attempts(queue), [0, 0, 0]);
+
+      client.script.clear();
+      await queue.drain();
+      expect(await pending(queue), isEmpty);
+    });
+
+    test(
+      'two refused bookmarks at the front do not shut out a third',
+      () async {
+        resolved = null;
+        final queue = newQueue();
+        await queue.enqueueArchive(bookmarkId: 1);
+        await queue.enqueueArchive(bookmarkId: 2);
+        await queue.enqueueArchive(bookmarkId: 3);
+
+        resolved = client;
+        // First pass: for all the queue can tell, Instapaper is down.
+        client.script.addAll([_serverError, _serverError]);
+        await queue.drain();
+        expect(client.calls, ['archive:1', 'archive:2']);
+
+        // Second pass: the one not tried yet goes first, and is accepted.
+        client.calls.clear();
+        client.script.addAll([null, _serverError, _serverError]);
+        await queue.drain();
+
+        expect(client.calls, ['archive:3', 'archive:1', 'archive:2']);
+        expect(await pending(queue), ['archive:1', 'archive:2']);
+        expect(await attempts(queue), [1, 1]);
+      },
+    );
+
+    test(
+      'the archive behind a position Instapaper would not take waits with it',
+      () async {
+        resolved = null;
+        final queue = newQueue();
+        await queue.enqueueArchive(
+          bookmarkId: 1,
+          finalProgress: 1,
+          timestampSeconds: 50,
+        );
+        await queue.enqueueArchive(bookmarkId: 2);
+
+        resolved = client;
+        client.script.add(_serverError);
+        await queue.drain();
+
+        expect(client.calls, ['progress:1:1.00:50', 'archive:2']);
+        expect(await pending(queue), ['progress:1:1.00:50', 'archive:1']);
+      },
+    );
+
+    test('an op Instapaper could not take is tried again on its own', () async {
+      final queue = newQueue(retryDelays: const [Duration(milliseconds: 20)]);
+      client.script.add(_serverError);
+
+      await queue.enqueueArchive(bookmarkId: 1);
+      await queue.drain();
+      expect(await pending(queue), ['archive:1']);
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await queue.drain();
+
+      expect(client.calls, ['archive:1', 'archive:1']);
+      expect(await pending(queue), isEmpty);
+    });
+  });
+
   group('coalescing', () {
     setUp(() => resolved = null);
 

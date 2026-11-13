@@ -5,8 +5,9 @@
 /// or [InstapaperSyncQueue.enqueueArchive] returns, and sending happens
 /// afterwards, on its own. Nothing a caller awaits ever waits on the network.
 ///
-/// An op leaves the queue only when Instapaper accepted it, or when it can
-/// never succeed (the bookmark is gone). A send that failed for any other
+/// An op leaves the queue only when Instapaper accepted it, when it can
+/// never succeed (the bookmark is gone), or when Instapaper has refused it
+/// several times while taking other ops. A send that failed for any other
 /// reason stays queued and is tried again: after a pause, on the next
 /// enqueue, on the next list refresh, and on sign-in.
 ///
@@ -34,8 +35,10 @@ sealed class InstapaperSyncOp {
   /// The bookmark this op targets.
   final int bookmarkId;
 
-  /// How many sends Instapaper has refused for a reason the queue does not
-  /// know. Sends that never reached Instapaper are not counted.
+  /// How many sends Instapaper has refused for the op itself: for a reason
+  /// the queue does not know, or with trouble of its own in a pass where it
+  /// accepted other ops. Sends that never reached Instapaper, and refusals
+  /// while it accepted nothing, are not counted.
   final int attempts;
 
   /// Serialise to a JSON-safe map.
@@ -148,8 +151,13 @@ enum _Outcome {
   /// Refused for an unknown reason; counted, and the next op gets its turn.
   failed,
 
-  /// Nothing will get through right now (no connection, rate limit, server
-  /// trouble): stop, keep everything, try again after a pause.
+  /// Instapaper answered with trouble of its own (a server error, a reply
+  /// that makes no sense). Either it is unwell, or it cannot take this op:
+  /// the op is kept, and the rest of the pass shows which.
+  troubled,
+
+  /// Nothing will get through right now (no connection, a rate limit, a
+  /// wrong clock): stop, keep everything, try again after a pause.
   retryLater,
 
   /// Nothing will get through until the reader signs in again: stop, keep
@@ -181,7 +189,8 @@ class InstapaperSyncQueue {
   /// [onAuthFailure] is told when Instapaper refuses the saved connection.
   /// [retryDelays] are the pauses before a failed drain is tried again (the
   /// last one repeats); an empty list means no timed retry. An op refused
-  /// [maxAttempts] times for an unknown reason is given up on.
+  /// [maxAttempts] times for itself (see [InstapaperSyncOp.attempts]) is
+  /// given up on.
   InstapaperSyncQueue({
     required InstapaperClientResolver clientResolver,
     void Function(InstapaperApiException error)? onAuthFailure,
@@ -214,6 +223,15 @@ class InstapaperSyncQueue {
   Timer? _retryTimer;
   int _retryStep = 0;
   bool _disposed = false;
+
+  /// How many bookmarks Instapaper may answer with trouble, with nothing
+  /// accepted, before a pass takes it that Instapaper itself is unwell.
+  static const int _troubleLimit = 2;
+
+  /// Bookmarks whose ops Instapaper answered with trouble and has not taken
+  /// since. They go last in a pass, so that what is queued behind them is
+  /// sent, and shows whether the trouble was theirs.
+  final Set<int> _setAside = <int>{};
 
   /// Snapshot of pending ops (read-only view used by callers to overlay
   /// optimistic state on freshly fetched bookmark lists).
@@ -335,16 +353,35 @@ class InstapaperSyncQueue {
       return _Pass.noClient;
     }
 
-    final ops = await _read();
-    if (ops.isEmpty) {
+    final queued = await _read();
+    if (queued.isEmpty) {
       _cancelRetry();
+      _setAside.clear();
       return _Pass.workedThrough;
     }
-    appLog('instapaper-queue', 'draining ${ops.length} op(s)');
+    appLog('instapaper-queue', 'draining ${queued.length} op(s)');
 
+    // Ops for one bookmark keep their order (a position before its archive).
+    _setAside.retainAll({for (final op in queued) op.bookmarkId});
+    final ops = [
+      ...queued.where((op) => !_setAside.contains(op.bookmarkId)),
+      ...queued.where((op) => _setAside.contains(op.bookmarkId)),
+    ];
+
+    // Ops Instapaper answered with trouble in this pass. Whether the
+    // trouble is Instapaper's or theirs shows when another op is accepted.
+    final troubled = <InstapaperSyncOp>[];
+    var accepted = false;
+    var pass = _Pass.workedThrough;
+    var retry = false;
+
+    sending:
     for (final op in ops) {
       if (_disposed || generation != _generation) return _Pass.workedThrough;
       if (refused.any(op.sameAs)) continue;
+      // The archive behind a position Instapaper would not take waits with
+      // it: one request per troubled bookmark in a pass.
+      if (troubled.any((t) => t.bookmarkId == op.bookmarkId)) continue;
       // Replaced or cleared since the snapshot was taken.
       if (!await _contains(op)) continue;
 
@@ -355,20 +392,48 @@ class InstapaperSyncQueue {
       switch (outcome) {
         case _Outcome.sent:
           _retryStep = 0;
+          accepted = true;
+          _setAside.remove(op.bookmarkId);
           await _remove(op);
         case _Outcome.dropped:
           await _remove(op);
         case _Outcome.failed:
           refused.add(op);
           await _countFailure(op);
+        case _Outcome.troubled:
+          troubled.add(op);
+          if (!accepted && troubled.length >= _troubleLimit) {
+            break sending;
+          }
         case _Outcome.retryLater:
-          _scheduleRetry();
-          return _Pass.blocked;
+          retry = true;
+          pass = _Pass.blocked;
+          break sending;
         case _Outcome.needsSignIn:
+          // Signing in starts the next drain; a timer would only knock on
+          // a closed door.
           return _Pass.blocked;
       }
     }
-    return _Pass.workedThrough;
+
+    if (troubled.isNotEmpty) {
+      _setAside.addAll(troubled.map((op) => op.bookmarkId));
+      retry = true;
+      if (accepted) {
+        // Instapaper took other ops in this pass, so these were refused
+        // for themselves. That counts towards giving up on them, and they
+        // no longer hold up anything else.
+        for (final op in troubled) {
+          refused.add(op);
+          await _countFailure(op);
+        }
+      } else {
+        // Nothing got through: Instapaper is unwell. Everything is kept.
+        pass = _Pass.blocked;
+      }
+    }
+    if (retry) _scheduleRetry();
+    return pass;
   }
 
   Future<_Outcome> _send(InstapaperClient client, InstapaperSyncOp op) async {
@@ -399,6 +464,11 @@ class InstapaperSyncQueue {
           _onAuthFailure?.call(e);
         }
         return _Outcome.needsSignIn;
+      }
+      if (e.kind == InstapaperFailureKind.serviceUnavailable ||
+          e.kind == InstapaperFailureKind.unexpectedResponse) {
+        appLog('instapaper-queue', 'not taken for now, $label: $why');
+        return _Outcome.troubled;
       }
       if (e.isTransient) {
         appLog('instapaper-queue', 'keeping ops, will retry: $why');
