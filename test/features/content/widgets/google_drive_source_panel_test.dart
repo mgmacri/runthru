@@ -678,6 +678,69 @@ void main() {
       expect(find.text('Grant access'), findsNothing);
     });
 
+    testWidgets('the row\'s buttons are 48dp targets, each announced once', (
+      tester,
+    ) async {
+      // They were 34dp: drawn that size, and tappable only there.
+      final handle = tester.ensureSemantics();
+
+      // Signed out: settings and Connect.
+      await tester.pumpWidget(
+        _harness(
+          authState: const GoogleDriveAuthUnauthenticated(),
+          config: const AppConfig(),
+        ),
+      );
+      await tester.pump();
+      for (final label in ['Google Drive settings', 'Connect Google Drive']) {
+        final target = find.bySemanticsLabel(label);
+        expect(target, findsOneWidget, reason: label);
+        final size = tester.getSize(target);
+        expect(size.width, greaterThanOrEqualTo(48), reason: label);
+        expect(size.height, greaterThanOrEqualTo(48), reason: label);
+        expect(
+          tester.getSemantics(target),
+          matchesSemantics(
+            label: label,
+            isButton: true,
+            hasTapAction: true,
+            hasEnabledState: label == 'Connect Google Drive',
+            isEnabled: label == 'Connect Google Drive',
+          ),
+          reason: label,
+        );
+      }
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
+
+    testWidgets('signed in, settings and disconnect are 48dp targets too', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _harness(
+          authState: const GoogleDriveAuthAuthenticated(
+            user: GoogleDriveUser(id: 'id', email: 'drive@example.com'),
+          ),
+          config: const AppConfig(),
+        ),
+      );
+      await tester.pump();
+      for (final label in [
+        'Google Drive settings',
+        'Disconnect Google Drive',
+      ]) {
+        final size = tester.getSize(find.bySemanticsLabel(label));
+        expect(size.width, greaterThanOrEqualTo(48), reason: label);
+        expect(size.height, greaterThanOrEqualTo(48), reason: label);
+      }
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      handle.dispose();
+    });
+
     testWidgets('Connect signs in when the full Drive browser is turned on', (
       tester,
     ) async {

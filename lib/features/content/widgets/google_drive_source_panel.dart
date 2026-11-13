@@ -325,7 +325,6 @@ class _ConnectionRow extends StatelessWidget {
             tooltip: 'Google Drive settings',
             onPressed: onOpenBrowserSetting,
           ),
-          const SizedBox(width: 8),
           _MiniButton(
             icon: Icons.logout_rounded,
             tooltip: 'Disconnect Google Drive',
@@ -342,10 +341,9 @@ class _ConnectionRow extends StatelessWidget {
             tooltip: 'Google Drive settings',
             onPressed: onOpenBrowserSetting,
           ),
-          const SizedBox(width: 8),
           Opacity(
             opacity: isLoading ? 0.5 : 1.0,
-            child: GestureDetector(
+            child: _ConnectPill(
               onTap: isLoading
                   ? null
                   : () {
@@ -361,21 +359,6 @@ class _ConnectionRow extends StatelessWidget {
                         onConnect();
                       }
                     },
-              child: Container(
-                height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                alignment: Alignment.center,
-                decoration: RunThruDecorations.designerRaisedSmall(
-                  borderRadius: 999,
-                ),
-                child: Text(
-                  'Connect',
-                  style: RunThruTypography.caption.copyWith(
-                    color: RunThruTokens.shellAccent,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
             ),
           ),
         ],
@@ -383,9 +366,8 @@ class _ConnectionRow extends StatelessWidget {
     }
 
     return Semantics(
-      label: isAuthenticated
-          ? 'Google Drive connected'
-          : 'Connect Google Drive',
+      // Signed out, the Connect button says what there is to say.
+      label: isAuthenticated ? 'Google Drive connected' : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
@@ -401,7 +383,8 @@ class _ConnectionRow extends StatelessWidget {
                 )
               : null,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            // 6 + the 48dp controls + 6 keeps the row at its 60dp height.
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
                 Container(
@@ -480,21 +463,80 @@ class _MiniButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Drawn 34dp, tappable at 48dp, and announced once: the tooltip shows
+    // on a long press, the label is what a screen reader says.
     return Tooltip(
       message: tooltip,
+      excludeFromSemantics: true,
       child: Semantics(
         button: true,
         label: tooltip,
+        excludeSemantics: true,
+        onTap: onPressed,
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onPressed,
-          child: Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: RunThruDecorations.designerRaisedSmall(
-              borderRadius: 10,
+          child: SizedBox(
+            width: RunThruA11y.minTapTarget,
+            height: RunThruA11y.minTapTarget,
+            child: Center(
+              child: Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: RunThruDecorations.designerRaisedSmall(
+                  borderRadius: 10,
+                ),
+                child: Icon(icon, size: 16, color: RunThruTokens.shellInkSoft),
+              ),
             ),
-            child: Icon(icon, size: 16, color: RunThruTokens.shellInkSoft),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The raised "Connect" pill: drawn 34dp high, tappable at 48dp.
+class _ConnectPill extends StatelessWidget {
+  const _ConnectPill({required this.onTap});
+
+  /// Null while a sign-in is under way.
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: 'Connect Google Drive',
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: RunThruA11y.minTapTarget,
+            minHeight: RunThruA11y.minTapTarget,
+          ),
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: RunThruDecorations.designerRaisedSmall(
+                borderRadius: 999,
+              ),
+              child: Text(
+                'Connect',
+                style: RunThruTypography.caption.copyWith(
+                  color: RunThruTokens.shellAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
         ),
       ),
