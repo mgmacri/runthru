@@ -26,6 +26,7 @@ class ProgressRecord {
     required this.lastReadAt,
     this.finished = false,
     this.contentHash,
+    this.partialText = false,
   });
 
   /// Reconstructs a record from JSON (SharedPreferences).
@@ -41,6 +42,7 @@ class ProgressRecord {
           : DateTime.fromMillisecondsSinceEpoch(0),
       finished: json['finished'] as bool? ?? false,
       contentHash: json['contentHash'] as String?,
+      partialText: json['partialText'] as bool? ?? false,
     );
   }
 
@@ -68,6 +70,12 @@ class ProgressRecord {
   /// Content hash of the underlying book — survives re-imports that change
   /// the path-based [contentId].
   final String? contentHash;
+
+  /// True when [totalWords] counted only part of the book: its extraction
+  /// had not finished when this was recorded, and the reader had the pages
+  /// extracted so far. Such a length says nothing about the whole text, so
+  /// it must not be used to rescale a saved position.
+  final bool partialText;
 
   /// Reading progress 0.0–1.0.
   double get percent =>
@@ -103,6 +111,7 @@ class ProgressRecord {
     DateTime? lastReadAt,
     bool? finished,
     String? contentHash,
+    bool? partialText,
   }) {
     return ProgressRecord(
       contentId: contentId ?? this.contentId,
@@ -113,6 +122,7 @@ class ProgressRecord {
       lastReadAt: lastReadAt ?? this.lastReadAt,
       finished: finished ?? this.finished,
       contentHash: contentHash ?? this.contentHash,
+      partialText: partialText ?? this.partialText,
     );
   }
 
@@ -126,6 +136,7 @@ class ProgressRecord {
     'lastReadAt': lastReadAt.toIso8601String(),
     'finished': finished,
     'contentHash': contentHash,
+    if (partialText) 'partialText': true,
   };
 }
 
@@ -153,6 +164,9 @@ class ReadingProgress extends _$ReadingProgress {
   /// there (the notes after the story); going back into the text makes it
   /// an item in progress again.
   ///
+  /// [partialText] says that [totalWords] counts only the part of the book
+  /// extracted so far (see [ProgressRecord.partialText]).
+  ///
   /// [lastReadAt] is exposed for testing; in production it defaults to now.
   /// Maximum retained records — oldest (by [ProgressRecord.lastReadAt])
   /// are evicted beyond this, so the store never grows without bound.
@@ -167,6 +181,7 @@ class ReadingProgress extends _$ReadingProgress {
     DateTime? lastReadAt,
     String? contentHash,
     bool finished = false,
+    bool partialText = false,
   }) async {
     // Collapse any pre-existing duplicates (legacy persisted data or a
     // concurrent write that landed before this call) into a single entry per
@@ -195,6 +210,7 @@ class ReadingProgress extends _$ReadingProgress {
       lastReadAt: lastReadAt ?? DateTime.now(),
       finished: finished || stillFinished,
       contentHash: contentHash ?? existing?.contentHash,
+      partialText: partialText,
     );
 
     var records = byId.values.toList();

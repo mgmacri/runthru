@@ -997,6 +997,263 @@ void main() {
     });
   });
 
+  group('ParallaxReadingScreen: saved progress of a library book', () {
+    const path = '/books/long.pdf';
+
+    /// Opens [path] as a book of [words] words (ten to a sentence) whose
+    /// extraction ended as [status]. [savedTotal] and [savedAt] are what an
+    /// earlier sitting left behind.
+    Future<ProviderContainer> open(
+      WidgetTester tester, {
+      required int words,
+      PdfStatus status = PdfStatus.ready,
+      ReadingMode mode = ReadingMode.book,
+      int? savedAt,
+      int? savedTotal,
+      bool savedPartial = false,
+      bool savedFinished = false,
+    }) async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer(
+        overrides: [
+          configProvider.overrideWith(
+            () => _FakeConfigNotifier(
+              const AppConfig(
+                hasSeenReadingGoalOnboarding: true,
+                defaultWpm: 600,
+                chapterMoments: false,
+              ),
+            ),
+          ),
+          deviceCapabilityProvider.overrideWithValue(
+            const DeviceCapability(
+              processorCount: 4,
+              maxWorkers: 2,
+              isMobile: false,
+            ),
+          ),
+          pdfListProvider.overrideWith((ref) async => const <PdfEntry>[]),
+          // Extraction that stopped early stays stopped for the test: the
+          // real queue would go to the file for the rest.
+          if (status != PdfStatus.ready)
+            preprocessingQueueProvider.overrideWith(_StuckQueue.new),
+        ],
+      );
+      final queue = container.read(preprocessingQueueProvider.notifier);
+      queue.pauseBackground();
+      queue.debugSetEntry(
+        PdfEntry(
+          filePath: path,
+          fileName: 'long.pdf',
+          status: status,
+          document: ExtractedDocument(
+            sentences: [
+              for (var s = 0; s < words ~/ 10; s++)
+                Sentence(
+                  words: [for (var w = 0; w < 10; w++) 'w${s * 10 + w}'],
+                ),
+            ],
+            pageBoundaries: const [
+              PageBoundary(
+                pageNumber: 0,
+                startSentenceIndex: 0,
+                startWordIndex: 0,
+              ),
+            ],
+            totalPages: 1,
+          ),
+        ),
+      );
+      // As in the app, where the Library keeps the progress store alive.
+      container.listen(readingProgressProvider, (_, __) {});
+      await container.read(readingProgressProvider.future);
+      await container.read(bookmarkStoreProvider.future);
+      if (savedAt != null) {
+        await container
+            .read(bookmarkStoreProvider.notifier)
+            .save(path, BookmarkData(wordIndex: savedAt));
+        await container
+            .read(readingProgressProvider.notifier)
+            .record(
+              contentId: path,
+              source: 'local',
+              title: 'Long',
+              wordIndex: savedAt,
+              totalWords: savedTotal ?? words,
+              partialText: savedPartial,
+              finished: savedFinished,
+            );
+      }
+      container.read(readingModeNotifierProvider.notifier).setMode(mode);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: ParallaxReadingScreen(filePath: path)),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      return container;
+    }
+
+    Future<void> leave(WidgetTester tester, ProviderContainer container) async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const SizedBox.shrink(),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 10));
+    }
+
+    ProgressRecord? saved(ProviderContainer container) =>
+        container.read(readingProgressProvider.notifier).getRecord(path);
+
+    testWidgets('a book whose extraction has since finished opens where it '
+        'was left', (tester) async {
+      // Left at word 20 when only 40 words had been extracted. Opened again
+      // with all 400: the position used to be scaled by the growth, to
+      // word 200, and saved there.
+      final container = await open(
+        tester,
+        words: 400,
+        savedAt: 20,
+        savedTotal: 40,
+        savedPartial: true,
+      );
+
+      expect(container.read(wordTimerProvider).currentIndex, 20);
+
+      await leave(tester, container);
+      expect(container.read(bookmarkProvider(path)), 20);
+      container.dispose();
+    });
+
+    testWidgets('a length that grew is not taken for a re-extraction, even '
+        'unmarked', (tester) async {
+      // The same, saved by a build that did not yet mark partial lengths.
+      final container = await open(
+        tester,
+        words: 400,
+        savedAt: 20,
+        savedTotal: 40,
+      );
+
+      expect(container.read(wordTimerProvider).currentIndex, 20);
+
+      await leave(tester, container);
+      container.dispose();
+    });
+
+    testWidgets('a book extracted again a little shorter is still rescaled', (
+      tester,
+    ) async {
+      // What the rescaling is for: 440 words then, 400 now.
+      final container = await open(
+        tester,
+        words: 400,
+        savedAt: 220,
+        savedTotal: 440,
+      );
+
+      expect(container.read(wordTimerProvider).currentIndex, 200);
+      // The new length is recorded at once, so that the next opening does
+      // not scale the scaled position again.
+      expect(saved(container)?.totalWords, 400);
+      expect(saved(container)?.wordIndex, 200);
+
+      await leave(tester, container);
+      container.dispose();
+    });
+
+    testWidgets('the end of a partly extracted book is not the end of the '
+        'book', (tester) async {
+      // Extraction stopped after the first pages; the reader has those.
+      final container = await open(
+        tester,
+        words: 40,
+        status: PdfStatus.preview,
+        mode: ReadingMode.singleWord,
+      );
+      // 40 words at 600 a minute.
+      await tester.pump(const Duration(seconds: 8));
+      expect(container.read(wordTimerProvider).isFinished, isTrue);
+
+      await leave(tester, container);
+      final record = saved(container);
+      expect(record?.finished ?? false, isFalse);
+      expect(record?.partialText, isTrue);
+      container.dispose();
+    });
+
+    testWidgets('a whole book read to its last word is finished', (
+      tester,
+    ) async {
+      final container = await open(
+        tester,
+        words: 40,
+        mode: ReadingMode.singleWord,
+      );
+      await tester.pump(const Duration(seconds: 8));
+
+      await leave(tester, container);
+      expect(saved(container)?.finished, isTrue);
+      expect(saved(container)?.partialText, isFalse);
+      container.dispose();
+    });
+
+    for (final mode in [ReadingMode.book, ReadingMode.singleWord]) {
+      testWidgets('a finished book opened again and closed stays finished '
+          '(${mode.name})', (tester) async {
+        // Finished at word 35. Opening it again starts at the sentence
+        // that word is in (word 30), and leaving used to save that earlier
+        // word, which took the finished mark away.
+        final container = await open(
+          tester,
+          words: 40,
+          mode: mode,
+          savedAt: 35,
+          savedFinished: true,
+        );
+        expect(container.read(wordTimerProvider).currentIndex, 30);
+        if (mode == ReadingMode.singleWord) {
+          // A few words in, short of the word it was finished at.
+          await tester.pump(const Duration(milliseconds: 250));
+          container.read(wordTimerProvider.notifier).pause();
+          await tester.pump();
+          expect(
+            container.read(wordTimerProvider).currentIndex,
+            inInclusiveRange(31, 34),
+          );
+        }
+
+        await leave(tester, container);
+        expect(saved(container)?.finished, isTrue);
+        container.dispose();
+      });
+    }
+
+    testWidgets('going back into a finished book makes it unfinished again', (
+      tester,
+    ) async {
+      final container = await open(
+        tester,
+        words: 40,
+        savedAt: 35,
+        savedFinished: true,
+      );
+      // Back a page, to the start: the reader is reading it again.
+      container.read(wordTimerProvider.notifier).seekTo(10);
+      await tester.pump();
+
+      await leave(tester, container);
+      expect(saved(container)?.finished, isFalse);
+      container.dispose();
+    });
+  });
+
   group('ParallaxReadingScreen: a page range in Book mode', () {
     testWidgets('turning past its last page completes the range', (
       tester,
@@ -1287,6 +1544,15 @@ void main() {
 }
 
 final _openedAt = DateTime(2026, 5, 24);
+
+/// A queue in which a book's extraction stopped part-way and stays there:
+/// asking for the book again brings nothing more.
+class _StuckQueue extends PreprocessingQueue {
+  _StuckQueue(super.ref);
+
+  @override
+  Future<void> prioritize(String filePath) async {}
+}
 
 Widget _readingHarness(
   _FakeConfigNotifier config, {

@@ -254,6 +254,62 @@ void main() {
     });
   });
 
+  group('a length recorded from a partly extracted book', () {
+    test('is marked as such, and the mark survives a restart', () async {
+      final container = ProviderContainer();
+      container.listen(readingProgressProvider, (_, __) {});
+      await container.read(readingProgressProvider.future);
+      await container
+          .read(readingProgressProvider.notifier)
+          .record(
+            contentId: '/books/long.pdf',
+            source: 'local',
+            title: 'Long',
+            wordIndex: 20,
+            totalWords: 40,
+            partialText: true,
+          );
+      container.dispose();
+
+      final reopened = ProviderContainer();
+      addTearDown(reopened.dispose);
+      reopened.listen(readingProgressProvider, (_, __) {});
+      await reopened.read(readingProgressProvider.future);
+      final record = reopened
+          .read(readingProgressProvider.notifier)
+          .getRecord('/books/long.pdf')!;
+      expect(record.partialText, isTrue);
+
+      // The next write, from the whole text, clears it.
+      await reopened
+          .read(readingProgressProvider.notifier)
+          .record(
+            contentId: '/books/long.pdf',
+            source: 'local',
+            title: 'Long',
+            wordIndex: 20,
+            totalWords: 400,
+          );
+      expect(
+        reopened
+            .read(readingProgressProvider.notifier)
+            .getRecord('/books/long.pdf')!
+            .partialText,
+        isFalse,
+      );
+    });
+
+    test('records written before the mark existed read as whole', () {
+      final record = ProgressRecord.fromJson(const {
+        'contentId': 'x',
+        'wordIndex': 5,
+        'totalWords': 10,
+      });
+      expect(record.partialText, isFalse);
+      expect(record.toJson().containsKey('partialText'), isFalse);
+    });
+  });
+
   group('ProgressRecord.displayPercent', () {
     ProgressRecord at(int wordIndex, {bool finished = false}) => ProgressRecord(
       contentId: 'x',

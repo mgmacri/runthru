@@ -309,6 +309,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final local = (start - _sliceOffset).clamp(0, _words.length - 1);
     ref.read(wordTimerProvider.notifier).seekTo(local);
     _cacheTimerPosition(local);
+    if (_lastGlobalIndex < _openedAtGlobal) _openedAtGlobal = _lastGlobalIndex;
   }
 
   /// A Book page turn moves the shared reading position.
@@ -685,12 +686,26 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     if (total <= 0 || _lastGlobalIndex <= 0) return null;
     // Finished and not read any further: keep it finished.
     if (_finishedAt >= 0 && _lastGlobalIndex == _finishedAt) return null;
+    // A finished book opened again and not read backwards: still finished.
+    // Opening puts the reader at the start of the sentence (or page) they
+    // finished on, which is before the word the mark was recorded at, and
+    // writing that earlier word would take the mark away. Resuming after a
+    // pause steps back a few words by itself; that is not going back.
+    final saved = _shelfProgress.getRecord(widget.filePath);
+    if (saved != null &&
+        saved.finished &&
+        _lastGlobalIndex < saved.wordIndex &&
+        _openedAtGlobal >= 0 &&
+        _lastGlobalIndex >= _openedAtGlobal - RunThruTiming.autoRewindWords) {
+      return null;
+    }
     final shelf = _shelfProgress;
     final contentId = widget.filePath;
     final source = _progressSource;
     final title = _shelfTitle;
     final wordIndex = _lastGlobalIndex;
     final contentHash = _queue.contentHashOf(widget.filePath);
+    final partialText = _textIsPartial;
     return () => unawaited(
       shelf.record(
         contentId: contentId,
@@ -699,9 +714,21 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         wordIndex: wordIndex,
         totalWords: total,
         contentHash: contentHash,
+        partialText: partialText,
       ),
     );
   }
+
+  /// Whether the text in hand is only part of the book: its extraction
+  /// stopped early (a timeout on a large file) and the reader was given the
+  /// pages extracted so far. The end of such a text is not the end of the
+  /// book, and its length is not the book's length.
+  bool _textIsPartial = false;
+
+  /// The document-wide word this sitting opened on, or -1 before a document
+  /// is loaded. Where the app itself moves the position back (a Book page
+  /// starts on a sentence), this follows it: only the reader goes back.
+  int _openedAtGlobal = -1;
 
   /// Records this item as read to the end, which takes it off the Continue
   /// Reading shelf. Written with the position, not as a flag on whatever was
@@ -709,6 +736,8 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// store keeps the mark only while the reader stays at or past this point.
   void _markShelfFinished() {
     if (_isClipboard && !_isInstapaper) return;
+    // The end of the pages extracted so far is not the end of the book.
+    if (_textIsPartial) return;
     _finishedAt = _lastGlobalIndex;
     final total = _allDocWords.isNotEmpty
         ? _allDocWords.length
@@ -862,7 +891,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     );
 
     if (entry?.document != null) {
-      _loadDocument(entry!.document!);
+      // Anything but "ready" with a document in hand is the part extracted
+      // before extraction stopped; the rest follows on a later launch.
+      _textIsPartial = entry!.status != PdfStatus.ready;
+      _loadDocument(entry.document!);
     } else {
       final reason = entry?.errorMessage ?? entry?.status.name ?? 'unknown';
       appLog(
@@ -1116,12 +1148,23 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// then. When this build extracts the same book differently (page
   /// furniture removed, split words rejoined), the old index would land a
   /// little further on: scale it by the change in length and store it.
+  ///
+  /// Only between two whole texts. When either length is of a partly
+  /// extracted book the text did not change, it grew: the saved index is
+  /// still right, and scaling it by the growth would throw the reader far
+  /// ahead (and save that).
   BookmarkData? _bookmarkForCurrentText(BookmarkData? bookmark) {
     if (bookmark == null || bookmark.wordIndex <= 0) return bookmark;
     final record = _shelfProgress.getRecord(widget.filePath);
-    final oldTotal = record?.totalWords ?? 0;
+    if (record == null || record.partialText || _textIsPartial) return bookmark;
+    final oldTotal = record.totalWords;
     final newTotal = _allDocWords.length;
     if (oldTotal <= 0 || oldTotal == newTotal || newTotal <= 0) return bookmark;
+    // The same text extracted again comes out a little shorter (page
+    // furniture gone, split words rejoined), never much longer. A text
+    // that grew is one that had been extracted only in part when its
+    // length was saved, by a build that did not yet record that.
+    if (newTotal > oldTotal * 1.1) return bookmark;
     final scaled = (bookmark.wordIndex * newTotal / oldTotal).round().clamp(
       0,
       newTotal - 1,
@@ -1131,6 +1174,21 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       'text length changed $oldTotal→$newTotal; position rescaled',
     );
     _bookmarkNotifier.updateIndex(scaled);
+    // The new length is recorded with the new position, at once: left for
+    // a later write that may not come (a finished book opened and closed),
+    // the next opening would scale the scaled position again.
+    unawaited(
+      _shelfProgress.record(
+        contentId: widget.filePath,
+        source: _progressSource,
+        title: _shelfTitle,
+        wordIndex: scaled,
+        totalWords: newTotal,
+        lastReadAt: record.lastReadAt,
+        contentHash: _queue.contentHashOf(widget.filePath),
+        finished: record.finished,
+      ),
+    );
     return bookmark.copyWith(wordIndex: scaled);
   }
 
@@ -1144,6 +1202,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           .read(readingModeNotifierProvider.notifier)
           .setMode(ReadingModeX.parse(config.lastReadingMode));
     }
+    _openedAtGlobal = _lastGlobalIndex;
     // Book mode is read at the reader's own pace: no timer.
     if (_inBookMode) {
       timer.pause();
@@ -1540,6 +1599,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Whether reaching the last word should bring up the finish screen.
   bool get _finishScreenApplies =>
       _readingRange == null &&
+      !_textIsPartial &&
       _allDocWords.length >= RunThruTiming.bookCompleteMinWords;
 
   void _togglePause() {
