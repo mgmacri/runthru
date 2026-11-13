@@ -95,13 +95,44 @@ void main() {
       expect(config.shownHints, isEmpty);
     });
 
-    test('parallaxIntensity serializes and deserializes', () {
+    test('parallaxIntensity serializes and deserializes for an owner', () {
       for (final intensity in ParallaxIntensity.values) {
-        final config = AppConfig(parallaxIntensity: intensity);
+        final config = AppConfig(
+          hasPremium: true,
+          parallaxIntensity: intensity,
+        );
         final json = config.toJson();
         final restored = AppConfig.fromJson(json);
         expect(restored.parallaxIntensity, intensity);
       }
+    });
+
+    test('a 3D room saved without the unlock loads flat', () {
+      // Saved by a build whose placeholder purchase handed out the room
+      // (the legacy `hasPremium` key), then upgraded: the reader went on
+      // drawing the room, and Settings showed no control to turn it off.
+      for (final room in ['off', 'subtle', 'full']) {
+        expect(
+          AppConfig.fromJson({
+            'hasPremium': true,
+            'parallaxIntensity': room,
+          }).parallaxIntensity,
+          ParallaxIntensity.none,
+          reason: room,
+        );
+        expect(
+          AppConfig.fromJson({'parallaxIntensity': room}).parallaxIntensity,
+          ParallaxIntensity.none,
+          reason: room,
+        );
+      }
+      expect(
+        AppConfig.fromJson({
+          'premiumUnlocked': true,
+          'parallaxIntensity': 'full',
+        }).parallaxIntensity,
+        ParallaxIntensity.full,
+      );
     });
 
     test('orpCondition serializes and deserializes', () {

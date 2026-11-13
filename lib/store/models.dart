@@ -134,11 +134,19 @@ class AppConfig {
           MapEntry(key, BookmarkData.fromJson(value as Map<String, Object?>)),
     );
 
+    final hasPremium = json['premiumUnlocked'] as bool? ?? false;
+
     // Parse v3 enums with safe fallbacks for backward compatibility.
+    //
+    // The 3D room is part of RunThru Unlock. A room saved without it (by a
+    // build whose placeholder purchase gave the room away) loads flat:
+    // otherwise the reader would keep drawing a room that Settings, which
+    // hides the room control from free readers, gives no way to turn off.
     final parallaxIntensityStr = json['parallaxIntensity'] as String?;
-    final parallaxIntensity =
-        ParallaxIntensity.values.asNameMap()[parallaxIntensityStr] ??
-        ParallaxIntensity.none;
+    final parallaxIntensity = hasPremium
+        ? ParallaxIntensity.values.asNameMap()[parallaxIntensityStr] ??
+              ParallaxIntensity.none
+        : ParallaxIntensity.none;
 
     final readingGoalPresetStr = json['readingGoalPreset'] as String?;
     final readingGoalPreset = readingGoalPresetStr != null
@@ -162,7 +170,7 @@ class AppConfig {
       anchorColorIndex:
           json[_anchorColorKey] as int? ?? kDefaultAnchorColorIndex,
       fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
-      hasPremium: json['premiumUnlocked'] as bool? ?? false,
+      hasPremium: hasPremium,
       parallaxIntensity: parallaxIntensity,
       readingGoalPreset: readingGoalPreset,
       orpCondition: orpCondition,
