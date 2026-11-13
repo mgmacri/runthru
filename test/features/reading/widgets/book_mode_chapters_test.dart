@@ -196,7 +196,9 @@ void main() {
             )
             .first,
       );
-      if (next.properties.enabled == false) break;
+      // The last page: the button now offers to finish (B-73) where it
+      // used to be switched off.
+      if (next.properties.label == 'Finish') break;
       await _next(tester);
     }
     final expected = [
@@ -251,8 +253,8 @@ void main() {
     await _setUp(tester);
     var ended = 0;
     await tester.pumpWidget(_Harness(start: _two, onEnd: () => ended++));
-    // The last chapter fits one page here; "next" is disabled as a button
-    // but a tap on the page's forward zone still asks for more.
+    // The last chapter fits one page here. A tap on the page's forward
+    // zone asks for more, as the footer's "Finish" does.
     final state = tester.state<BookModeViewState>(find.byType(BookModeView));
     for (var guard = 0; guard < 10 && ended == 0; guard++) {
       state.nextPage();

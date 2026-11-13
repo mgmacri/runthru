@@ -318,6 +318,7 @@ class BookModeViewState extends State<BookModeView> {
                   minutesLeft: minutesLeft,
                   canGoBack: start > 0,
                   canGoForward: page.end < widget.words.length - 1,
+                  canFinish: widget.onEnd != null,
                   onPrevious: previousPage,
                   onNext: nextPage,
                   fontSize: widget.fontSize,
@@ -858,6 +859,7 @@ class _BookFooter extends StatelessWidget {
     required this.minutesLeft,
     required this.canGoBack,
     required this.canGoForward,
+    required this.canFinish,
     required this.onPrevious,
     required this.onNext,
     required this.fontSize,
@@ -868,6 +870,10 @@ class _BookFooter extends StatelessWidget {
   final int minutesLeft;
   final bool canGoBack;
   final bool canGoForward;
+
+  /// On the last page: whether going on from it does anything (it tells the
+  /// host that the text has been read to the end).
+  final bool canFinish;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final double fontSize;
@@ -916,11 +922,14 @@ class _BookFooter extends StatelessWidget {
             label: 'Larger text',
             onTap: () => onFontSizeChanged(fontSize + 2),
           ),
+          // On the last page this button finishes the text. The page's tap
+          // zones do too, but they are hidden from assistive technology, so
+          // this is the only way to the end for a screen-reader user.
           _FooterButton(
             key: BookModeView.nextKey,
             icon: Icons.chevron_right_rounded,
-            label: 'Next page',
-            onTap: canGoForward ? onNext : null,
+            label: canGoForward ? 'Next page' : 'Finish',
+            onTap: canGoForward || canFinish ? onNext : null,
           ),
         ],
       ),
@@ -947,6 +956,9 @@ class _FooterButton extends StatelessWidget {
       button: true,
       enabled: enabled,
       label: label,
+      // The ink response's own tap action is excluded with its semantics,
+      // so the action is named here for assistive technology.
+      onTap: onTap,
       excludeSemantics: true,
       child: InkResponse(
         onTap: onTap,

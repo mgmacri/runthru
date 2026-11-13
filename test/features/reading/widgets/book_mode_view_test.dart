@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/features/reading/widgets/book_mode_view.dart';
 
@@ -23,9 +24,10 @@ final Set<int> _paragraphs = {
 };
 
 class _Harness extends StatefulWidget {
-  const _Harness({this.onTurnLog});
+  const _Harness({this.onTurnLog, this.onEnd});
 
   final List<int>? onTurnLog;
+  final VoidCallback? onEnd;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -50,6 +52,7 @@ class _HarnessState extends State<_Harness> {
               widget.onTurnLog?.add(i);
               setState(() => start = i);
             },
+            onEnd: widget.onEnd,
             fontFamily: 'Roboto',
             fontSize: 20,
             letterSpacing: 0,
@@ -164,6 +167,69 @@ void main() {
       expect(size.width, greaterThanOrEqualTo(48));
       expect(size.height, greaterThanOrEqualTo(48));
     }
+  });
+
+  testWidgets('on the last page the footer button finishes the book', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final handle = tester.ensureSemantics();
+
+    var finished = 0;
+    await tester.pumpWidget(_Harness(onEnd: () => finished++));
+    for (var guard = 0; guard < 200; guard++) {
+      if (find.bySemanticsLabel('Finish').evaluate().isNotEmpty) break;
+      await tester.tap(find.byKey(BookModeView.nextKey));
+      await tester.pump();
+    }
+    expect(_pageText(tester), endsWith('c2w39.'));
+    expect(finished, 0);
+
+    // The button used to be switched off here. The page's tap zones finish
+    // the book too, but assistive technology cannot see them, so a
+    // screen-reader user had no way to the end.
+    expect(
+      tester.getSemantics(find.byKey(BookModeView.nextKey)),
+      matchesSemantics(
+        label: 'Finish',
+        isButton: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        hasTapAction: true,
+      ),
+    );
+
+    await tester.tap(find.byKey(BookModeView.nextKey));
+    expect(finished, 1);
+    handle.dispose();
+  });
+
+  testWidgets('a screen reader can press the footer buttons', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final handle = tester.ensureSemantics();
+
+    final turns = <int>[];
+    await tester.pumpWidget(_Harness(onTurnLog: turns));
+    final first = _pageText(tester);
+
+    // The action a screen reader sends, as opposed to a touch on the glass.
+    final next = tester.getSemantics(find.byKey(BookModeView.nextKey));
+    next.owner!.performAction(next.id, SemanticsAction.tap);
+    await tester.pump();
+
+    expect(turns, hasLength(1));
+    expect(_pageText(tester), isNot(first));
+
+    final previous = tester.getSemantics(find.byKey(BookModeView.previousKey));
+    previous.owner!.performAction(previous.id, SemanticsAction.tap);
+    await tester.pump();
+
+    expect(_pageText(tester), first);
+    handle.dispose();
   });
 
   testWidgets('a document with no paragraph data still pages quickly', (
