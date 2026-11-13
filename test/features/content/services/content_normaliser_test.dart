@@ -364,6 +364,101 @@ void main() {
       expect(ContentNormaliser.htmlTitle('<title>A &amp; B</title>'), 'A & B');
       expect(ContentNormaliser.htmlTitle('<p>none</p>'), isNull);
     });
+
+    test('a title keeps the other kind of quote it contains', () {
+      // The value used to end at the first quote of either kind: "Don".
+      expect(
+        ContentNormaliser.htmlTitle(
+          '<meta property="og:title" content="Don\'t Panic">',
+        ),
+        "Don't Panic",
+      );
+      expect(
+        ContentNormaliser.htmlTitle(
+          "<meta property='og:title' content='The \"Tall\" One'>"
+          '<title>Fallback</title>',
+        ),
+        'The "Tall" One',
+      );
+    });
+
+    Future<String> textOf(String html) async =>
+        (await ContentNormaliser.normalise(
+          html,
+          ContentType.html,
+        )).allWords.join(' ');
+
+    test('superscripts that are text stay; note markers go', () async {
+      // Every <sup> used to be removed with its text: "the 21 century".
+      expect(
+        await textOf(
+          '<p>In the 21<sup>st</sup> century, M<sup>lle</sup> Dupont '
+          'counted 10<sup>6</sup> cells in 3 km<sup>2</sup>.</p>',
+        ),
+        'In the 21st century, Mlle Dupont counted 10^6 cells in 3 km2.',
+      );
+      expect(
+        await textOf(
+          '<p>Ships came<sup><a href="#fn1">1</a></sup> and '
+          'went<sup class="footnote-ref">a</sup> at night'
+          '<sup>[<a href="#c">citation needed</a>]</sup>.</p>',
+        ),
+        'Ships came and went at night.',
+      );
+    });
+
+    test('an article goes on after something embedded in it', () async {
+      // An embedded card or comment is an <article> too. The post used to
+      // end at the first closing tag: everything after the card was lost.
+      final text = await textOf(
+        '<article><h1>The crossing</h1><p>The first part of the post.</p>'
+        '<article class="card"><p>An embedded card.</p></article>'
+        '<p>The second part, after the card.</p></article>'
+        '<article><p>A short comment.</p></article>',
+      );
+      expect(text, contains('The first part of the post.'));
+      expect(text, contains('The second part, after the card.'));
+      expect(text, isNot(contains('A short comment.')));
+    });
+
+    test('a page wrapped in a form or a layout table keeps its text', () async {
+      // Every ASP.NET WebForms page is one <form> around the body, and old
+      // sites lay the page out in a table. Both came out empty.
+      const body =
+          '<h1>Council news</h1><p>The council met on Tuesday evening. It '
+          'voted to repair the old bridge before winter.</p>';
+      expect(
+        await textOf(
+          '<html><body><form method="post" id="form1"><div>$body'
+          '<input type="submit" value="Go"></div></form></body></html>',
+        ),
+        'Council news The council met on Tuesday evening. It voted to '
+        'repair the old bridge before winter.',
+      );
+      expect(
+        await textOf(
+          '<html><body><table><tr><td>$body</td></tr></table></body></html>',
+        ),
+        contains('It voted to repair the old bridge before winter.'),
+      );
+    });
+
+    test(
+      'a form or table that is a small part of the page still goes',
+      () async {
+        final text = await textOf(
+          '<main><p>The council met on Tuesday evening. It voted to repair '
+          'the old bridge before winter.</p>'
+          '<form><label>Your email</label><button>Subscribe</button></form>'
+          '<table><tr><td>Votes</td><td>7</td></tr></table></main>',
+        );
+        expect(
+          text,
+          'The council met on Tuesday evening. It voted to repair the old '
+          'bridge before winter.',
+        );
+      },
+    );
   });
 
   group('ContentNormaliser — output contract', () {

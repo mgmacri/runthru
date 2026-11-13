@@ -74,12 +74,14 @@ class ContentNormaliser {
   /// The page's title: `og:title` when present, otherwise `<title>`.
   /// Null when the page has neither.
   static String? htmlTitle(String html) {
+    // The value runs to the quote that opened it: a title in double quotes
+    // may hold an apostrophe ("Don't Panic").
     final og = RegExp(
-      r"""<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']+)["']""",
+      r"""<meta[^>]+property=["']og:title["'][^>]*content=(["'])(.*?)\1""",
       caseSensitive: false,
     ).firstMatch(html);
     final raw =
-        og?.group(1) ??
+        og?.group(2) ??
         RegExp(
           r'<title[^>]*>([\s\S]*?)</title>',
           caseSensitive: false,
@@ -92,8 +94,9 @@ class ContentNormaliser {
   /// Readable text from an HTML page, like an e-reader's reading view.
   ///
   /// Drops page chrome (navigation, headers, footers, sidebars, forms,
-  /// tables, figures), keeps only `<article>` or `<main>` when the page has
-  /// one, removes citation markers ("[1]", "[edit]"), and turns block
+  /// tables, figures) unless it holds most of the page's words, keeps only
+  /// `<article>` or `<main>` when the page has one, removes citation
+  /// markers ("[1]", "[edit]", superscript note links), and turns block
   /// elements into paragraph breaks.
   static String _stripHtml(String html) {
     var text = html;
@@ -116,7 +119,10 @@ class ContentNormaliser {
     final region = _innerOf(text, 'article') ?? _innerOf(text, 'main') ?? text;
     text = region;
 
-    // Page chrome and non-prose blocks.
+    // Page chrome and non-prose blocks. An element that holds most of the
+    // words is the page itself, not its chrome: a form wrapped around the
+    // whole body (every ASP.NET WebForms page), a table used for layout.
+    // Those are kept, and only their tags go.
     for (final tag in const [
       'nav',
       'header',
@@ -127,10 +133,12 @@ class ContentNormaliser {
       'menu',
       'table',
       'figure',
-      'sup',
     ]) {
-      text = _dropElement(text, tag);
+      final without = _dropElement(text, tag);
+      if (_textLength(without) * 2 < _textLength(text)) continue;
+      text = without;
     }
+    text = _dropNoteMarkers(text);
 
     // Link lists (tabs, tables of contents, menus) and small link-only
     // elements ("edit", "Talk") are navigation.
@@ -271,17 +279,83 @@ class ContentNormaliser {
   );
 
   /// Inner HTML of the largest `<tag>` element, or null if there is none.
+  ///
+  /// Elements of one tag nest (an embedded card or a comment inside an
+  /// article is an `<article>` too), so opening and closing tags are
+  /// counted: stopping at the first closing tag would end the article at
+  /// the end of the first thing embedded in it.
   static String? _innerOf(String html, String tag) {
     String? best;
+    void offer(String inner) {
+      if (best == null || inner.length > best!.length) best = inner;
+    }
+
+    var depth = 0;
+    var innerStart = 0;
     for (final m in RegExp(
-      '<$tag(\\s[^>]*)?>([\\s\\S]*?)</$tag>',
+      '<(/?)$tag(?:\\s[^>]*)?>',
       caseSensitive: false,
     ).allMatches(html)) {
-      final inner = m.group(2)!;
-      if (best == null || inner.length > best.length) best = inner;
+      if (m.group(1)!.isEmpty) {
+        if (depth == 0) innerStart = m.end;
+        depth++;
+      } else if (depth > 0) {
+        depth--;
+        if (depth == 0) offer(html.substring(innerStart, m.start));
+      }
     }
+    // An element never closed runs to the end of the page.
+    if (depth > 0) offer(html.substring(innerStart));
     return best;
   }
+
+  /// How much text [html] holds: its characters without tags and spaces.
+  static int _textLength(String html) => html
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll(RegExp(r'\s+'), '')
+      .length;
+
+  /// A superscript that is a note marker goes; any other superscript is
+  /// text and stays ("21st", "Mlle", "10^6").
+  ///
+  /// A marker is a bracketed reference ("[1]", "[citation needed]"), or a
+  /// number, symbol or single letter that links to its note or sits in an
+  /// element named for references. A bare number is not taken for one: it
+  /// is as likely an exponent or a unit ("km2").
+  static String _dropNoteMarkers(String html) => html.replaceAllMapped(
+    RegExp(r'(\d?)<sup(\s[^>]*)?>([\s\S]*?)</sup>', caseSensitive: false),
+    (m) {
+      final before = m.group(1)!;
+      final attributes = m.group(2) ?? '';
+      final inner = m.group(3)!;
+      final plain = inner
+          .replaceAll(RegExp(r'<[^>]+>'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      final bracketed = RegExp(r'^\[[^\]]{1,24}\]$').hasMatch(plain);
+      final pointsToNote =
+          RegExp(r'<a[\s>]', caseSensitive: false).hasMatch(inner) ||
+          RegExp(
+            r'reference|footnote|noteref|cite',
+            caseSensitive: false,
+          ).hasMatch(attributes);
+      if (bracketed ||
+          (pointsToNote && (plain.isEmpty || _noteMarker.hasMatch(plain)))) {
+        return before;
+      }
+      // A number raised on a number is a power.
+      if (before.isNotEmpty && RegExp(r'^\d+$').hasMatch(plain)) {
+        return '$before^$plain';
+      }
+      return '$before$inner';
+    },
+  );
+
+  /// The text of a footnote marker: a number, a symbol or one letter,
+  /// bracketed or not (the EPUB extractor's rule).
+  static final RegExp _noteMarker = RegExp(
+    r'^[\[(]?\s*(?:\d{1,4}|[*†‡§¶]+|[a-z])\s*[\])]?$',
+  );
 
   /// Strip Markdown formatting — preserve readable text.
   static String _stripMarkdown(String text) {
