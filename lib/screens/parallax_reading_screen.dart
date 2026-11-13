@@ -863,7 +863,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
             duration: const Duration(seconds: 4),
           ),
         );
-        context.pop();
+        _leaveReader();
       }
     }
   }
@@ -1755,7 +1755,20 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _recordShelfProgress();
     unawaited(_flushInstapaperProgress());
     ref.read(wordTimerProvider.notifier).pause();
-    if (mounted) context.pop();
+    if (mounted) _leaveReader();
+  }
+
+  /// Leaves the reader: back to the page that opened it, or to the Library
+  /// when the reader is the only page there is. A share, a web link and the
+  /// page range picker all open the reader with `go()`, which replaces every
+  /// page beneath it; popping then throws "There is nothing to pop" and the
+  /// reader could not be left at all.
+  void _leaveReader() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
   }
 
   // ── ContextReveal gesture handlers ──

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
 import 'package:runthru/core/clipboard_document.dart';
 import 'package:runthru/core/word_timer.dart';
@@ -988,6 +989,105 @@ void main() {
 
       expect(container.read(wordTimerProvider).wpm, 420);
       expect(container.read(wordTimerProvider).pacingConfig, pacing);
+    });
+  });
+
+  group('ParallaxReadingScreen: leaving', () {
+    // The other reader tests put the reader straight into a MaterialApp, so
+    // none of them ever left it through the router. These do.
+    GoRouter routerAt(String initialLocation) => GoRouter(
+      initialLocation: initialLocation,
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, __) => const Scaffold(body: Text('library stand-in')),
+        ),
+        GoRoute(
+          path: '/read-clipboard',
+          builder: (_, __) => ParallaxReadingScreen(
+            filePath: 'clipboard://shared',
+            contentSource: 'clipboard',
+            clipboardDocument: ClipboardDocument(
+              title: 'Shared note',
+              fullText: '',
+              document: const ExtractedDocument(
+                sentences: [
+                  Sentence(words: ['A', 'shared', 'note']),
+                  Sentence(words: ['With', 'two', 'sentences']),
+                ],
+              ),
+              pastedAt: _openedAt,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    Future<void> pumpApp(WidgetTester tester, GoRouter router) async {
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            configProvider.overrideWith(
+              () => _FakeConfigNotifier(
+                const AppConfig(hasSeenReadingGoalOnboarding: true),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    Future<void> expectBackInTheLibrary(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+      expect(find.text('library stand-in'), findsOneWidget);
+      expect(find.byType(ParallaxReadingScreen), findsNothing);
+      // Let the reader's save throttles and timeouts finish.
+      await tester.pump(const Duration(seconds: 10));
+    }
+
+    // A share, a web link and the page range picker open the reader with
+    // `go()`, which leaves no page beneath it.
+    testWidgets('the back button leaves a reader that is the only page', (
+      tester,
+    ) async {
+      await pumpApp(tester, routerAt('/read-clipboard'));
+      expect(find.byType(ParallaxReadingScreen), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Back: library'));
+
+      await expectBackInTheLibrary(tester);
+    });
+
+    testWidgets('system Back leaves a reader that is the only page', (
+      tester,
+    ) async {
+      await pumpApp(tester, routerAt('/read-clipboard'));
+      expect(find.byType(ParallaxReadingScreen), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+
+      await expectBackInTheLibrary(tester);
+    });
+
+    testWidgets('a reader opened over the Library goes back to it', (
+      tester,
+    ) async {
+      final router = routerAt('/');
+      await pumpApp(tester, router);
+      unawaited(router.push('/read-clipboard'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(ParallaxReadingScreen), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Back: library'));
+
+      await expectBackInTheLibrary(tester);
     });
   });
 }
