@@ -52,6 +52,31 @@ void main() {
       expect(sentenceBoundsForWord(words, 99), (start: 0, end: 2));
     });
 
+    test('a paragraph break ends a sentence without a full stop', () {
+      // A heading and two list items, then prose: none of the first three
+      // lines has punctuation. They used to run into "It was late.".
+      const words = ['Key', 'points', 'Fast', 'Cheap', 'It', 'was', 'late.'];
+      bool starts(int i) => const {0, 2, 3, 4}.contains(i);
+
+      expect(sentenceBoundsForWord(words, 1), (start: 0, end: 6));
+      expect(sentenceBoundsForWord(words, 1, startsParagraph: starts), (
+        start: 0,
+        end: 1,
+      ));
+      expect(sentenceBoundsForWord(words, 2, startsParagraph: starts), (
+        start: 2,
+        end: 2,
+      ));
+      expect(sentenceBoundsForWord(words, 3, startsParagraph: starts), (
+        start: 3,
+        end: 3,
+      ));
+      expect(sentenceBoundsForWord(words, 5, startsParagraph: starts), (
+        start: 4,
+        end: 6,
+      ));
+    });
+
     test('handles empty word lists', () {
       expect(sentenceBoundsForWord(const [], 4), (start: 0, end: -1));
     });

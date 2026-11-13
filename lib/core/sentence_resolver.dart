@@ -9,17 +9,30 @@ typedef SentenceBounds = ({int start, int end});
 /// This helper works on the flat word slices used by the reading timer. It
 /// clamps out-of-range indices and falls back to punctuation boundaries when
 /// structured [Sentence] records are not available in the view layer.
-SentenceBounds sentenceBoundsForWord(List<String> words, int wordIndex) {
+///
+/// [startsParagraph] says whether a paragraph starts at a word index. A
+/// paragraph break ends a sentence too: a heading or a list item with no
+/// full stop is its own sentence, not the opening of the one after it.
+SentenceBounds sentenceBoundsForWord(
+  List<String> words,
+  int wordIndex, {
+  bool Function(int index)? startsParagraph,
+}) {
   if (words.isEmpty) return (start: 0, end: -1);
+
+  // Whether a sentence starts at [index] (which is at least 1).
+  bool startsAt(int index) =>
+      _isSentenceEnd(words[index - 1]) ||
+      (startsParagraph?.call(index) ?? false);
 
   final clampedIndex = wordIndex.clamp(0, words.length - 1);
   var start = clampedIndex;
-  while (start > 0 && !_isSentenceEnd(words[start - 1])) {
+  while (start > 0 && !startsAt(start)) {
     start--;
   }
 
   var end = clampedIndex;
-  while (end < words.length - 1 && !_isSentenceEnd(words[end])) {
+  while (end < words.length - 1 && !startsAt(end + 1)) {
     end++;
   }
 

@@ -283,6 +283,50 @@ void main() {
     });
   });
 
+  group('a line break without a full stop', () {
+    /// How long the first word, a one-word line, stays up when reading
+    /// starts; [paragraphBreak] says whether the next line is a paragraph
+    /// of its own.
+    Future<int> firstWordMs(
+      WidgetTester tester, {
+      required bool paragraphBreak,
+    }) async {
+      final c = await _open(
+        tester,
+        chapterMoments: false,
+        document: ExtractedDocument(
+          sentences: [
+            const Sentence(words: ['Results'], startsParagraph: true),
+            Sentence(
+              words: [for (var i = 0; i < 40; i++) 'word$i'],
+              startsParagraph: paragraphBreak,
+            ),
+          ],
+        ),
+      );
+      expect(_timer(c).isPlaying, isTrue);
+      var ms = 0;
+      while (_timer(c).currentIndex == 0 && ms < 5000) {
+        await tester.pump(const Duration(milliseconds: 10));
+        ms += 10;
+      }
+      c.read(wordTimerProvider.notifier).pause();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      return ms;
+    }
+
+    testWidgets('is still a pause', (tester) async {
+      // "Results" on a line of its own, then the text. Before 2.0 a full
+      // stop was written in at the break; without it the heading ran
+      // straight into the first word of the text.
+      final runOn = await firstWordMs(tester, paragraphBreak: false);
+      final atBreak = await firstWordMs(tester, paragraphBreak: true);
+
+      expect(atBreak, greaterThan(runOn + 100));
+    });
+  });
+
   group('finishing a chapter', () {
     testWidgets('is marked, then the next chapter is announced', (
       tester,

@@ -581,12 +581,18 @@ int _scaledDelayMs(int bonusPercent, int delayMs) {
 /// Returns total display duration in ms for [word], given [nextWord]
 /// for abbreviation context and the base interval (60000 / wpm).
 ///
+/// [endsParagraph] says a paragraph ends with this word. A line break is a
+/// pause: a heading, a list item or a caption that carries no full stop of
+/// its own gets at least the pause the end of a sentence gets. A word that
+/// already ends a sentence is unchanged.
+///
 /// Pure, deterministic, no side effects.
 int durationForWord(
   String word, {
   required String? nextWord,
   required int baseIntervalMs,
   required PacingConfig config,
+  bool endsParagraph = false,
 }) {
   if (word.isEmpty || baseIntervalMs == 0) return baseIntervalMs;
 
@@ -594,7 +600,10 @@ int durationForWord(
 
   final lengthBonus = _lengthBonusPercent(word);
   final complexityBonus = _complexityBonusPercent(word);
-  final punctuationPause = _punctuationPausePercent(word, nextStartsLower);
+  var punctuationPause = _punctuationPausePercent(word, nextStartsLower);
+  if (endsParagraph && punctuationPause < _kSentencePausePercent) {
+    punctuationPause = _kSentencePausePercent;
+  }
 
   var totalBonusMs = 0;
   totalBonusMs += _scaledDelayMs(

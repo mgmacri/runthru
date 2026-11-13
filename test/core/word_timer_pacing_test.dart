@@ -202,6 +202,77 @@ void main() {
       });
     });
 
+    group('attachParagraphEnds', () {
+      // Plain words, so that nothing but the paragraph end changes a time.
+      final words = List.filled(400, 'word');
+
+      /// How long the word at [index] stays up, past the warm-up ramp.
+      int shownMsAt(int index, {required bool Function(int)? paragraphEnds}) {
+        late int ms;
+        fakeAsync((async) {
+          final timer = WordTimerNotifier();
+          timer.loadDocument(words.length);
+          timer.attachWordSource((i) => i < words.length ? words[i] : null);
+          timer.attachParagraphEnds(paragraphEnds);
+          timer.setWpm(300);
+          timer.play();
+          while (timer.state.currentIndex < index) {
+            async.elapse(const Duration(milliseconds: 1));
+          }
+          ms = 0;
+          while (timer.state.currentIndex == index && ms < 5000) {
+            async.elapse(const Duration(milliseconds: 1));
+            ms++;
+          }
+          timer.dispose();
+        });
+        return ms;
+      }
+
+      test('the last word of a paragraph is held like a sentence end', () {
+        const at = 150;
+        final plain = shownMsAt(at, paragraphEnds: null);
+        final ending = shownMsAt(at, paragraphEnds: (i) => i == at);
+        final expected =
+            durationForWord(
+              'word',
+              nextWord: 'word',
+              baseIntervalMs: 200,
+              config: defaultPacingConfig,
+              endsParagraph: true,
+            ) -
+            durationForWord(
+              'word',
+              nextWord: 'word',
+              baseIntervalMs: 200,
+              config: defaultPacingConfig,
+            );
+
+        expect(expected, greaterThan(0));
+        expect(ending - plain, closeTo(expected, 2));
+        // The word before it is not held.
+        expect(shownMsAt(at - 1, paragraphEnds: (i) => i == at), plain);
+      });
+
+      test('loading another document forgets the last one\'s paragraphs', () {
+        fakeAsync((async) {
+          final timer = WordTimerNotifier();
+          var asked = 0;
+          timer.loadDocument(10);
+          timer.attachParagraphEnds((i) {
+            asked++;
+            return false;
+          });
+          timer.loadDocument(10);
+          timer.attachWordSource((i) => 'word');
+          timer.play();
+          async.elapse(const Duration(seconds: 2));
+          expect(asked, 0);
+          timer.dispose();
+        });
+      });
+    });
+
     test('copyWith(pacingConfig) does not reset currentIndex or isPlaying', () {
       notifier.loadDocument(100, startIndex: 42);
       notifier.play();

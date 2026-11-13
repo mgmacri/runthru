@@ -223,6 +223,57 @@ void main() {
   // -------------------------------------------------------------------------
   // Duration: pacing scale affects bonus magnitude
   // -------------------------------------------------------------------------
+  // A line break is a pause. Before 2.0 pasted and shared text had a full
+  // stop written into it at every paragraph break; now the break is known
+  // without one, and pacing is told about it.
+  group('Duration: the end of a paragraph', () {
+    int atParagraphEnd(String word, String? next) => durationForWord(
+      word,
+      nextWord: next,
+      baseIntervalMs: 200,
+      config: defaultPacingConfig,
+      endsParagraph: true,
+    );
+
+    test('a line with no full stop is held like the end of a sentence', () {
+      expect(
+        duration(300, 'Results', 'We'),
+        lessThan(duration(300, 'Results.', 'We')),
+      );
+      expect(atParagraphEnd('Results', 'We'), duration(300, 'Results.', 'We'));
+    });
+
+    test('short list items get the pause a full stop would not give them', () {
+      // "Milk." before a lowercase word reads as an abbreviation: no pause.
+      expect(duration(300, 'Milk.', 'eggs'), duration(300, 'Milk', 'eggs'));
+      expect(
+        atParagraphEnd('Milk', 'eggs'),
+        greaterThan(duration(300, 'Milk', 'eggs')),
+      );
+      expect(
+        atParagraphEnd('No', 'yes'),
+        greaterThan(duration(300, 'No', 'yes')),
+      );
+    });
+
+    test('a word that already ends a sentence is unchanged', () {
+      for (final word in ['done.', 'Really?', 'Stop!']) {
+        expect(
+          atParagraphEnd(word, 'Next'),
+          duration(300, word, 'Next'),
+          reason: word,
+        );
+      }
+    });
+
+    test('a comma or colon at a line end is raised to the sentence pause', () {
+      expect(
+        atParagraphEnd('following:', 'Milk'),
+        greaterThan(duration(300, 'following:', 'Milk')),
+      );
+    });
+  });
+
   group('Duration: pacing scale affects bonus magnitude', () {
     test('punctuation scale halved', () {
       // "done." next "The", punctuationScale=50

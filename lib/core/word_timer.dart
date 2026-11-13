@@ -90,6 +90,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   /// annotations (`modelAnnotations['difficultyPerWord']`). Ring 1 never
   /// calls a model — it only reads this hint when one was attached.
   double? Function(int index)? _difficultyAt;
+  bool Function(int index)? _endsParagraphAt;
 
   DateTime? _warmupStart;
 
@@ -100,6 +101,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
     _hasPlayedOnce = false;
     _wordAt = null;
     _difficultyAt = null;
+    _endsParagraphAt = null;
     _warmupStart = null;
     state = WordTimerState(
       totalWords: totalWords,
@@ -123,6 +125,16 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
   /// exists. Used only if attached — pacing is unchanged otherwise.
   void attachDifficultySource(double? Function(int index)? difficultyAt) {
     _difficultyAt = difficultyAt;
+  }
+
+  /// Attaches a lookup for where paragraphs end.
+  ///
+  /// Call after [loadDocument]. The callback says whether the word at the
+  /// given index is the last of its paragraph; such a word is held as long
+  /// as the end of a sentence, whatever its own punctuation. Without it
+  /// pacing goes by each word's punctuation alone.
+  void attachParagraphEnds(bool Function(int index)? endsParagraphAt) {
+    _endsParagraphAt = endsParagraphAt;
   }
 
   void play() {
@@ -231,6 +243,7 @@ class WordTimerNotifier extends StateNotifier<WordTimerState> {
             nextWord: next,
             baseIntervalMs: base,
             config: state.pacingConfig,
+            endsParagraph: _endsParagraphAt?.call(state.currentIndex) ?? false,
           );
 
     // Model-annotated difficulty override — applied only when present.

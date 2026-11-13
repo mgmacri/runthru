@@ -993,7 +993,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _cacheTimerPosition(startIndex);
     _previousGlobalIndex = startIndex;
     _sectionIndex.value = _structure.sectionAt(startIndex).index;
-    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+    _attachPacingSources(timer);
     timer.setWpm(config.defaultWpm);
     timer.setPacingConfig(config.pacingConfig);
     _startTimerAfterFirstRunGate();
@@ -1087,7 +1087,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         _sectionIndex.value = _structure
             .sectionAt(_sliceOffset + startIndex)
             .index;
-        timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+        _attachPacingSources(timer);
         timer.setWpm(config.defaultWpm);
         timer.setPacingConfig(config.pacingConfig);
 
@@ -1126,11 +1126,20 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     _cacheTimerPosition(startIndex);
     _previousGlobalIndex = startIndex;
     _sectionIndex.value = _structure.sectionAt(startIndex).index;
-    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+    _attachPacingSources(timer);
     timer.setWpm(config.defaultWpm);
     timer.setPacingConfig(config.pacingConfig);
     _startTimerAfterFirstRunGate();
     appLog('ParallaxReadingScreen', 'timer loaded wpm=${config.defaultWpm}');
+  }
+
+  /// Gives the timer what it paces by: the words, and where paragraphs end
+  /// (a heading or a list item with no full stop still gets its pause).
+  void _attachPacingSources(WordTimerNotifier timer) {
+    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+    timer.attachParagraphEnds(
+      (i) => _paragraphStarts.contains(_sliceOffset + i + 1),
+    );
   }
 
   /// Where a document opens. A book with no saved position starts at its
@@ -1791,7 +1800,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
     final timer = ref.read(wordTimerProvider.notifier);
     timer.loadDocument(_words.length, startIndex: 0);
     _cacheTimerPosition(0);
-    timer.attachWordSource((i) => i < _words.length ? _words[i] : null);
+    _attachPacingSources(timer);
     _previousGlobalIndex = _sliceOffset;
     if (_inBookMode) return;
     _play();
@@ -2603,6 +2612,9 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
                                                         'sentence',
                                                       ),
                                                       anchorColor: anchorColor,
+                                                      paragraphStarts:
+                                                          _paragraphStarts,
+                                                      wordOffset: _sliceOffset,
                                                       words: _words,
                                                       currentIndex:
                                                           currentIndex,

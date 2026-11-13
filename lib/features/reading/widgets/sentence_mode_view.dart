@@ -24,7 +24,16 @@ class SentenceModeView extends StatelessWidget {
     required this.fontSize,
     this.wpm = 300,
     this.anchorColor = RunThruTokens.stageFocalRed,
+    this.paragraphStarts = const {},
+    this.wordOffset = 0,
   });
+
+  /// Document-wide word indices that start a paragraph: a sentence ends at
+  /// a paragraph break even without a full stop. Empty when unknown.
+  final Set<int> paragraphStarts;
+
+  /// Document index of `words[0]` (non-zero when reading a page range).
+  final int wordOffset;
 
   /// Colour of the ORP letter on inked words (the reader's anchor setting).
   final Color anchorColor;
@@ -72,7 +81,13 @@ class SentenceModeView extends StatelessWidget {
     }
 
     final safeIndex = currentIndex.clamp(0, words.length - 1);
-    final bounds = sentenceBoundsForWord(words, safeIndex);
+    final bounds = sentenceBoundsForWord(
+      words,
+      safeIndex,
+      startsParagraph: paragraphStarts.isEmpty
+          ? null
+          : (i) => paragraphStarts.contains(i + wordOffset),
+    );
     if (bounds.end < bounds.start) {
       return const Center(child: Text(''));
     }
