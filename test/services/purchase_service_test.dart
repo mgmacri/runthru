@@ -35,19 +35,23 @@ PurchaseDetails _purchase(
 class _FakeStore implements StoreGateway {
   _FakeStore({this.available = true, this.product});
 
-  final bool available;
+  bool available;
   final ProductDetails? product;
   final controller = StreamController<List<PurchaseDetails>>.broadcast();
   final completed = <PurchaseDetails>[];
   int buyCalls = 0;
   int restoreCalls = 0;
+  int availabilityChecks = 0;
   List<PurchaseDetails>? emitOnRestore;
 
   @override
   Stream<List<PurchaseDetails>> get purchaseStream => controller.stream;
 
   @override
-  Future<bool> isAvailable() async => available;
+  Future<bool> isAvailable() async {
+    availabilityChecks++;
+    return available;
+  }
 
   @override
   Future<ProductDetails?> queryProduct(String id) async => product;
@@ -173,6 +177,24 @@ void main() {
 
       expect(c.read(hasPremiumProvider), isFalse);
       expect(store.completed, [other]);
+    });
+
+    test('a store that was unreachable at launch can be asked again', () async {
+      final store = _FakeStore(available: false, product: _product);
+      final c = await _container(store);
+      final controller = c.read(purchaseControllerProvider.notifier);
+      expect(c.read(purchaseControllerProvider).canBuy, isFalse);
+
+      store.available = true;
+      await controller.reloadIfUnavailable();
+
+      expect(c.read(purchaseControllerProvider).canBuy, isTrue);
+      expect(c.read(purchaseControllerProvider).product?.price, r'$4.99');
+
+      // With the product in hand there is nothing to ask again.
+      final checks = store.availabilityChecks;
+      await controller.reloadIfUnavailable();
+      expect(store.availabilityChecks, checks);
     });
 
     test('unavailable store or missing product disables buying', () async {

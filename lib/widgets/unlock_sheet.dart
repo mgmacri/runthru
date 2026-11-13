@@ -23,12 +23,41 @@ Future<void> showUnlockSheet(BuildContext context) {
 }
 
 /// One-time purchase sheet: benefits, store price, buy and restore.
-class UnlockSheet extends ConsumerWidget {
+class UnlockSheet extends ConsumerStatefulWidget {
   /// Creates the sheet.
   const UnlockSheet({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UnlockSheet> createState() => _UnlockSheetState();
+}
+
+class _UnlockSheetState extends ConsumerState<UnlockSheet> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // The store was asked once, at launch. If it could not be reached then,
+    // it is asked again now that the reader wants it, and whenever they
+    // come back to the app (from turning Wi-Fi on, say).
+    _lifecycle = AppLifecycleListener(onResume: _askStoreAgain);
+    // After the first frame: a provider must not change during a build.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askStoreAgain());
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  void _askStoreAgain() {
+    if (!mounted) return;
+    ref.read(purchaseControllerProvider.notifier).reloadIfUnavailable();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(purchaseControllerProvider);
     final owned = ref.watch(hasPremiumProvider);
     final controller = ref.read(purchaseControllerProvider.notifier);

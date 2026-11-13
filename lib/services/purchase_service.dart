@@ -206,6 +206,18 @@ class PurchaseController extends Notifier<PurchaseState> {
     await _load();
   }
 
+  /// Asks the store again if the last lookup found no store or no product.
+  ///
+  /// The lookup runs once, at launch, and the app may have been offline
+  /// then. The Unlock sheet calls this when it opens and when the app
+  /// comes back to the front, so the reader is not left with "unavailable"
+  /// until they restart the app.
+  Future<void> reloadIfUnavailable() async {
+    if (state.loading) return;
+    if (state.storeAvailable && state.product != null) return;
+    await reload();
+  }
+
   /// Opens the store purchase sheet. The entitlement is granted only when
   /// the store later reports the purchase on the stream.
   Future<void> buy() async {

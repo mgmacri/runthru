@@ -32,8 +32,11 @@ class _FakeStore implements StoreGateway {
 
   int buyCalls = 0;
   int restoreCalls = 0;
+
+  /// Whether the store can be reached right now.
+  bool available = true;
   @override
-  Future<bool> isAvailable() async => true;
+  Future<bool> isAvailable() async => available;
   @override
   Future<ProductDetails?> queryProduct(String id) async => product;
   @override
@@ -110,6 +113,70 @@ void main() {
     expect(find.textContaining('not available in this store'), findsOneWidget);
     await tester.tap(find.text('Unlock unavailable'));
     expect(store.buyCalls, 0);
+  });
+
+  group('a store that could not be reached at launch', () {
+    // The app starts the purchase controller with its first frame, long
+    // before a sheet exists. The lookup it makes then used to be the only
+    // one: opened later, the sheet said "unavailable" until a restart.
+    Future<ProviderContainer> launchedOffline(
+      WidgetTester tester,
+      _FakeStore store,
+    ) async {
+      store.available = false;
+      final container = ProviderContainer(
+        overrides: [
+          storeGatewayProvider.overrideWithValue(store),
+          configProvider.overrideWith(() => _FakeConfig(const AppConfig())),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(purchaseControllerProvider);
+      await tester.pump();
+      expect(container.read(purchaseControllerProvider).loading, isFalse);
+      expect(container.read(purchaseControllerProvider).storeAvailable, false);
+      return container;
+    }
+
+    Widget sheetIn(ProviderContainer container) => UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: UnlockSheet())),
+    );
+
+    testWidgets('is asked again when the sheet opens', (tester) async {
+      final store = _FakeStore(product: _product);
+      final container = await launchedOffline(tester, store);
+
+      store.available = true;
+      await tester.pumpWidget(sheetIn(container));
+      await tester.pumpAndSettle();
+
+      expect(find.text(r'Unlock for $4.99'), findsOneWidget);
+      expect(find.text('The store is not reachable right now.'), findsNothing);
+    });
+
+    testWidgets('is asked again when the reader comes back to the app', (
+      tester,
+    ) async {
+      final store = _FakeStore(product: _product);
+      final container = await launchedOffline(tester, store);
+
+      await tester.pumpWidget(sheetIn(container));
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock unavailable'), findsOneWidget);
+      expect(
+        find.text('The store is not reachable right now.'),
+        findsOneWidget,
+      );
+
+      // Off to turn the connection on, and back.
+      store.available = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      expect(find.text(r'Unlock for $4.99'), findsOneWidget);
+    });
   });
 
   testWidgets('owners see it as active', (tester) async {
