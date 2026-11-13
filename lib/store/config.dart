@@ -10,30 +10,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _configKey = 'runthru_config';
 
 /// Riverpod AsyncNotifier managing persistent app configuration.
+///
+/// Every change starts from `state.valueOrNull ?? await future`: the saved
+/// settings, waiting for the first load if it has not finished. Starting from
+/// defaults while the saved settings are still being read would write the
+/// defaults back over them (a purchase delivered at launch reaches
+/// [setHasPremium] that early). Once loaded there is no wait, so a change
+/// still shows in [state] before the call returns.
 class ConfigNotifier extends AsyncNotifier<AppConfig> {
   Future<void> setLetterSpacing(double spacing) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(letterSpacing: spacing.clamp(0.0, 5.0));
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
 
   Future<void> setWordSpacing(double spacing) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(wordSpacing: spacing.clamp(0.0, 20.0));
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
 
   Future<void> setReadingRulerEnabled(bool enabled) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(readingRulerEnabled: enabled);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
 
   Future<void> setFocusModeEnabled(bool enabled) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(focusModeEnabled: enabled);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
@@ -41,7 +48,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   /// Turns chapter title cards and chapter-complete moments on or off.
   Future<void> setChapterMoments(bool enabled) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(chapterMoments: enabled);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
@@ -49,7 +56,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   /// Sets the Book-mode text size, clamped to the supported range.
   Future<void> setBookFontSize(double size) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(
       bookFontSize: size.clamp(kMinBookFontSize, kMaxBookFontSize).toDouble(),
     );
@@ -59,7 +66,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   /// Remembers the reading mode so the next book opens in it.
   Future<void> setLastReadingMode(String mode) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     if (config.lastReadingMode == mode) return;
     final updated = config.copyWith(lastReadingMode: mode);
     state = AsyncData<AppConfig>(updated);
@@ -69,7 +76,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   /// Sets the Google Drive access mode without requesting new OAuth scopes.
   Future<void> setGoogleDriveAccessMode(GoogleDriveAccessMode mode) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         final updated = config.copyWith(googleDriveAccessMode: mode);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
@@ -118,14 +125,14 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   }
 
   Future<void> setDefaultWpm(int wpm) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(defaultWpm: wpm.clamp(30, 1000));
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
 
   Future<void> setPdfFolderPath(String? path) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = path == null
         ? config.copyWith(clearPdfFolderPath: true)
         : config.copyWith(pdfFolderPath: path);
@@ -139,21 +146,21 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   // rewrote the whole config blob every 5 seconds during reading).
 
   Future<void> setAnchorColorIndex(int index) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(anchorColorIndex: index);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
 
   Future<void> setReadingFontFamily(String family) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(readingFontFamily: family);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
 
   Future<void> setFontScale(double scale) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(fontScale: scale.clamp(0.5, 2.0));
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
@@ -162,7 +169,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   /// Records the store-delivered RunThru Unlock entitlement. Only
   /// `PurchaseController` calls this, after the store reports the purchase.
   Future<void> setHasPremium(bool value) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(hasPremium: value);
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
@@ -170,7 +177,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   Future<void> setParallaxIntensity(ParallaxIntensity intensity) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         // The 3D room is part of RunThru Unlock; free users stay flat.
         final updated = config.copyWith(
           parallaxIntensity: config.hasPremium
@@ -183,7 +190,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   Future<void> setReadingGoalPreset(ReadingGoalPreset? preset) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         final updated = preset == null
             ? config.copyWith(clearReadingGoalPreset: true)
             : config.copyWith(readingGoalPreset: preset);
@@ -193,7 +200,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   Future<void> setOrpCondition(OrpCondition condition) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         final updated = config.copyWith(orpCondition: condition);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
@@ -202,7 +209,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   /// Mark a hint as shown so it never appears again (Rule 27).
   // P27 — hints show once per installation
   Future<void> markHintShown(String id) => _synchronized(() async {
-    final config = state.valueOrNull ?? const AppConfig();
+    final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(shownHints: {...config.shownHints, id});
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
@@ -216,7 +223,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   Future<void> setHasSeenReadingGoalOnboarding(bool seen) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         final updated = config.copyWith(hasSeenReadingGoalOnboarding: seen);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
@@ -225,7 +232,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   /// Updates the per-word adaptive pacing configuration.
   Future<void> updatePacingConfig(PacingConfig pacingConfig) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         final updated = config.copyWith(pacingConfig: pacingConfig);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
@@ -237,7 +244,7 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   // P8 Grade B — presets are reading intentions, not speed tiers
   Future<void> applyReadingGoalPreset(ReadingGoalConfig goal) =>
       _synchronized(() async {
-        final config = state.valueOrNull ?? const AppConfig();
+        final config = state.valueOrNull ?? await future;
         final updated = config.withReadingGoal(goal);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
