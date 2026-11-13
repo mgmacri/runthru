@@ -87,12 +87,15 @@ class _FakeStore implements StoreGateway {
   }
 }
 
-Future<ProviderContainer> _container(_FakeStore store) async {
+Future<ProviderContainer> _container(
+  _FakeStore store, {
+  Duration settle = _settleTime,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final container = ProviderContainer(
     overrides: [
       storeGatewayProvider.overrideWithValue(store),
-      restoreSettleTimeProvider.overrideWithValue(_settleTime),
+      restoreSettleTimeProvider.overrideWithValue(settle),
     ],
   );
   addTearDown(() {
@@ -212,7 +215,12 @@ void main() {
       'an empty restore is called only once the store has had time',
       () async {
         final store = _FakeStore(product: _product);
-        final c = await _container(store);
+        // A wait long enough that a busy machine cannot run through it
+        // while the event queue below is being pumped.
+        final c = await _container(
+          store,
+          settle: const Duration(milliseconds: 600),
+        );
 
         final restoring = c.read(purchaseControllerProvider.notifier).restore();
         await pumpEventQueue();
