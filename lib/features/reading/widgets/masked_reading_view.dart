@@ -545,16 +545,41 @@ List<List<_WindowWord>> _windowParagraphs(List<String> words, int wordIndex) {
   return paragraphs;
 }
 
-/// Real paragraphs around [wordIndex]: whole paragraphs until there are at
-/// least [before] words above and [after] words below the current word, so
-/// a short heading never leaves the page nearly empty.
+/// The longest run of words laid out as one paragraph. Text with no
+/// paragraph breaks at all (pasted or shared text whose paragraphs are
+/// separated by single line breaks) is otherwise one paragraph as long as
+/// the document, and the window, which is measured again on every word,
+/// would be the whole document.
+const int _maxParagraphWords = 200;
+
+/// Whether a paragraph, or a piece of an overlong one, starts at [index].
+///
+/// A paragraph that has run for [_maxParagraphWords] words without a break
+/// is cut at each multiple of that many words. The cuts depend only on the
+/// document, never on where the reader is, so the lines stay where they
+/// are as the reader advances.
+bool _startsPiece(int index, bool Function(int index) isStart) {
+  if (isStart(index)) return true;
+  if (index % _maxParagraphWords != 0) return false;
+  for (var i = index - 1; i > index - _maxParagraphWords && i > 0; i--) {
+    if (isStart(i)) return false;
+  }
+  return true;
+}
+
+/// Real paragraphs around [wordIndex]: whole paragraphs (pieces of them
+/// where one is overlong, see [_startsPiece]) until there are at least
+/// [before] words above and [after] words below the current word, so a
+/// short heading never leaves the page nearly empty.
 List<List<_WindowWord>> _windowParagraphsFromStarts(
   List<String> words,
   int wordIndex,
-  bool Function(int index) isStart, {
+  bool Function(int index) isParagraphStart, {
   int before = 120,
   int after = 220,
 }) {
+  bool isStart(int index) => _startsPiece(index, isParagraphStart);
+
   var start = wordIndex;
   while (start > 0 && !isStart(start)) {
     start--;

@@ -171,6 +171,84 @@ void main() {
       },
     );
 
+    testWidgets('text with no paragraph breaks is laid out in pieces', (
+      tester,
+    ) async {
+      // Pasted text whose paragraphs are separated by single line breaks is
+      // one paragraph to the segmenter: its only paragraph start is word 0.
+      // The window used to grow to the whole document, measured word by
+      // word on every tick.
+      final words = [for (var i = 0; i < 5000; i++) 'w$i'];
+      Widget at(int index) => wrap(
+        ParagraphModeView(
+          words: words,
+          currentIndex: index,
+          letterSpacing: 0,
+          wordSpacing: 0,
+          fontFamily: 'AtkinsonHyperlegible',
+          fontSize: 60,
+          wpm: 300,
+          paragraphStarts: const {0},
+        ),
+      );
+      bool shown(int i) =>
+          find.text('w$i', findRichText: true).evaluate().isNotEmpty;
+
+      await tester.pumpWidget(at(2500));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('paragraph-word-highlight-2500')),
+        findsOneWidget,
+      );
+      // Pieces of 200 words: the one being read, one above, enough below.
+      expect(shown(2200), isTrue);
+      expect(shown(2799), isTrue);
+      expect(shown(2199), isFalse);
+      expect(shown(2800), isFalse);
+      expect(shown(0), isFalse);
+      expect(shown(4999), isFalse);
+
+      // The pieces do not move with the reader: one word on, the same text.
+      await tester.pumpWidget(at(2501));
+      await tester.pumpAndSettle();
+      expect(shown(2200), isTrue);
+      expect(shown(2199), isFalse);
+      expect(shown(2799), isTrue);
+      expect(shown(2800), isFalse);
+    });
+
+    testWidgets('paragraphs of ordinary length are not cut', (tester) async {
+      // 150-word paragraphs: a multiple of 200 falls inside every other one
+      // and must not split it.
+      final words = [for (var i = 0; i < 900; i++) 'w$i'];
+      await tester.pumpWidget(
+        wrap(
+          ParagraphModeView(
+            words: words,
+            currentIndex: 380,
+            letterSpacing: 0,
+            wordSpacing: 0,
+            fontFamily: 'AtkinsonHyperlegible',
+            fontSize: 60,
+            wpm: 300,
+            paragraphStarts: const {0, 150, 300, 450, 600, 750},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      bool shown(int i) =>
+          find.text('w$i', findRichText: true).evaluate().isNotEmpty;
+      // The paragraph being read (300 to 449), the one above, and whole
+      // paragraphs below until 220 words are in view: 150 to 749.
+      expect(shown(150), isTrue);
+      expect(shown(149), isFalse);
+      expect(shown(749), isTrue);
+      expect(shown(750), isFalse);
+    });
+
     testWidgets('empty document does not crash', (tester) async {
       await tester.pumpWidget(
         wrap(
