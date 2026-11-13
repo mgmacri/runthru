@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:runthru/core/document_title.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/models/shared_content.dart';
 import 'package:runthru/features/content/services/content_normaliser.dart';
+import 'package:runthru/features/content/services/web_page_decoder.dart';
 import 'package:runthru/services/epub_extractor.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/pdf_extractor.dart';
@@ -277,7 +279,10 @@ class ShareIntent extends _$ShareIntent {
   ///
   /// Detects known LLM domains that share links instead of content and
   /// shows a helpful error. For other URLs, fetches HTML and normalises it.
-  /// Follows redirects (up to 5). Times out after 15 seconds.
+  /// Follows redirects (up to 5). Gives up when the site does not connect
+  /// within 15 seconds, does not answer within 20, or has not sent the
+  /// whole page within 30, and when the page is larger than
+  /// [kMaxWebPageBytes].
   Future<ExtractedDocument> _fetchAndExtractUrl(String url) async {
     // Check for known LLM domains — they share links, not content.
     final uri = Uri.tryParse(url);
@@ -323,7 +328,7 @@ class ShareIntent extends _$ShareIntent {
       request.followRedirects = true;
       request.maxRedirects = 5;
 
-      final response = await request.close();
+      final response = await request.close().timeout(_answerTimeout);
       // Security: reject any redirect hop that downgraded to cleartext.
       if (response.redirects.any((r) => r.location.scheme == 'http')) {
         throw const _ShareFailure(
@@ -338,7 +343,35 @@ class ShareIntent extends _$ShareIntent {
         );
       }
 
-      final body = await response.transform(utf8.decoder).join();
+      // A link to a file (a PDF, an image, a download) is not a page.
+      final type = response.headers.contentType;
+      if (type != null &&
+          type.primaryType != 'text' &&
+          !type.subType.contains('html') &&
+          !type.subType.contains('xml')) {
+        throw const _ShareFailure(
+          'That link is not a web page RunThru can read. '
+          'Try copying the text and pasting it in RunThru instead.',
+        );
+      }
+      if (response.contentLength > kMaxWebPageBytes) {
+        throw const _ShareFailure(_pageTooLarge);
+      }
+      final Uint8List bytes;
+      try {
+        bytes = await readWebPage(response).timeout(_downloadTimeout);
+      } on WebPageTooLarge {
+        throw const _ShareFailure(_pageTooLarge);
+      }
+      // The page's own encoding, not always UTF-8: an older page in
+      // Windows-1252 used to fail to open at its first accented letter.
+      final body = decodeWebPage(bytes, charset: type?.charset);
+      if (body == null) {
+        throw const _ShareFailure(
+          'That page is in a text encoding RunThru cannot read. '
+          'Try copying the text and pasting it in RunThru instead.',
+        );
+      }
       if (body.trim().isEmpty) {
         throw const _ShareFailure(
           'The shared link returned no content. '
@@ -358,10 +391,27 @@ class ShareIntent extends _$ShareIntent {
         'Could not fetch the shared link. '
         'Try copying the text and pasting it in RunThru instead.',
       );
+    } on TimeoutException {
+      throw const _ShareFailure(
+        'That page took too long to load. '
+        'Try again, or copy the text and paste it in RunThru instead.',
+      );
     } finally {
-      client.close();
+      // Forced: a download given up on (too slow, too large) is cut off
+      // rather than left to finish in the background.
+      client.close(force: true);
     }
   }
+
+  /// How long a site may take to start answering once connected.
+  static const Duration _answerTimeout = Duration(seconds: 20);
+
+  /// How long the whole page may take to arrive.
+  static const Duration _downloadTimeout = Duration(seconds: 30);
+
+  static const String _pageTooLarge =
+      'That page is too large to open. '
+      'Try copying the text and pasting it in RunThru instead.';
 
   /// Heuristic: does this text look like markdown?
   ///
