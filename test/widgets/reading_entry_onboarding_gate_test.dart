@@ -10,7 +10,6 @@ import 'package:runthru/screens/parallax_reading_screen.dart';
 import 'package:runthru/screens/reading_screen.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
-import 'package:runthru/widgets/coach_spotlight.dart';
 import 'package:runthru/widgets/reading_goal_onboarding_gate.dart';
 
 void main() {
@@ -30,7 +29,6 @@ void main() {
         expect(find.byType(HomeShell), findsNothing);
         expect(find.byType(ReadingScreen), findsNothing);
         expect(find.byType(ParallaxReadingScreen), findsNothing);
-        expect(find.byType(CoachSpotlight), findsNothing);
 
         final context = tester.element(find.byType(MaterialApp));
         final container = ProviderScope.containerOf(context);
@@ -168,7 +166,6 @@ void main() {
       expect(find.byType(HomeShell), findsNothing);
       expect(find.byType(ReadingScreen), findsNothing);
       expect(find.byType(ParallaxReadingScreen), findsNothing);
-      expect(find.byType(CoachSpotlight), findsNothing);
     });
 
     testWidgets('all six mocked steps advance with expected scenes', (

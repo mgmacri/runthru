@@ -149,15 +149,6 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
     await _persist(updated);
   });
 
-  Future<void> setPdfFolderPath(String? path) => _synchronized(() async {
-    final config = state.valueOrNull ?? await future;
-    final updated = path == null
-        ? config.copyWith(clearPdfFolderPath: true)
-        : config.copyWith(pdfFolderPath: path);
-    state = AsyncData<AppConfig>(updated);
-    await _persist(updated);
-  });
-
   // NOTE: bookmarks moved to BookmarkStore (lib/store/bookmark_store.dart).
   // AppConfig.bookmarks is retained read-only as the migration source and
   // rollback path — never add a bookmark writer here again (BK-5: it
@@ -173,13 +164,6 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   Future<void> setReadingFontFamily(String family) => _synchronized(() async {
     final config = state.valueOrNull ?? await future;
     final updated = config.copyWith(readingFontFamily: family);
-    state = AsyncData<AppConfig>(updated);
-    await _persist(updated);
-  });
-
-  Future<void> setFontScale(double scale) => _synchronized(() async {
-    final config = state.valueOrNull ?? await future;
-    final updated = config.copyWith(fontScale: scale.clamp(0.5, 2.0));
     state = AsyncData<AppConfig>(updated);
     await _persist(updated);
   });
@@ -202,24 +186,6 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
               ? intensity
               : ParallaxIntensity.none,
         );
-        state = AsyncData<AppConfig>(updated);
-        await _persist(updated);
-      });
-
-  Future<void> setReadingGoalPreset(ReadingGoalPreset? preset) =>
-      _synchronized(() async {
-        final config = state.valueOrNull ?? await future;
-        final updated = preset == null
-            ? config.copyWith(clearReadingGoalPreset: true)
-            : config.copyWith(readingGoalPreset: preset);
-        state = AsyncData<AppConfig>(updated);
-        await _persist(updated);
-      });
-
-  Future<void> setOrpCondition(OrpCondition condition) =>
-      _synchronized(() async {
-        final config = state.valueOrNull ?? await future;
-        final updated = config.copyWith(orpCondition: condition);
         state = AsyncData<AppConfig>(updated);
         await _persist(updated);
       });

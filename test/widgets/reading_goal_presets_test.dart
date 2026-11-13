@@ -8,7 +8,6 @@ import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/screens/settings_screen.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
-import 'package:runthru/widgets/reading_goal_presets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Fake [ConfigNotifier] that stores state in memory.
@@ -60,44 +59,6 @@ Widget _settingsHarness(AppConfig config) {
 }
 
 void main() {
-  group('ReadingGoalPresets widget', () {
-    testWidgets('shows 3 preset cards with correct names', (tester) async {
-      ReadingGoalConfig? selected;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ReadingGoalPresets(onSelected: (g) => selected = g),
-          ),
-        ),
-      );
-
-      expect(find.text('Deep Read'), findsOneWidget);
-      expect(find.text('Comfortable'), findsOneWidget);
-      expect(find.text('Quick Scan'), findsOneWidget);
-      expect(selected, isNull);
-    });
-
-    testWidgets('tapping a card fires onSelected with correct preset', (
-      tester,
-    ) async {
-      ReadingGoalConfig? selected;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ReadingGoalPresets(onSelected: (g) => selected = g),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Deep Read'));
-      await tester.pumpAndSettle();
-
-      expect(selected, isNotNull);
-      expect(selected!.preset, ReadingGoalPreset.deepRead);
-      expect(selected!.wpm, 200);
-    });
-  });
-
   group('Reading Goal selector in Settings', () {
     testWidgets('shows 3 presets + Custom segments', (tester) async {
       await tester.pumpWidget(_settingsHarness(const AppConfig()));
