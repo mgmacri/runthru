@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:runthru/core/document_title.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/models/shared_content.dart';
 import 'package:runthru/features/content/services/content_normaliser.dart';
 import 'package:runthru/services/epub_extractor.dart';
@@ -78,6 +79,28 @@ class ShareIntentError implements ShareIntentState {
   final SharedContent? content;
 }
 
+/// A failure whose [message] is written for the reader and shown as it is.
+class _ShareFailure implements Exception {
+  const _ShareFailure(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// What the reader is told when something shared cannot be opened. Only
+/// sentences written for them are shown: an error's own text ("Exception: …",
+/// "FormatException: …", a file path) never is.
+String _shareErrorMessage(Object error) => switch (error) {
+  _ShareFailure(:final message) => message,
+  UnsupportedPdfError() => 'RunThru could not find readable text in this file.',
+  PdfTimeoutError() => 'This file took too long to open.',
+  _ =>
+    'RunThru could not open what was shared. '
+        'Try copying the text and pasting it in RunThru instead.',
+};
+
 /// Platform channel name for share intent communication.
 const String _shareIntentChannel = 'com.runthru/share_intent';
 
@@ -140,8 +163,14 @@ class ShareIntent extends _$ShareIntent {
             )
           : content;
       state = ShareIntentState.done(content: titled, document: document);
-    } on Exception catch (e) {
-      state = ShareIntentState.error(message: e.toString(), content: content);
+    } catch (e) {
+      // Errors as well as exceptions: left uncaught, the state would stay
+      // "processing" for the rest of the session.
+      appLog('share_intent', 'could not open shared content: ${e.runtimeType}');
+      state = ShareIntentState.error(
+        message: _shareErrorMessage(e),
+        content: content,
+      );
     }
   }
 
@@ -192,8 +221,11 @@ class ShareIntent extends _$ShareIntent {
         title: titleFromText(text) ?? 'Clipboard',
       );
       await ingest(content);
-    } on Exception catch (e) {
-      state = ShareIntentState.error(message: e.toString());
+    } catch (e) {
+      appLog('share_intent', 'could not read the clipboard: ${e.runtimeType}');
+      state = const ShareIntentState.error(
+        message: 'RunThru could not read the clipboard.',
+      );
     }
   }
 
@@ -253,7 +285,7 @@ class ShareIntent extends _$ShareIntent {
       final host = uri.host.toLowerCase();
       for (final domain in _llmDomains) {
         if (host == domain || host.endsWith('.$domain')) {
-          throw Exception(
+          throw const _ShareFailure(
             'This app shared a link to the conversation, not the text. '
             'To read in RunThru:\n'
             '1. Tap the Copy button on the response\n'
@@ -271,7 +303,7 @@ class ShareIntent extends _$ShareIntent {
       fetchUri = fetchUri.replace(scheme: 'https');
     }
     if (fetchUri.scheme != 'https') {
-      throw Exception(
+      throw const _ShareFailure(
         'Only web links can be fetched. '
         'Try copying the text and pasting it in RunThru instead.',
       );
@@ -294,13 +326,13 @@ class ShareIntent extends _$ShareIntent {
       final response = await request.close();
       // Security: reject any redirect hop that downgraded to cleartext.
       if (response.redirects.any((r) => r.location.scheme == 'http')) {
-        throw Exception(
+        throw const _ShareFailure(
           'The shared link redirected to an insecure connection. '
           'Try copying the text and pasting it in RunThru instead.',
         );
       }
       if (response.statusCode != 200) {
-        throw Exception(
+        throw _ShareFailure(
           'Could not fetch the shared link (HTTP ${response.statusCode}). '
           'Try copying the text and pasting it in RunThru instead.',
         );
@@ -308,7 +340,7 @@ class ShareIntent extends _$ShareIntent {
 
       final body = await response.transform(utf8.decoder).join();
       if (body.trim().isEmpty) {
-        throw Exception(
+        throw const _ShareFailure(
           'The shared link returned no content. '
           'Try copying the text and pasting it in RunThru instead.',
         );
@@ -317,12 +349,12 @@ class ShareIntent extends _$ShareIntent {
       _fetchedTitle = ContentNormaliser.htmlTitle(body);
       return ContentNormaliser.normalise(body, ContentType.html);
     } on SocketException {
-      throw Exception(
+      throw const _ShareFailure(
         'No internet connection. '
         'Copy the text and paste it in RunThru instead.',
       );
     } on HttpException {
-      throw Exception(
+      throw const _ShareFailure(
         'Could not fetch the shared link. '
         'Try copying the text and pasting it in RunThru instead.',
       );
