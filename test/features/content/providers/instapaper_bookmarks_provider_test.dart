@@ -655,6 +655,30 @@ void main() {
     });
 
     test(
+      'a block page in place of the list does not sign the reader out',
+      () async {
+        listStatus = 403;
+        listBody =
+            '<html><head><title>403 Forbidden</title></head>'
+            '<body>Access to this site is blocked.</body></html>';
+        final container = signedIn();
+        await expectLater(
+          container.read(instapaperBookmarksProvider.future),
+          throwsA(isA<InstapaperApiException>()),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(auth.sessionExpiredCalls, 0);
+        expect(
+          instapaperListFailureMessage(
+            container.read(instapaperBookmarksProvider).error!,
+          ),
+          'Instapaper is having trouble right now. Try again in a while.',
+        );
+      },
+    );
+
+    test(
       'trouble on Instapaper\'s side does not sign the reader out',
       () async {
         listStatus = 503;

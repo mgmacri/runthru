@@ -930,6 +930,75 @@ void main() {
       );
     });
 
+    test('a bad signature is not a clock problem, though its page quotes the '
+        'timestamp', () async {
+      // The page as Instapaper sends it: the whole signature base string,
+      // oauth_timestamp and oauth_nonce included. The fixtures above stop
+      // short of those, which hid that "timestamp" was matched first.
+      const invalidSignature =
+          '<html><title>403: Invalid signature. Expected signature base '
+          'string: POST&amp;https%3A%2F%2Fwww.instapaper.com%2Fapi%2F1%2F'
+          'account%2Fverify_credentials&amp;oauth_consumer_key%3Dk%26'
+          'oauth_nonce%3Dabc%26oauth_signature_method%3DHMAC-SHA1%26'
+          'oauth_timestamp%3D1700000000%26oauth_token%3Dtok%26'
+          'oauth_version%3D1.0</title></html>';
+      stubPost((_) => http.Response(invalidSignature, 403));
+      final c = fixedClient()..setTokens(token: 'tok', tokenSecret: 'sec');
+
+      await expectLater(
+        c.verifyCredentials(),
+        throwsA(
+          isA<InstapaperApiException>().having(
+            (e) => e.kind,
+            'kind',
+            InstapaperFailureKind.unexpectedResponse,
+          ),
+        ),
+      );
+
+      // And at sign-in, where the wrong answer told the reader to fix
+      // their date and time.
+      Object? caught;
+      try {
+        await fixedClient().authenticate(username: 'u', password: 'p');
+      } on InstapaperAuthException catch (e) {
+        caught = e;
+      }
+      expect(
+        (caught! as InstapaperAuthException).kind,
+        InstapaperFailureKind.unexpectedResponse,
+      );
+    });
+
+    test(
+      'a 403 page that is not Instapaper\'s is not a revoked token',
+      () async {
+        // A filter or proxy in between answering for Instapaper. Reading it
+        // as "unauthorized" signed the reader out and deleted the tokens.
+        stubPost(
+          (_) => http.Response(
+            '<html><head><title>403 Forbidden</title></head>'
+            '<body>Access to this site is blocked.</body></html>',
+            403,
+          ),
+        );
+        final c = fixedClient()..setTokens(token: 'tok', tokenSecret: 'sec');
+
+        await expectLater(
+          c.verifyCredentials(),
+          throwsA(
+            isA<InstapaperApiException>()
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  InstapaperFailureKind.unexpectedResponse,
+                )
+                .having((e) => e.isTransient, 'isTransient', isTrue),
+          ),
+        );
+      },
+    );
+
     test('a bad signature is not mistaken for a revoked token', () async {
       stubPost(
         (_) => http.Response(

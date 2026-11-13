@@ -830,14 +830,27 @@ class InstapaperClient {
   /// category is taken from the body; the text itself is never kept.
   static InstapaperFailureKind _refusalReason(String body) {
     final text = body.toLowerCase();
-    if (text.contains('timestamp')) return InstapaperFailureKind.clockSkew;
-    if (text.contains('signature') || text.contains('nonce')) {
+    // The "Invalid signature" page quotes the parameters that were signed,
+    // `oauth_timestamp` and `oauth_nonce` among them. So a stale clock is
+    // recognised by Instapaper's own phrase for it first, and a bare
+    // "timestamp" only on a page that does not mention the signature.
+    if (text.contains('expired timestamp')) {
+      return InstapaperFailureKind.clockSkew;
+    }
+    if (text.contains('signature')) {
       return InstapaperFailureKind.unexpectedResponse;
     }
+    if (text.contains('timestamp')) return InstapaperFailureKind.clockSkew;
+    if (text.contains('nonce')) return InstapaperFailureKind.unexpectedResponse;
     if (text.contains('suspended') || text.contains('not approved')) {
       return InstapaperFailureKind.suspended;
     }
-    return InstapaperFailureKind.unauthorized;
+    // A revoked token gets no body at all. A page that says anything else
+    // is not Instapaper speaking about the token (a block page from
+    // something in between, say), and must not sign the reader out.
+    return text.trim().isEmpty
+        ? InstapaperFailureKind.unauthorized
+        : InstapaperFailureKind.unexpectedResponse;
   }
 
   static InstapaperFailureKind _kindForCode(int code) {
