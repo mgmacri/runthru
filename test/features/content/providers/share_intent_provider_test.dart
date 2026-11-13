@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:runthru/features/content/models/shared_content.dart';
@@ -26,6 +29,83 @@ void main() {
       expect(words.first, 'A');
       expect(words.last, 'sentences.');
     });
+  });
+
+  group('ShareIntent: what the iOS share extension leaves for the app', () {
+    late Directory group;
+
+    setUp(() {
+      group = Directory.systemTemp.createTempSync('runthru_app_group');
+    });
+
+    tearDown(() {
+      if (group.existsSync()) group.deleteSync(recursive: true);
+    });
+
+    Future<ShareIntentState> pickUp(Object json) async {
+      File(
+        '${group.path}/shared_content.json',
+      ).writeAsStringSync(jsonEncode(json));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container
+          .read(shareIntentProvider.notifier)
+          .checkAppGroupContainer(group.path);
+      return container.read(shareIntentProvider);
+    }
+
+    test('shared text is opened and its note removed', () async {
+      final state = await pickUp({
+        'type': 'text',
+        'data': 'A note from another app. It has two sentences.',
+      });
+
+      expect(state, isA<ShareIntentDone>());
+      expect(File('${group.path}/shared_content.json').existsSync(), isFalse);
+    });
+
+    test(
+      'a shared file is removed from the container once it has been read',
+      () async {
+        // The extension copies the PDF or EPUB into the container. Nothing
+        // removed it afterwards: every file ever shared stayed there.
+        final shared = File('${group.path}/report.pdf')
+          ..writeAsStringSync('not really a PDF');
+        final state = await pickUp({
+          'type': 'pdfFile',
+          'data': shared.path,
+          'title': 'report.pdf',
+        });
+
+        // It could not be read here; removed all the same.
+        expect(state, isNot(isA<ShareIntentProcessing>()));
+        expect(shared.existsSync(), isFalse);
+        expect(File('${group.path}/shared_content.json').existsSync(), isFalse);
+      },
+    );
+
+    test('a file outside the container is left alone', () async {
+      final elsewhere = Directory.systemTemp.createTempSync('runthru_other');
+      addTearDown(() => elsewhere.deleteSync(recursive: true));
+      final theirs = File('${elsewhere.path}/keep.pdf')
+        ..writeAsStringSync('not ours to remove');
+
+      await pickUp({'type': 'pdfFile', 'data': theirs.path});
+
+      expect(theirs.existsSync(), isTrue);
+    });
+
+    test(
+      'a note that is not what the extension writes is dropped quietly',
+      () async {
+        // A list where a record is expected used to throw past the handler
+        // and stay in place, to throw again on every return to the app.
+        final state = await pickUp(['unexpected']);
+
+        expect(state, isA<ShareIntentIdle>());
+        expect(File('${group.path}/shared_content.json').existsSync(), isFalse);
+      },
+    );
   });
 
   group('ShareIntent: what the reader is told while it opens', () {

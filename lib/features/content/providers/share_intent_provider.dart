@@ -194,18 +194,52 @@ class ShareIntent extends _$ShareIntent {
     final file = File('$appGroupPath/shared_content.json');
     if (!file.existsSync()) return;
 
+    final SharedContent content;
     try {
-      final jsonStr = await file.readAsString();
-      final map = json.decode(jsonStr) as Map<String, dynamic>;
-      final content = SharedContent.fromMap(map);
-
-      // Delete the file immediately after reading to prevent re-processing.
+      final decoded = json.decode(await file.readAsString());
+      // Deleted as soon as it is read, so that it is never processed twice.
       await file.delete();
-
-      await ingest(content);
+      // Not what the share extension writes: nothing to open.
+      if (decoded is! Map<String, dynamic>) return;
+      content = SharedContent.fromMap(decoded);
     } on FormatException {
       // Malformed JSON — delete and ignore.
       await file.delete();
+      return;
+    }
+
+    try {
+      await ingest(content);
+    } finally {
+      await _discardSharedFile(content, appGroupPath);
+    }
+  }
+
+  /// Removes the copy of a shared PDF or EPUB from the App Group container.
+  ///
+  /// The share extension copies the file there for the app to read. Once it
+  /// has been read (or could not be) it has no further use, since what is
+  /// shared is read now and not kept, and nothing else removes it: every
+  /// file ever shared to the app used to stay in the container.
+  Future<void> _discardSharedFile(
+    SharedContent content,
+    String appGroupPath,
+  ) async {
+    if (content.type != SharedContentType.pdfFile &&
+        content.type != SharedContentType.epubFile) {
+      return;
+    }
+    // Only what the extension put in the container. (On iOS the same
+    // folder can be spelled with or without a leading "/private".)
+    String plain(String path) =>
+        path.startsWith('/private/') ? path.substring('/private'.length) : path;
+    final folder = plain(Directory(appGroupPath).absolute.path);
+    final shared = File(content.data).absolute;
+    if (!plain(shared.path).startsWith('$folder/')) return;
+    try {
+      if (shared.existsSync()) await shared.delete();
+    } on FileSystemException {
+      appLog('share_intent', 'could not remove the shared file');
     }
   }
 
