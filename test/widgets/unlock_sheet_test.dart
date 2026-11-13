@@ -63,6 +63,8 @@ final _product = ProductDetails(
 Widget _harness(_FakeStore store, {bool owned = false}) => ProviderScope(
   overrides: [
     storeGatewayProvider.overrideWithValue(store),
+    // No waiting for a restored purchase in these tests.
+    restoreSettleTimeProvider.overrideWithValue(Duration.zero),
     configProvider.overrideWith(
       () => _FakeConfig(AppConfig(hasPremium: owned)),
     ),

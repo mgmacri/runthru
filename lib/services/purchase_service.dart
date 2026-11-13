@@ -156,6 +156,12 @@ final storeGatewayProvider = Provider<StoreGateway>(
 final purchaseControllerProvider =
     NotifierProvider<PurchaseController, PurchaseState>(PurchaseController.new);
 
+/// How long a restored purchase may take to arrive on the purchase stream
+/// after the store reports the restore as finished. Override in tests.
+final restoreSettleTimeProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 2),
+);
+
 /// Whether RunThru Unlock is owned.
 final hasPremiumProvider = Provider<bool>(
   (ref) => ref.watch(
@@ -167,6 +173,10 @@ final hasPremiumProvider = Provider<bool>(
 class PurchaseController extends Notifier<PurchaseState> {
   StreamSubscription<List<PurchaseDetails>>? _sub;
 
+  /// Runs out when a restore may be called empty-handed; see [restore].
+  Timer? _restoreTimer;
+  int _restoreAttempt = 0;
+
   StoreGateway get _store => ref.read(storeGatewayProvider);
 
   @override
@@ -175,7 +185,10 @@ class PurchaseController extends Notifier<PurchaseState> {
       _onPurchases,
       onError: (Object e) => appLog(_tag, 'stream error: ${e.runtimeType}'),
     );
-    ref.onDispose(() => _sub?.cancel());
+    ref.onDispose(() {
+      _sub?.cancel();
+      _restoreTimer?.cancel();
+    });
     unawaited(_load());
     return const PurchaseState();
   }
@@ -247,11 +260,18 @@ class PurchaseController extends Notifier<PurchaseState> {
         state.flow == PurchaseFlow.restoring) {
       return;
     }
+    final attempt = ++_restoreAttempt;
     state = state.copyWith(flow: PurchaseFlow.restoring, clearMessage: true);
     try {
       await _store.restorePurchases();
-      // A restored purchase arrives on the stream. If nothing arrives, the
-      // flow returns to idle with a note once the store call finishes.
+      // A restored purchase arrives on the stream, and recording it takes
+      // a moment more. The store call can return before that, so deciding
+      // now would tell an owner, aloud through the sheet's live region,
+      // that no purchase was found, just before it is delivered. The flow
+      // stays "restoring" a little longer and the purchase ends it if it
+      // comes.
+      await _restoredPurchaseHadTime();
+      if (attempt != _restoreAttempt) return;
       if (state.flow == PurchaseFlow.restoring) {
         state = state.copyWith(
           flow: PurchaseFlow.idle,
@@ -267,6 +287,15 @@ class PurchaseController extends Notifier<PurchaseState> {
         message: 'Restore did not finish. Check your connection and try again.',
       );
     }
+  }
+
+  /// Completes once [restoreSettleTimeProvider] has passed. Never completes
+  /// if the controller is disposed first, so nothing touches it afterwards.
+  Future<void> _restoredPurchaseHadTime() {
+    final done = Completer<void>();
+    _restoreTimer?.cancel();
+    _restoreTimer = Timer(ref.read(restoreSettleTimeProvider), done.complete);
+    return done.future;
   }
 
   Future<void> _onPurchases(List<PurchaseDetails> purchases) async {

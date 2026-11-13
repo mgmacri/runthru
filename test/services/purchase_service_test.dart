@@ -32,6 +32,9 @@ PurchaseDetails _purchase(
   status: status,
 )..pendingCompletePurchase = pendingComplete;
 
+/// Stands in for the two seconds a restore waits for its purchase.
+const _settleTime = Duration(milliseconds: 60);
+
 class _FakeStore implements StoreGateway {
   _FakeStore({this.available = true, this.product});
 
@@ -43,6 +46,10 @@ class _FakeStore implements StoreGateway {
   int restoreCalls = 0;
   int availabilityChecks = 0;
   List<PurchaseDetails>? emitOnRestore;
+
+  /// When set, the restored purchase arrives this long after the store call
+  /// has returned, not before it.
+  Duration? emitAfter;
 
   @override
   Stream<List<PurchaseDetails>> get purchaseStream => controller.stream;
@@ -65,7 +72,12 @@ class _FakeStore implements StoreGateway {
   @override
   Future<void> restorePurchases() async {
     restoreCalls++;
-    if (emitOnRestore != null) controller.add(emitOnRestore!);
+    final purchases = emitOnRestore;
+    final delay = emitAfter;
+    if (purchases != null && delay == null) controller.add(purchases);
+    if (purchases != null && delay != null) {
+      Timer(delay, () => controller.add(purchases));
+    }
     await Future<void>.delayed(Duration.zero);
   }
 
@@ -78,7 +90,10 @@ class _FakeStore implements StoreGateway {
 Future<ProviderContainer> _container(_FakeStore store) async {
   SharedPreferences.setMockInitialValues({});
   final container = ProviderContainer(
-    overrides: [storeGatewayProvider.overrideWithValue(store)],
+    overrides: [
+      storeGatewayProvider.overrideWithValue(store),
+      restoreSettleTimeProvider.overrideWithValue(_settleTime),
+    ],
   );
   addTearDown(() {
     container.dispose();
@@ -166,6 +181,55 @@ void main() {
         contains('No previous purchase'),
       );
     });
+
+    test('a purchase delivered after the store call returns is not first '
+        'reported as missing', () async {
+      // The restore call returns and the purchase is delivered a moment
+      // later. "No previous purchase was found" used to be shown, and
+      // read out by the sheet's live region, in between.
+      final store = _FakeStore(product: _product)
+        ..emitOnRestore = [_purchase(PurchaseStatus.restored)]
+        ..emitAfter = const Duration(milliseconds: 10);
+      final c = await _container(store);
+      final messages = <String>[];
+      c.listen(purchaseControllerProvider, (_, next) {
+        final message = next.message;
+        if (message != null) messages.add(message);
+      });
+
+      await c.read(purchaseControllerProvider.notifier).restore();
+      await pumpEventQueue();
+
+      expect(c.read(hasPremiumProvider), isTrue);
+      expect(messages, isNotEmpty);
+      expect(messages, everyElement(isNot(contains('No previous purchase'))));
+      final state = c.read(purchaseControllerProvider);
+      expect(state.message, contains('RunThru Unlock is active'));
+      expect(state.flow, PurchaseFlow.idle);
+    });
+
+    test(
+      'an empty restore is called only once the store has had time',
+      () async {
+        final store = _FakeStore(product: _product);
+        final c = await _container(store);
+
+        final restoring = c.read(purchaseControllerProvider.notifier).restore();
+        await pumpEventQueue();
+
+        // The store call is over; the purchase may still be on its way.
+        expect(store.restoreCalls, 1);
+        expect(c.read(purchaseControllerProvider).flow, PurchaseFlow.restoring);
+        expect(c.read(purchaseControllerProvider).message, isNull);
+
+        await restoring;
+        expect(c.read(purchaseControllerProvider).flow, PurchaseFlow.idle);
+        expect(
+          c.read(purchaseControllerProvider).message,
+          contains('No previous purchase'),
+        );
+      },
+    );
 
     test('other product IDs are acknowledged but never unlock', () async {
       final store = _FakeStore(product: _product);
