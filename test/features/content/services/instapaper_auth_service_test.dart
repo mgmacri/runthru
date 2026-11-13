@@ -433,10 +433,69 @@ void main() {
       ).called(1);
     });
 
+    test(
+      'the plugin\'s own report of a failed decryption is recognised',
+      () async {
+        // What flutter_secure_storage 9 sends from Android: the Java stack
+        // trace in `details`.
+        when(() => storage.read(key: any(named: 'key'))).thenThrow(
+          PlatformException(
+            code: 'Exception encountered',
+            message: 'read',
+            details:
+                'javax.crypto.BadPaddingException: error:1e000065:Cipher '
+                'functions:OPENSSL_internal:BAD_DECRYPT\n'
+                '\tat com.android.org.conscrypt.NativeCrypto.EVP_CipherFinal_ex',
+          ),
+        );
+        when(
+          () => storage.delete(key: any(named: 'key')),
+        ).thenAnswer((_) async {});
+
+        final tokens = await SecureInstapaperTokenStore(
+          storage: storage,
+        ).loadTokens();
+
+        expect(tokens, isNull);
+        verify(() => storage.delete(key: instapaperOAuthTokenKey)).called(1);
+      },
+    );
+
+    test('a read that fails for the moment keeps the saved tokens', () async {
+      // The tokens used to be deleted on any failed read, so one bad moment
+      // in secure storage made the reader type their password again.
+      for (final failure in [
+        // Android: the cipher could not be set up (keystore busy).
+        PlatformException(
+          code: 'Exception encountered',
+          message: 'read',
+          details:
+              'java.lang.NullPointerException: Attempt to invoke interface '
+              'method StorageCipher.decrypt(byte[]) on a null object reference',
+        ),
+        // iOS: the keychain is locked (errSecInteractionNotAllowed).
+        PlatformException(
+          code: 'Unexpected security result code',
+          message: 'Code: -25308, Message: User interaction is not allowed.',
+        ),
+        StateError('anything else'),
+      ]) {
+        final storage = MockSecureStorage();
+        when(() => storage.read(key: any(named: 'key'))).thenThrow(failure);
+
+        await expectLater(
+          SecureInstapaperTokenStore(storage: storage).loadTokens,
+          throwsA(isA<InstapaperSecureStorageException>()),
+          reason: '$failure',
+        );
+        verifyNever(() => storage.delete(key: any(named: 'key')));
+      }
+    });
+
     test('reports storage that can be neither read nor cleared', () async {
       when(
         () => storage.read(key: any(named: 'key')),
-      ).thenThrow(PlatformException(code: 'Exception'));
+      ).thenThrow(PlatformException(code: 'Exception', message: 'BadPadding'));
       when(
         () => storage.delete(key: any(named: 'key')),
       ).thenThrow(PlatformException(code: 'Exception'));

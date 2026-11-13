@@ -5,6 +5,7 @@
 /// parameters and are never retained or written to storage.
 library;
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:runthru/core/logger.dart';
 import 'package:runthru/features/content/services/instapaper_client.dart';
@@ -66,6 +67,14 @@ class SecureInstapaperTokenStore implements InstapaperTokenStore {
       token = await _storage.read(key: instapaperOAuthTokenKey);
       secret = await _storage.read(key: instapaperOAuthTokenSecretKey);
     } on Object catch (e) {
+      if (!_cannotBeDecrypted(e)) {
+        // Secure storage did not answer this time (a keystore that is busy,
+        // a keychain that is still locked). The tokens are still there and
+        // the next launch can read them, so they are left alone.
+        throw InstapaperSecureStorageException(
+          'Could not load Instapaper tokens: ${InstapaperRedactor.redact('$e')}',
+        );
+      }
       // Values written under a key this device no longer has (app data
       // restored from a backup onto a new phone) can never be read again.
       // Dropping them lets the reader connect afresh; keeping them would
@@ -83,6 +92,23 @@ class SecureInstapaperTokenStore implements InstapaperTokenStore {
     if (token == null || secret == null) return null;
     if (token.isEmpty || secret.isEmpty) return null;
     return InstapaperTokenPair(token: token, tokenSecret: secret);
+  }
+
+  /// Whether [error] says the saved value itself cannot be decrypted, as
+  /// opposed to secure storage failing to answer.
+  ///
+  /// On Android the plugin reports a failed read as a [PlatformException]
+  /// whose details are the Java stack trace; a value encrypted under a key
+  /// that is gone fails with `BadPaddingException` (`AEADBadTagException`
+  /// for the GCM cipher, `BAD_DECRYPT` from the crypto library). Nothing
+  /// else is taken as permanent: an iOS keychain error is about access, not
+  /// about the value.
+  static bool _cannotBeDecrypted(Object error) {
+    if (error is! PlatformException) return false;
+    final text = '${error.message} ${error.details}';
+    return text.contains('BadPadding') ||
+        text.contains('AEADBadTag') ||
+        text.contains('BAD_DECRYPT');
   }
 
   @override
