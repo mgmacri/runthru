@@ -29,6 +29,14 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- RunThru reads incoming links itself (MainActivity.handleActionView)
+                 and hands them to Dart over the share channel. Flutter's own deep
+                 linking is on by default and would also push the web address into
+                 the router as if it were an app route, which showed "Page Not
+                 Found" for as long as the page took to load. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
