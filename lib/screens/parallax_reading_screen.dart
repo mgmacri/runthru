@@ -364,6 +364,20 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// Book mode: the reader turned past the last page.
   void _onBookEnd() {
     if (_interlude != null) return;
+    if (_readingRange != null && !_isInstapaper) {
+      // The end of a page range. The timed modes get here by showing the
+      // range's last word; a page turn never lands on it, so the range is
+      // completed here instead: the saved position moves to its end (the
+      // Library then shows the range as read, and opening it again offers
+      // what comes next) and the range-complete choices come up.
+      if (_isRangeComplete) return;
+      final end = _sliceOffset + _words.length - 1;
+      _lastGlobalIndex = end;
+      ref.read(bookmarkProvider(widget.filePath).notifier).updateIndex(end);
+      _recordShelfProgress();
+      setState(() => _isRangeComplete = true);
+      return;
+    }
     // Finished, whether or not the text is long enough for the finish
     // screen. (A short article or book used to stay in Continue Reading,
     // and the article unarchived, when finished in Book mode.)

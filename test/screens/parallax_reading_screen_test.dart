@@ -17,13 +17,17 @@ import 'package:runthru/features/content/services/instapaper_client.dart';
 import 'package:runthru/features/reading/pacing/pacing_config.dart';
 import 'package:runthru/features/reading/providers/reading_mode_provider.dart';
 import 'package:runthru/features/reading/providers/reading_progress_provider.dart';
+import 'package:runthru/features/reading/widgets/book_mode_view.dart';
+import 'package:runthru/hooks/bookmark_notifier.dart';
 import 'package:runthru/screens/parallax_reading_screen.dart';
 import 'package:runthru/services/device_capability.dart';
 import 'package:runthru/services/folder_scanner.dart';
 import 'package:runthru/services/models.dart';
 import 'package:runthru/services/preprocessing_queue.dart';
+import 'package:runthru/store/bookmark_store.dart';
 import 'package:runthru/store/config.dart';
 import 'package:runthru/store/models.dart';
+import 'package:runthru/widgets/finished_range_overlay.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -990,6 +994,145 @@ void main() {
 
       expect(container.read(wordTimerProvider).wpm, 420);
       expect(container.read(wordTimerProvider).pacingConfig, pacing);
+    });
+  });
+
+  group('ParallaxReadingScreen: a page range in Book mode', () {
+    testWidgets('turning past its last page completes the range', (
+      tester,
+    ) async {
+      // A Book page turn lands on the start of a page, never on the range's
+      // last word, and reaching that word was the only thing that completed
+      // a range. The last page turn did nothing at all.
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer(
+        overrides: [
+          configProvider.overrideWith(
+            () => _FakeConfigNotifier(
+              const AppConfig(
+                hasSeenReadingGoalOnboarding: true,
+                hasPremium: true,
+              ),
+            ),
+          ),
+          deviceCapabilityProvider.overrideWithValue(
+            const DeviceCapability(
+              processorCount: 4,
+              maxWorkers: 2,
+              isMobile: false,
+            ),
+          ),
+          pdfListProvider.overrideWith((ref) async => const <PdfEntry>[]),
+        ],
+      );
+      const path = '/books/ranged.pdf';
+      final queue = container.read(preprocessingQueueProvider.notifier);
+      queue.pauseBackground();
+      queue.debugSetEntry(
+        PdfEntry(
+          filePath: path,
+          fileName: 'ranged.pdf',
+          status: PdfStatus.ready,
+          document: ExtractedDocument(
+            sentences: [
+              for (var p = 0; p < 3; p++)
+                for (var s = 0; s < 4; s++)
+                  Sentence(
+                    words: [
+                      for (var w = 0; w < 10; w++)
+                        w == 9 ? 'p${p}s${s}w$w.' : 'p${p}s${s}w$w',
+                    ],
+                  ),
+            ],
+            pageBoundaries: const [
+              PageBoundary(
+                pageNumber: 0,
+                startSentenceIndex: 0,
+                startWordIndex: 0,
+              ),
+              PageBoundary(
+                pageNumber: 1,
+                startSentenceIndex: 4,
+                startWordIndex: 40,
+              ),
+              PageBoundary(
+                pageNumber: 2,
+                startSentenceIndex: 8,
+                startWordIndex: 80,
+              ),
+            ],
+            totalPages: 3,
+          ),
+        ),
+      );
+      // The reader chose the middle page (words 40 to 79), in Book mode.
+      await container.read(bookmarkStoreProvider.future);
+      await container
+          .read(bookmarkStoreProvider.notifier)
+          .save(
+            path,
+            const BookmarkData(
+              wordIndex: 40,
+              readingRange: ReadingRange(
+                startPage: 1,
+                endPage: 1,
+                endWordIndexOnPage: 39,
+              ),
+            ),
+          );
+      container
+          .read(readingModeNotifierProvider.notifier)
+          .setMode(ReadingMode.book);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: ParallaxReadingScreen(filePath: path)),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.byType(BookModeView), findsOneWidget);
+      expect(find.byType(FinishedRangeOverlay), findsNothing);
+
+      String nextLabel() =>
+          tester
+              .widget<Semantics>(
+                find
+                    .descendant(
+                      of: find.byKey(BookModeView.nextKey),
+                      matching: find.byType(Semantics),
+                    )
+                    .first,
+              )
+              .properties
+              .label ??
+          '';
+      for (var guard = 0; guard < 20 && nextLabel() != 'Finish'; guard++) {
+        await tester.tap(find.byKey(BookModeView.nextKey));
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      expect(nextLabel(), 'Finish');
+
+      await tester.tap(find.byKey(BookModeView.nextKey));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      // "Range complete", with the ways on from there...
+      expect(find.byType(FinishedRangeOverlay), findsOneWidget);
+      // ...and the saved position at the end of the range, so the Library
+      // shows it as read and opening it again offers what comes next.
+      expect(container.read(bookmarkProvider(path)), 79);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const SizedBox.shrink(),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 10));
+      container.dispose();
     });
   });
 

@@ -55,7 +55,18 @@ class _FinishedRangeOverlayState extends State<FinishedRangeOverlay>
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
 
+  bool _opened = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The first showing waits for here: whether motion is reduced comes
+    // from MediaQuery, which must not be read during initState (debug
+    // builds assert on it, and the overlay is always created visible).
+    if (_opened) return;
+    _opened = true;
     if (widget.visible) _show();
   }
 
