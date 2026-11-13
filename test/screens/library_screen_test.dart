@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +70,7 @@ Future<ProviderContainer> _open(
   WidgetTester tester, {
   List<PdfEntry>? entries,
   bool instapaperAvailable = true,
+  Future<List<PdfEntry>> Function(List<PdfEntry> books)? scan,
 }) async {
   SharedPreferences.setMockInitialValues({});
   await tester.binding.setSurfaceSize(const Size(420, 1400));
@@ -83,7 +86,9 @@ Future<ProviderContainer> _open(
           isMobile: false,
         ),
       ),
-      pdfListProvider.overrideWith((ref) async => books),
+      pdfListProvider.overrideWith(
+        (ref) => scan == null ? Future.value(books) : scan(books),
+      ),
       googleDriveAvailableProvider.overrideWithValue(false),
       // Tests run without dart-defines; a store build has the Instapaper key.
       instapaperAvailableProvider.overrideWithValue(instapaperAvailable),
@@ -150,6 +155,42 @@ Future<void> _search(WidgetTester tester, String query) async {
 }
 
 void main() {
+  _libraryTest('a book list that cannot be loaded says so, and can be tried '
+      'again', (tester) async {
+    // The section used to show the error's own text: "Failed to load:
+    // FileSystemException: Permission denied, path = …".
+    var scans = 0;
+    await _open(
+      tester,
+      scan: (books) async {
+        scans++;
+        if (scans == 1) {
+          throw const FileSystemException(
+            'Permission denied',
+            '/storage/emulated/0/Books',
+          );
+        }
+        return books;
+      },
+    );
+
+    expect(find.text('Could not load your books.'), findsOneWidget);
+    expect(find.textContaining('Failed to load'), findsNothing);
+    expect(find.textContaining('FileSystemException'), findsNothing);
+    expect(find.textContaining('Permission denied'), findsNothing);
+    expect(find.text('Frankenstein'), findsNothing);
+
+    await tester.tap(find.text('Try again'));
+    // The list, then the titles its rows look up.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(scans, 2);
+    expect(find.text('Could not load your books.'), findsNothing);
+    expect(find.text('Frankenstein'), findsOneWidget);
+  });
+
   _libraryTest('lists the books under the titles their files carry', (
     tester,
   ) async {

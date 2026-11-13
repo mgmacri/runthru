@@ -318,7 +318,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     countLabel: 'Issue',
                     dotColor: RunThruTokens.shellTeal,
                     itemCount: 0,
-                    empty: _SectionError(message: e.toString()),
+                    // A sentence and a way to try again, never the error's
+                    // own text (its type is in the log).
+                    empty: _ArticlesLoadError(
+                      message: 'Could not load your books.',
+                      onRetry: () => ref.invalidate(pdfListProvider),
+                    ),
                   ),
                 ),
               ),
@@ -1303,7 +1308,9 @@ class _ArticlesAuthErrorTile extends ConsumerWidget {
   }
 }
 
-/// The article list could not be loaded and there is none to fall back on.
+/// A section's list could not be loaded and there is none to fall back on
+/// (the articles, or the books): what happened in a sentence, and a way to
+/// try again.
 class _ArticlesLoadError extends StatelessWidget {
   const _ArticlesLoadError({required this.message, required this.onRetry});
 
@@ -1665,27 +1672,6 @@ class _SectionLoading extends StatelessWidget {
         style: RunThruTypography.caption.copyWith(
           color: RunThruTokens.shellTextSecondary,
         ),
-      ),
-    );
-  }
-}
-
-class _SectionError extends StatelessWidget {
-  const _SectionError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-      child: Text(
-        'Failed to load: $message',
-        style: RunThruTypography.caption.copyWith(
-          color: RunThruTokens.shellError,
-        ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
       ),
     );
   }

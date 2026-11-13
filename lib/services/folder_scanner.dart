@@ -262,12 +262,18 @@ class FolderScannerService {
 final pdfListProvider = FutureProvider<List<PdfEntry>>((ref) async {
   final sources = ref.watch(librarySourcesProvider);
   return sources.when(
-    data: (list) {
+    data: (list) async {
       appLog('pdfListProvider', 'scanning ${list.length} source(s)');
-      return FolderScannerService.scanSources(
-        list,
-        identity: ref.read(contentIdentityProvider),
-      );
+      try {
+        return await FolderScannerService.scanSources(
+          list,
+          identity: ref.read(contentIdentityProvider),
+        );
+      } on Object catch (e) {
+        // The Library says so in a sentence; what it was goes here.
+        appLog('pdfListProvider', 'scan failed: ${e.runtimeType}');
+        rethrow;
+      }
     },
     loading: () async {
       appLog('pdfListProvider', 'sources loading…');
