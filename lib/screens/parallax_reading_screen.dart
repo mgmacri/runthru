@@ -526,7 +526,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
       configNotifier: ref.read(configProvider.notifier),
     );
     _motionCtrl = MotionParallaxController();
-    appLog('ParallaxReadingScreen', 'initState filePath=${widget.filePath}');
+    // Where the text came from, never its path: for pasted and shared text
+    // the path carries the title, and the title is the text's own opening
+    // words (rule 4: no document text in the log).
+    appLog('ParallaxReadingScreen', 'initState source=${widget.contentSource}');
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:runthru/core/reading_goal_presets.dart';
 import 'package:runthru/core/clipboard_document.dart';
+import 'package:runthru/core/logger.dart';
 import 'package:runthru/core/word_timer.dart';
 import 'package:runthru/features/content/models/instapaper_bookmark.dart';
 import 'package:runthru/features/content/providers/instapaper_auth_provider.dart';
@@ -989,6 +990,56 @@ void main() {
 
       expect(container.read(wordTimerProvider).wpm, 420);
       expect(container.read(wordTimerProvider).pacingConfig, pacing);
+    });
+  });
+
+  group('ParallaxReadingScreen: the log', () {
+    testWidgets('says where shared text came from, not what it is called', (
+      tester,
+    ) async {
+      // Text shared with no subject is titled by its own first words, and
+      // the route puts that title in the reader's path, which was logged.
+      const title = 'Dear Sam, the test results';
+      AppLogger.clear();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            configProvider.overrideWith(
+              () => _FakeConfigNotifier(
+                const AppConfig(hasSeenReadingGoalOnboarding: true),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            home: ParallaxReadingScreen(
+              filePath: 'clipboard://$title',
+              contentSource: 'clipboard',
+              clipboardDocument: ClipboardDocument(
+                title: title,
+                fullText: '',
+                document: const ExtractedDocument(
+                  sentences: [
+                    Sentence(words: ['Dear', 'Sam,', 'the', 'test', 'results']),
+                    Sentence(words: ['came', 'back', 'today']),
+                  ],
+                ),
+                pastedAt: _openedAt,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      ).read(wordTimerProvider.notifier).pause();
+      await tester.pump();
+
+      final log = AppLogger.entries.join('\n');
+      expect(log, contains('initState source=clipboard'));
+      expect(log, isNot(contains('Dear Sam')));
+      expect(log, isNot(contains('test results')));
     });
   });
 
