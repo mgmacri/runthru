@@ -335,6 +335,49 @@ void main() {
       expect(legacy.hasPremium, isFalse);
       expect(AppConfig.fromJson({'premiumUnlocked': true}).hasPremium, isTrue);
     });
+
+    test(
+      'what an earlier version saved under other keys survives a save',
+      () async {
+        // The whole blob used to be rewritten from the keys this version
+        // knows, so the first change of any setting erased the legacy
+        // `anchorColorIndex` and `hasPremium` for good.
+        final container = await containerWith({
+          'runthru_config': jsonEncode({
+            'defaultWpm': 450,
+            'anchorColorIndex': 3,
+            'hasPremium': true,
+            'aKeyFromALaterVersion': 'kept',
+          }),
+        });
+
+        await container.read(configProvider.notifier).setDefaultWpm(500);
+
+        final prefs = await SharedPreferences.getInstance();
+        final saved =
+            jsonDecode(prefs.getString('runthru_config')!)
+                as Map<String, Object?>;
+        expect(saved['anchorColorIndex'], 3);
+        expect(saved['hasPremium'], isTrue);
+        expect(saved['aKeyFromALaterVersion'], 'kept');
+        // …beside what this version writes, which still wins for its own keys.
+        expect(saved['defaultWpm'], 500);
+        expect(saved['anchorColorIndexV2'], kDefaultAnchorColorIndex);
+        expect(saved['premiumUnlocked'], isFalse);
+      },
+    );
+
+    test('a saved blob that cannot be read is replaced, not merged', () async {
+      final container = await containerWith({'runthru_config': 'not json'});
+
+      await container.read(configProvider.notifier).setDefaultWpm(500);
+
+      final prefs = await SharedPreferences.getInstance();
+      final saved =
+          jsonDecode(prefs.getString('runthru_config')!)
+              as Map<String, Object?>;
+      expect(saved['defaultWpm'], 500);
+    });
   });
 
   group('BookmarkData', () {

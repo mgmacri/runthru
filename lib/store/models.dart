@@ -99,7 +99,8 @@ const double kBookFontSizeStep = 2;
 /// `anchorColorIndex` but only the legacy reader honoured it, so nearly every
 /// saved value is the old Hot Coral default rather than a real choice. A new
 /// key lets those users start on [kDefaultAnchorColorIndex]; the legacy key
-/// is left in place, never deleted.
+/// is left in place, never deleted (`ConfigNotifier` carries over every
+/// saved key it does not write itself).
 const String _anchorColorKey = 'anchorColorIndexV2';
 
 class AppConfig {

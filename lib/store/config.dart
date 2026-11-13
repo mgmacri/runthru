@@ -120,8 +120,26 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
 
   Future<void> _persist(AppConfig config) async {
     final prefs = await SharedPreferences.getInstance();
-    final json = jsonEncode(config.toJson());
+    // What is saved under keys this version does not write is carried
+    // over: settings an earlier version kept under other names
+    // (`anchorColorIndex`, `hasPremium`) are legacy data, and legacy data
+    // is never deleted. It also lets a newer build's keys survive a save
+    // made by an older one.
+    final json = jsonEncode({..._savedKeys(prefs), ...config.toJson()});
     await prefs.setString(_configKey, json);
+  }
+
+  /// Everything saved under [_configKey] as it stands, or nothing if it
+  /// cannot be read.
+  static Map<String, Object?> _savedKeys(SharedPreferences prefs) {
+    final raw = prefs.getString(_configKey);
+    if (raw == null) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, Object?> ? decoded : const {};
+    } on Object {
+      return const {};
+    }
   }
 
   Future<void> setDefaultWpm(int wpm) => _synchronized(() async {
