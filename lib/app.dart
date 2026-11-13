@@ -140,15 +140,20 @@ class _ContentLifecycleObserverState
   /// Navigates to reading screen when share intent produces a document.
   void _listenForShareIntent() {
     // Check current state first — on cold-start the provider may have
-    // already transitioned to done before this listener was set up.
+    // already moved on before this listener was set up.
     final current = ref.read(shareIntentProvider);
     if (current is ShareIntentDone) {
       _handleShareIntentDone(current);
-      return;
+    } else if (current is ShareIntentProcessing) {
+      _showShareProgress(current);
     }
 
+    // Always listen: this share is not the last one of the session.
     ref.listenManual(shareIntentProvider, (previous, next) {
-      if (next is ShareIntentDone) {
+      if (next is ShareIntentProcessing) {
+        _showShareProgress(next);
+      } else if (next is ShareIntentDone) {
+        _hideShareProgress();
         _handleShareIntentDone(next);
       } else if (next is ShareIntentError) {
         _showShareError(next);
@@ -156,21 +161,45 @@ class _ContentLifecycleObserverState
     });
   }
 
+  /// The messenger of whatever screen is up, or null before there is one.
+  ScaffoldMessengerState? get _messenger {
+    final context = appRouter.routerDelegate.navigatorKey.currentContext;
+    return context == null ? null : ScaffoldMessenger.maybeOf(context);
+  }
+
+  /// Says that what was shared is being opened. A link takes as long as its
+  /// site does; until this notice the app showed nothing at all in the
+  /// meantime, and looked as if the share had been ignored.
+  void _showShareProgress(ShareIntentProcessing state) {
+    final message = shareProgressMessage(state.content);
+    if (message == null || !mounted) return;
+    _messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          // Replaced by the reader or by the reason there is none; this
+          // only has to outlast the slowest fetch.
+          duration: const Duration(seconds: 60),
+        ),
+      );
+  }
+
+  void _hideShareProgress() => _messenger?.hideCurrentSnackBar();
+
   /// Shows a snackbar with the share intent error message.
   void _showShareError(ShareIntentError state) {
     ref.read(shareIntentProvider.notifier).clear();
     if (!mounted) return;
 
-    // Find the nearest ScaffoldMessenger below the router.
-    final messenger = appRouter.routerDelegate.navigatorKey.currentContext;
-    if (messenger != null) {
-      ScaffoldMessenger.of(messenger).showSnackBar(
+    _messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
         SnackBar(
           content: Text(state.message),
           duration: const Duration(seconds: 5),
         ),
       );
-    }
 
     // Navigate to library as fallback.
     appRouter.go('/');

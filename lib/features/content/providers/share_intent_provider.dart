@@ -103,6 +103,16 @@ String _shareErrorMessage(Object error) => switch (error) {
         'Try copying the text and pasting it in RunThru instead.',
 };
 
+/// What to tell the reader while [content] is being opened, or null when
+/// opening it takes no time worth mentioning (text is ready at once; a link
+/// takes as long as its site does, and a file has to be read through).
+String? shareProgressMessage(SharedContent content) => switch (content.type) {
+  SharedContentType.url => 'Opening the link you shared…',
+  SharedContentType.pdfFile ||
+  SharedContentType.epubFile => 'Opening the file you shared…',
+  SharedContentType.text || SharedContentType.htmlText => null,
+};
+
 /// Platform channel name for share intent communication.
 const String _shareIntentChannel = 'com.runthru/share_intent';
 

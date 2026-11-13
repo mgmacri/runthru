@@ -28,6 +28,29 @@ void main() {
     });
   });
 
+  group('ShareIntent: what the reader is told while it opens', () {
+    test(
+      'a link and a file are announced; text is not, it is there at once',
+      () {
+        // Nothing was shown at all while a link loaded, for as long as its
+        // site took.
+        expect(
+          shareProgressMessage(SharedContent.url('https://example.org/a')),
+          'Opening the link you shared…',
+        );
+        expect(
+          shareProgressMessage(SharedContent.pdfFile('/tmp/a.pdf')),
+          'Opening the file you shared…',
+        );
+        expect(
+          shareProgressMessage(SharedContent.epubFile('/tmp/a.epub')),
+          'Opening the file you shared…',
+        );
+        expect(shareProgressMessage(SharedContent.text('Some words.')), isNull);
+      },
+    );
+  });
+
   group('ShareIntent: what the reader is told when sharing fails', () {
     test('a link to a chat app says what to do', () async {
       final state = await ingest(
