@@ -210,6 +210,10 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
   /// a jump).
   int _previousGlobalIndex = 0;
 
+  /// Where the latest timer step came from: on resume, the word the reader
+  /// paused on, before the timer stepped back from it.
+  int _steppedFromGlobal = 0;
+
   /// The continuous run of reading inside the current section: where it
   /// began and how long it has been playing. Feeds the chapter-complete
   /// figures, and decides whether a chapter was read or merely passed.
@@ -2316,14 +2320,21 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
           _queue.pauseBackground();
           _readingClock.start();
           _runClock.start();
-          // Resuming rewinds a few words; never back into a heading.
+          // Resuming rewinds a few words; never back into a heading, and
+          // never back out of the chapter the reader was in.
           if (config.chapterMoments && _words.isNotEmpty) {
             final global = _sliceOffset + next.currentIndex;
-            final start = playStartFor(_structure, global);
-            if (start.from != global) {
-              ref
-                  .read(wordTimerProvider.notifier)
-                  .seekTo(_localIndex(start.from));
+            final start = resumeStartFor(
+              _structure,
+              pausedAt: _steppedFromGlobal,
+              rewound: global,
+              rewindWords: RunThruTiming.autoRewindWords,
+            );
+            if (start != global) {
+              // A seek, not a step onto the next word: it must not count
+              // as reading across the chapter's start.
+              _previousGlobalIndex = start;
+              ref.read(wordTimerProvider.notifier).seekTo(_localIndex(start));
               return;
             }
           }
@@ -2338,6 +2349,7 @@ class _ParallaxReadingScreenState extends ConsumerState<ParallaxReadingScreen>
         final global = _sliceOffset + idx;
         final previousGlobal = _previousGlobalIndex;
         _previousGlobalIndex = global;
+        _steppedFromGlobal = previousGlobal;
 
         // Chapter boundaries: a chapter ending, a heading to announce.
         if (_words.isNotEmpty) {

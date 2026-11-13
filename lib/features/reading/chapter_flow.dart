@@ -112,6 +112,32 @@ ChapterEvent? chapterEventFor({
   return (announce: null, from: index);
 }
 
+/// Where reading resumes when pressing play has stepped the timer back from
+/// [pausedAt] to [rewound] (it rewinds a few words after a pause).
+///
+/// Never back out of the chapter the reader was in. Its title card has
+/// been shown; stepping back across the chapter's start and reading onto
+/// its first word again would bring the card up a second time, on every
+/// pause in the chapter's first words. Such a step stops at the chapter's
+/// first text word. Anything that is not that short step back (a seek, a
+/// first play) is [playStartFor]'s answer.
+int resumeStartFor(
+  BookStructure structure, {
+  required int pausedAt,
+  required int rewound,
+  required int rewindWords,
+}) {
+  if (rewound < pausedAt && pausedAt - rewound <= rewindWords) {
+    final section = structure.sectionAt(pausedAt);
+    if (section.isTitled &&
+        pausedAt >= section.textStart &&
+        rewound < section.textStart) {
+      return section.textStart;
+    }
+  }
+  return playStartFor(structure, rewound).from;
+}
+
 SubHeading? _subHeadingContaining(BookStructure structure, int index) {
   final list = structure.subHeadings;
   var lo = 0;

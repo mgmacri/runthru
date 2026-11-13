@@ -227,6 +227,62 @@ void main() {
     });
   });
 
+  group('pausing just after a chapter starts', () {
+    testWidgets('play goes on reading and does not show the title again', (
+      tester,
+    ) async {
+      // Play after a pause steps back three words. From the chapter's first
+      // word that is the end of the page before it; reading on from there
+      // crossed the chapter's start again, and the title card came back,
+      // stopping the reader, on every pause this early in a chapter.
+      final c = await _open(tester);
+      await _runUntil(
+        tester,
+        () => find.byType(ChapterTitleCard).evaluate().isEmpty,
+      );
+      // On the first text word of Chapter One (its heading is 13 and 14).
+      expect(_timer(c).isPlaying, isTrue);
+      expect(_timer(c).currentIndex, 15);
+
+      await tester.tap(find.bySemanticsLabel('Pause reading'));
+      await tester.pump();
+      expect(_timer(c).isPlaying, isFalse);
+      expect(_timer(c).currentIndex, 15);
+
+      await tester.tap(find.bySemanticsLabel('Resume reading'));
+      await _run(tester, 0.6);
+
+      expect(find.byType(ChapterTitleCard), findsNothing);
+      expect(_timer(c).isPlaying, isTrue);
+      expect(_timer(c).currentIndex, greaterThanOrEqualTo(15));
+      expect(tester.takeException(), isNull);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 1);
+    });
+
+    testWidgets('a few words further in, play steps back as usual', (
+      tester,
+    ) async {
+      final c = await _open(tester);
+      await _runUntil(
+        tester,
+        () => find.byType(ChapterTitleCard).evaluate().isEmpty,
+      );
+      await _runUntil(tester, () => _timer(c).currentIndex >= 24);
+      await tester.tap(find.bySemanticsLabel('Pause reading'));
+      await tester.pump();
+      final pausedAt = _timer(c).currentIndex;
+
+      await tester.tap(find.bySemanticsLabel('Resume reading'));
+      await tester.pump();
+
+      expect(find.byType(ChapterTitleCard), findsNothing);
+      expect(_timer(c).currentIndex, pausedAt - 3);
+      c.read(wordTimerProvider.notifier).pause();
+      await _run(tester, 1);
+    });
+  });
+
   group('finishing a chapter', () {
     testWidgets('is marked, then the next chapter is announced', (
       tester,
